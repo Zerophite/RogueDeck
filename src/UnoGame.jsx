@@ -232,6 +232,10 @@ function sh(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(M
 function gs(v){return{skip:"⦸",reverse:"⇄",draw2:"+2",wild:"W",wild4:"+4",discardAll:"✕",shadow:"👤",snatch:"🫳"}[v]||v;}
 function gl(v){return{skip:"SKIP",reverse:"REVERSE",draw2:"DRAW TWO",wild:"WILD",wild4:"WILD DRAW FOUR",discardAll:"DISCARD ALL",shadow:"SHADOW",snatch:"SNATCH"}[v]||v;}
 function canPlay(c,top,curCol){if(c.type==="wild")return true;if(c.value==="shadow")return true;if(c.color===curCol)return true;if(c.value===top.value)return true;return false;}
+const BOT_NAMES=["Botchi","RoboK","AI-chan","Mecha","Droid","Cybot","NPC-san","Unit-7","Glitch"];
+const isBot=id=>id?.startsWith("bot_");
+function botPickColor(hand){const cnt={red:0,blue:0,green:0,yellow:0};hand.forEach(c=>{if(c.color!=="wild"&&cnt[c.color]!==undefined)cnt[c.color]++;});const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);return best[0][1]>0?best[0][0]:COLORS[Math.floor(Math.random()*4)];}
+function botChooseCard(playable,hand,curColor,intel,nextOppHL){if(intel===0)return playable[Math.floor(Math.random()*playable.length)];const scored=playable.map(c=>{let s=0;if(c.type!=="wild")s+=3;if(c.value==="discardAll")s+=8;if(c.value==="draw2")s+=5;if(c.value==="skip"||c.value==="reverse")s+=4;if(c.value==="snatch")s+=2;if(c.color===curColor)s+=2;if(intel>=2&&nextOppHL<=2){if(c.value==="draw2"||c.value==="wild4")s+=10;if(c.value==="skip")s+=6;}if(c.value==="wild4")s-=2;return{card:c,s};});scored.sort((a,b)=>b.s-a.s);if(intel<=1&&scored.length>1&&Math.random()>0.6)return scored[Math.min(1,scored.length-1)].card;return scored[0].card;}
 function gpid(){let i=localStorage.getItem("uno_pid");if(!i){i=gid();localStorage.setItem("uno_pid",i);}return i;}
 function getTag(id){return"#"+id.slice(0,4).toUpperCase();}
 function goFS(){try{const d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen||d.msRequestFullscreen)?.call(d);}catch(e){}}
@@ -1121,6 +1125,7 @@ export default function UnoGame(){
   const[restoreMsg,setRestoreMsg]=useState("");
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[showSettings,setShowSettings]=useState(false);
+  const[autoStart,setAutoStart]=useState(false);
   const[roundTimer,setRoundTimer]=useState(ROUND_TIME);
   const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);
 
@@ -1234,12 +1239,13 @@ export default function UnoGame(){
           const lbSnap=await get(ref(db,"leaderboard/"+winnerId));const prev=lbSnap.val()||{totalPoints:0,gamesPlayed:0,wins:0,name:mn};
           const wRank=getRank(prev.totalPoints,prev.gamesPlayed);let totalWin=0;
           for(const[oppId]of pls){if(oppId===winnerId)continue;
-            const os=await get(ref(db,"leaderboard/"+oppId));const op=os.val()||{totalPoints:0,gamesPlayed:0,wins:0};
+            const isOppBot2=isBot(oppId);
+            const op=isOppBot2?{totalPoints:0,gamesPlayed:0,wins:0}:(await get(ref(db,"leaderboard/"+oppId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
             const oRank=getRank(op.totalPoints,op.gamesPlayed);
             const elo=calcElo(wRank.idx,oRank.idx,baseScore);totalWin+=elo.winPts;
-            const newPts=Math.max(0,(op.totalPoints||0)-elo.losePts);
+            if(!isOppBot2){const newPts=Math.max(0,(op.totalPoints||0)-elo.losePts);
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
-              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}
+              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}}
           const curScores=rd.scores||{};curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
           await update(ref(db,"rooms/"+rc),{scores:curScores});
           await update(ref(db,"leaderboard/"+winnerId),{name:mn,totalPoints:(prev.totalPoints||0)+totalWin,
@@ -1300,6 +1306,115 @@ export default function UnoGame(){
   },[myTurn,g,drawStack,myH,pid,np,wgs,rd,ps,trigShake]);
   useEffect(()=>{autoDrawRef.current=false;},[g?.currentPlayer]);
 
+  /* ═══ BOT AI ═══ */
+  const botTurnRef=useRef(null);
+  useEffect(()=>{
+    if(!isHost||!g||g.winner)return;
+    const cp=g.currentPlayer;if(!isBot(cp))return;
+    const tk=cp+"_"+g.turnTimestamp;
+    if(botTurnRef.current===tk)return;
+    botTurnRef.current=tk;
+    const pr=myStats?getRank(myStats.totalPoints,myStats.gamesPlayed):UNRANKED;
+    const intel=pr.idx<=0?0:pr.idx<=2?1:2;
+    setTimeout(async()=>{
+      if(botTurnRef.current!==tk)return;
+      try{
+        const hand=[...(g.hands?.[cp]||[])];if(!hand.length)return;
+        const topCard=g.discardPile[g.discardPile.length-1];
+        const curColor=g.currentColor;const ds=g.drawStack||0;const dst=g.drawStackType;
+        const bn=rd.players[cp]?.name||"Bot";const nh={...g.hands};
+        let ndp2=[...(g.drawPile||[])];const nd=[...g.discardPile];let dir=g.direction;
+        const cu={...(g.calledUno||{})};const is2P=po.length===2;
+        const ensure=n=>{if(ndp2.length<n){const r2=sh(nd.slice(0,-1));ndp2=[...ndp2,...r2];nd.splice(0,nd.length-1);}
+          return ndp2.splice(0,Math.min(n,ndp2.length));};
+
+        if(g.pendingChallenge&&g.pendingChallenge.target===cp){
+          const dr=ensure(4);nh[cp]=[...hand,...dr];
+          await wgs({hands:nh,drawPile:ndp2,discardPile:nd,currentPlayer:np(cp,dir),
+            message:bn+" accepts. Draws 4!",pendingChallenge:null,turnTimestamp:Date.now()});return;}
+
+        if(ds>0){
+          const ct=dst==="wild4"?hand.filter(c=>c.value==="wild4"||c.value==="shadow")
+            :hand.filter(c=>c.value==="draw2"||c.value==="wild4"||c.value==="shadow");
+          if(ct.length>0&&(intel>=1||Math.random()>0.3)){
+            const card=ct[0];let remain=hand.filter(c=>c.id!==card.id);nd.push(card);
+            let nCol=card.color==="wild"?botPickColor(remain):card.color;
+            let nds=ds,ndt=dst,m=bn+" played "+gl(card.value),pc=null;
+            if(card.value==="draw2"){nds=settings.stacking?ds+2:2;ndt="draw2";m+=" +2!";if(settings.stacking&&nds>2)m+=" Stack: "+nds+"!";}
+            else if(card.value==="wild4"){nds=settings.stacking?ds+4:4;ndt="wild4";m+=" +4! > "+nCol.toUpperCase();
+              pc={player:cp,target:np(cp,dir),hadMatchingColor:hand.some(c=>c.color===curColor&&c.id!==card.id)};}
+            else if(card.value==="shadow"){m+=" Shadow! Deflects "+ds+" to next!";}
+            if(remain.length===1&&(intel>=1||Math.random()>0.3))cu[cp]=true;
+            if(remain.length===1&&!cu[cp]){m+=" | Forgot UNO! +2 penalty!";remain=[...remain,...ensure(2)];}
+            cu[cp]=false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
+            await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,
+              currentPlayer:w?cp:np(cp,dir,false),winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
+              pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
+          }else{
+            const drawn=ensure(ds);nh[cp]=[...hand,...drawn];
+            await wgs({hands:nh,drawPile:ndp2,discardPile:nd,drawStack:0,drawStackType:null,
+              currentPlayer:np(cp,dir),message:bn+" draws "+ds+" cards!",turnTimestamp:Date.now()});}
+          return;}
+
+        const playable=hand.filter(c=>canPlay(c,topCard,curColor));
+        let cardToPlay=null;let drewMsg="";
+
+        if(playable.length>0){
+          const nxOpp=np(cp,dir);const nxHL=(g.hands?.[nxOpp]||[]).length;
+          cardToPlay=botChooseCard(playable,hand,curColor,intel,nxHL);
+        }else{
+          if(!ndp2.length){const r2=sh(nd.slice(0,-1));ndp2.push(...r2);nd.splice(0,nd.length-1);}
+          if(!ndp2.length){await wgs({currentPlayer:np(cp,dir),message:bn+" passed",turnTimestamp:Date.now()});return;}
+          let drawnCards=[];let found=false;
+          if(settings.drawTilPlay){
+            while(ndp2.length>0&&drawnCards.length<10){
+              const d=ndp2.shift();drawnCards.push(d);
+              if(canPlay(d,topCard,curColor)){cardToPlay=d;found=true;break;}}
+          }else{const d=ndp2.shift();drawnCards=[d];if(canPlay(d,topCard,curColor)){cardToPlay=d;found=true;}}
+          hand.push(...drawnCards);
+          if(!found){nh[cp]=[...hand];cu[cp]=false;
+            const dm=drawnCards.length>1?drawnCards.length+" cards":"";
+            await wgs({hands:nh,drawPile:ndp2,discardPile:nd,currentPlayer:np(cp,dir),
+              message:bn+" drew"+(dm?" "+dm:"")+" — can't play",turnTimestamp:Date.now(),calledUno:cu});return;}
+          drewMsg=drawnCards.length>1?" drew "+drawnCards.length+" and":" drew and";
+        }
+
+        let remain=hand.filter(c=>c.id!==cardToPlay.id);
+        let nCol=cardToPlay.color==="wild"?botPickColor(remain):(cardToPlay.color||curColor);
+        let m=bn+drewMsg+" played "+gl(cardToPlay.value),skip2=false,nds=0,ndt=null,pc=null;
+
+        if(cardToPlay.value==="discardAll"){const mc=cardToPlay.color;
+          const disc=remain.filter(c=>c.color===mc);remain=remain.filter(c=>c.color!==mc);
+          nd.push(...disc,cardToPlay);m+=" Discard all "+mc+"! (-"+(disc.length+1)+" cards)";
+          const dr=ensure(1);remain=[...remain,...dr];m+=" Drew 1.";}
+        else nd.push(cardToPlay);
+
+        if(cardToPlay.value==="reverse"){if(is2P){skip2=true;m+=" Reverse! (Skip)";}else{dir=-dir;m+=" Reverse!";}}
+        if(cardToPlay.value==="skip"){skip2=true;m+=" Skip!";}
+        if(cardToPlay.value==="draw2"){nds=settings.stacking?(g.drawStack||0)+2:2;ndt="draw2";m+=" +2!";if(settings.stacking&&nds>2)m+=" Stack: "+nds+"!";}
+        if(cardToPlay.value==="wild4"){nds=settings.stacking?(g.drawStack||0)+4:4;ndt="wild4";m+=" +4!";if(settings.stacking&&nds>4)m+=" Stack: "+nds+"!";
+          pc={player:cp,target:np(cp,dir,false),hadMatchingColor:hand.some(c=>c.color===curColor&&c.id!==cardToPlay.id)};}
+        if(cardToPlay.type==="wild")m+=" > "+nCol.toUpperCase();
+        if(cardToPlay.value==="shadow"&&(g.drawStack||0)>0){m+=" Shadow! Deflects "+g.drawStack+" to next!";nds=g.drawStack;ndt=g.drawStackType;}
+        if(cardToPlay.value==="snatch"){const nxId=np(cp,dir,false);const nxH=[...(nh[nxId]||[])];
+          if(nxH.length>0){const si=Math.floor(Math.random()*nxH.length);const st3=nxH.splice(si,1)[0];remain=[...remain,st3];
+            let wi=0,wv=999;remain.forEach((c,i)=>{const v=c.type==="wild"?50:c.type==="action"?20:parseInt(c.value)||0;if(v<wv){wv=v;wi=i;}});
+            nxH.push(remain[wi]);remain=remain.filter((_,i)=>i!==wi);nh[nxId]=nxH;
+            m+=" Snatch! Swapped with "+(rd.players[nxId]?.name)+"!";}else m+=" Snatch! (nothing to take)";}
+
+        if(remain.length===1&&(intel>=1||Math.random()>0.3))cu[cp]=true;
+        if(remain.length===1&&!cu[cp]){m+=" | Forgot UNO! +2 penalty!";remain=[...remain,...ensure(2)];}
+        cu[cp]=false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
+        let nxP=w?cp:np(cp,dir,skip2);
+        if((cardToPlay.value==="draw2"||cardToPlay.value==="wild4")&&!w)nxP=np(cp,dir,false);
+        await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,
+          currentPlayer:nxP,winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
+          pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
+      }catch(e){console.error("Bot:",e);try{await wgs({currentPlayer:np(g.currentPlayer,g.direction),
+        message:(rd.players[g.currentPlayer]?.name||"Bot")+" passed",turnTimestamp:Date.now()});}catch(e2){}}
+    },1200+Math.random()*1300);
+  });
+
   const trigA=()=>{setCAn("cFly 0.6s cubic-bezier(.22,1,.36,1)");setTimeout(()=>setCAn(null),600);};
 
   const startMusic=useCallback(()=>{ua();if(!bgm.playing){bgm.start();setMus(true);}},[]);
@@ -1337,6 +1452,25 @@ export default function UnoGame(){
   const saveSetting=async(key,val)=>{const ns={...settings,[key]:val};setSettings(ns);
     if(rc)await update(ref(db,"rooms/"+rc),{settings:ns});};
 
+  const addBot=async()=>{if(!isHost||pls.length>=(settings.maxPlayers||10))return;
+    const bc=pls.filter(([id])=>isBot(id)).length;const botId="bot_"+(bc+1)+"_"+Date.now();
+    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:BOT_NAMES[bc%BOT_NAMES.length],order:pls.length,isBot:true});};
+  const removeBot=async(botId)=>{if(!isHost||!isBot(botId))return;await remove(ref(db,"rooms/"+rc+"/players/"+botId));};
+
+  const quickPlay1v1=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
+    const code=grc();const now=Date.now();
+    try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
+      players:{[pid]:{name:pName.trim(),order:0},["bot_1_"+now]:{name:BOT_NAMES[0],order:1,isBot:true}},
+      scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
+    }catch(e){setErr("Check Firebase config.");}};
+
+  const quickPlayFFA=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
+    const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0}};
+    for(let i=0;i<3;i++)players["bot_"+(i+1)+"_"+now]={name:BOT_NAMES[i],order:i+1,isBot:true};
+    try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
+      players,scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
+    }catch(e){setErr("Check Firebase config.");}};
+
   const startGame=async()=>{if(!isHost||pls.length<2)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);ps("gameOn");startMusic();
     let deck=sh(mkD());
     if(!settings.specialCards)deck=deck.filter(c=>c.value!=="shadow"&&c.value!=="snatch"&&c.value!=="discardAll");
@@ -1355,6 +1489,8 @@ export default function UnoGame(){
       hands,drawPile,discardPile:[fc],currentPlayer:firstPlayer,direction,
       currentColor,winner:null,message:m,calledUno:{},turnTimestamp:Date.now(),pendingChallenge:null,drawStack:0,drawStackType:null}});
     setScr("game");goFS();goLand();};
+
+  useEffect(()=>{if(autoStart&&isHost&&pls.length>=2&&scr==="lobby"){setAutoStart(false);startGame();}},[autoStart,isHost,pls.length,scr]);
 
   useEffect(()=>{if(rd?.status==="playing"&&scr==="lobby"&&!isHost){ua();startMusic();setScr("game");ps("gameOn");goFS();goLand();}},[rd?.status,scr,isHost,ps,startMusic]);
   useEffect(()=>{if(rd?.status==="waiting"&&scr==="game"){setScr("lobby");setSel(-1);setDrawnCard(null);setHasDrawn(false);setChallenge(null);setActFx(null);setWild4Fx(null);setChibiAttackFx(null);setDraw2Fx(null);setReverseFx(null);setSkipFx(null);setUnoCallFx(null);setUnoPenaltyFx(null);}},[rd?.status,scr]);
@@ -1415,12 +1551,13 @@ export default function UnoGame(){
       const wRank=getRank(prev.totalPoints,prev.gamesPlayed);
       let totalWin=0;
       for(const[oppId]of pls){if(oppId===pid)continue;
-        const os=await get(ref(db,"leaderboard/"+oppId));const op=os.val()||{totalPoints:0,gamesPlayed:0,wins:0};
+        const isOppBot=isBot(oppId);
+        const op=isOppBot?{totalPoints:0,gamesPlayed:0,wins:0}:(await get(ref(db,"leaderboard/"+oppId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
         const oRank=getRank(op.totalPoints,op.gamesPlayed);
         const elo=calcElo(wRank.idx,oRank.idx,baseScore);totalWin+=elo.winPts;
-        const newPts=Math.max(0,(op.totalPoints||0)-elo.losePts);
+        if(!isOppBot){const newPts=Math.max(0,(op.totalPoints||0)-elo.losePts);
         await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
-          gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}
+          gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}}
       m=mn+" WINS! (+"+totalWin+" pts)";
       const curScores=rd.scores||{};curScores[pid]=(curScores[pid]||0)+totalWin;
       await update(ref(db,"rooms/"+rc),{scores:curScores});
@@ -1651,10 +1788,27 @@ export default function UnoGame(){
             background:"linear-gradient(135deg,#E53935,#C62828,#B71C1C)",color:"#fff",
             fontSize:16,fontWeight:900,cursor:"pointer",letterSpacing:5,
             boxShadow:"0 6px 30px rgba(229,57,53,0.5),0 0 60px rgba(229,57,53,0.1)",
-            transition:"all 0.25s",marginBottom:10}}
+            transition:"all 0.25s",marginBottom:6}}
             onPointerEnter={e=>{e.currentTarget.style.transform="translateY(-2px) scale(1.01)";e.currentTarget.style.boxShadow="0 10px 40px rgba(229,57,53,0.7)";}}
             onPointerLeave={e=>{e.currentTarget.style.transform="translateY(0) scale(1)";e.currentTarget.style.boxShadow="0 6px 30px rgba(229,57,53,0.5)";}}>
             CREATE ROOM</button>
+
+          <div style={{display:"flex",gap:6,marginBottom:8}}>
+            <button onClick={quickPlay1v1} style={{flex:1,padding:"10px 0",borderRadius:12,border:"none",
+              background:"linear-gradient(135deg,#1976D2,#0D47A1)",color:"#fff",
+              fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:3,
+              boxShadow:"0 4px 20px rgba(25,118,210,0.4)",transition:"all 0.25s"}}
+              onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+              onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+              1v1 BOT</button>
+            <button onClick={quickPlayFFA} style={{flex:1,padding:"10px 0",borderRadius:12,border:"none",
+              background:"linear-gradient(135deg,#2E7D32,#1B5E20)",color:"#fff",
+              fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:3,
+              boxShadow:"0 4px 20px rgba(46,125,50,0.4)",transition:"all 0.25s"}}
+              onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+              onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
+              FREE FOR ALL</button>
+          </div>
 
           <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
             <input value={jc} onChange={e=>setJc(e.target.value.toUpperCase())} placeholder="CODE" maxLength={4}
@@ -1834,10 +1988,20 @@ export default function UnoGame(){
               <div style={{width:34,height:34,borderRadius:10,background:CG[COLORS[i%4]],display:"flex",alignItems:"center",justifyContent:"center",
                 fontSize:14,fontWeight:800,color:COLORS[i%4]==="yellow"?"#333":"#fff",
                 boxShadow:`0 3px 12px ${CH[COLORS[i%4]]}44`}}>{pd.name?.[0]?.toUpperCase()}</div>
-              <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}</div>
+              <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
               <span style={{fontSize:11,color:"#778",fontWeight:600,fontFamily:"monospace"}}>{rd?.scores?.[id]||0}</span>
               {id===rd?.host&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
+              {isHost&&pd.isBot&&<button onClick={()=>removeBot(id)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",
+                color:"#FF5252",width:22,height:22,borderRadius:6,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
+                transition:"all 0.2s"}} onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.5)"}
+                onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.2)"}>×</button>}
             </div>))}
+          {isHost&&pls.length<(settings.maxPlayers||10)&&<button onClick={addBot} style={{width:"100%",padding:"8px 0",borderRadius:10,
+            border:"1px dashed rgba(76,175,80,0.3)",background:"rgba(76,175,80,0.06)",color:"#4CAF50",
+            fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:3,transition:"all 0.2s",marginTop:4}}
+            onPointerEnter={e=>{e.currentTarget.style.borderColor="rgba(76,175,80,0.5)";e.currentTarget.style.background="rgba(76,175,80,0.12)";}}
+            onPointerLeave={e=>{e.currentTarget.style.borderColor="rgba(76,175,80,0.3)";e.currentTarget.style.background="rgba(76,175,80,0.06)";}}>
+            + ADD BOT</button>}
         </div>
         {/* Settings */}
         <div style={{width:"100%",maxWidth:380,marginBottom:10}}>
@@ -1966,10 +2130,8 @@ export default function UnoGame(){
         pointerEvents:"none",animation:"timeoutFade 2s ease-out forwards"}}>
         <div style={{fontSize:"min(60px, 12vw)",fontWeight:900,color:"rgba(255,82,82,0.7)",fontFamily:"Arial Black",
           letterSpacing:8,textShadow:"0 0 40px rgba(255,82,82,0.4),0 4px 20px rgba(0,0,0,0.8)",
-          textAlign:"center",lineHeight:1.2}}>TIMED OUT
-          {timeoutFx&&<div style={{fontSize:"min(18px, 4vw)",color:"rgba(255,255,255,0.4)",letterSpacing:4,marginTop:4}}>{timeoutFx}</div>}
-        </div></div>}
-      {turnFx!==null&&<div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center",
+          textAlign:"center"}}>TIMED OUT</div></div>}
+      {turnFx!==null&&timeoutFx===null&&<div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center",
         pointerEvents:"none",animation:"turnTextFade 1.8s ease-out forwards"}}>
         <div style={{fontSize:"min(48px, 10vw)",fontWeight:900,fontFamily:"Arial Black",
           color:`${gcHex}88`,
@@ -2203,25 +2365,14 @@ export default function UnoGame(){
             </div>)}
 
           {/* Hand - player's cards */}
-          <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,position:"relative"}}>
-            {!g.winner&&!(g.calledUno||{})[pid]&&(
-              <div onClick={callUno} style={{position:"absolute",right:8,top:-30,width:52,height:52,borderRadius:"50%",cursor:"pointer",zIndex:20,
-                background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
-                border:`3px solid ${gcHex}`,
-                boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
-                animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                transition:"border-color 0.5s,box-shadow 0.5s"}}
-                onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
-                onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
-                <span style={{fontSize:9,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
-                  textShadow:`0 0 8px rgba(255,214,0,0.6),0 0 16px ${gcHex}44`}}>UNO</span>
-                <span style={{fontSize:18,fontWeight:900,color:"#fff",lineHeight:1,
-                  textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
-              </div>)}
-            <div style={{position:"absolute",left:10,top:4,
-              fontSize:11,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:2,
-              pointerEvents:"none",zIndex:7,whiteSpace:"nowrap",
-              textShadow:"0 1px 4px rgba(0,0,0,0.8)"}}>{pName||"You"}</div>
+          <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
+            display:"flex",alignItems:"center",gap:6}}>
+            <div style={{flexShrink:0,width:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
+                writingMode:"vertical-rl",textOrientation:"mixed",
+                textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap"}}>{pName||"You"}</span>
+            </div>
+            <div style={{flex:1,position:"relative"}}>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
@@ -2239,6 +2390,23 @@ export default function UnoGame(){
                     cursor:(myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)?"pointer":"default"}}>
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
+            </div>
+            </div>
+            <div style={{flexShrink:0,width:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {!g.winner&&!(g.calledUno||{})[pid]&&(
+                <div onClick={callUno} style={{width:48,height:48,borderRadius:"50%",cursor:"pointer",
+                  background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
+                  border:`3px solid ${gcHex}`,
+                  boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
+                  animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                  transition:"border-color 0.5s,box-shadow 0.5s"}}
+                  onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
+                  onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
+                  <span style={{fontSize:8,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
+                    textShadow:`0 0 8px rgba(255,214,0,0.6)`}}>UNO</span>
+                  <span style={{fontSize:16,fontWeight:900,color:"#fff",lineHeight:1,
+                    textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
+                </div>)}
             </div>
           </div>
         </div>
