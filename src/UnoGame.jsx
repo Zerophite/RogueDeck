@@ -2166,47 +2166,24 @@ export default function UnoGame(){
               </div>
             </div>
           </div>
-          {(msg||lMsg)&&!(lMsg||msg||"").toLowerCase().includes("timed out")&&<div style={{textAlign:"center",flexShrink:0,zIndex:15,pointerEvents:"none"}}>
-            <span style={{padding:"2px 12px",borderRadius:10,display:"inline-block",
-              background:"linear-gradient(135deg,rgba(0,0,0,0.8),rgba(0,0,0,0.6))",
-              fontSize:9,fontWeight:700,color:"#FFD700",border:"1px solid rgba(255,215,0,0.12)",
-              animation:"fadeIn 0.3s",letterSpacing:1,whiteSpace:"nowrap"}}>{lMsg||msg}</span></div>}
+          {!g.winner&&<div style={{textAlign:"center",flexShrink:0,zIndex:15,pointerEvents:"none",marginBottom:2}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"3px 14px",borderRadius:14,
+              background:`linear-gradient(135deg,${gcHex}20,rgba(0,0,0,0.5))`,
+              border:`1px solid ${gcHex}44`,boxShadow:`0 0 12px ${gcHex}22`}}>
+              <span style={{fontSize:10,fontWeight:700,color:`${gcHex}cc`,letterSpacing:2}}>
+                {myTurn?(drawStack>0?"COUNTER OR DRAW":"YOUR TURN"):(rd.players[g.currentPlayer]?.name||"...")+"'s turn"}</span>
+              <div style={{width:24,height:24,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:11,fontWeight:900,fontFamily:"monospace",
+                color:turnTimer<=5?"#FF5252":gcHex,
+                background:turnTimer<=5?"rgba(255,82,82,0.15)":`${gcHex}15`,
+                border:`2px solid ${turnTimer<=5?"#FF5252":gcHex+"66"}`,
+                animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>
+            </div></div>}
           {drawStack>0&&<div style={{textAlign:"center",flexShrink:0,zIndex:15,pointerEvents:"none"}}>
             <span style={{padding:"2px 10px",borderRadius:10,fontSize:9,fontWeight:900,
               background:"linear-gradient(135deg,#FF6F00,#E65100)",color:"#fff",letterSpacing:2,
               boxShadow:"0 0 15px rgba(255,111,0,0.4)",animation:"dangerPulse 0.8s infinite",
               display:"inline-block",whiteSpace:"nowrap"}}>⚡ +{drawStack} ⚡</span></div>}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:1,marginBottom:2,flexShrink:0,zIndex:15,position:"relative"}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,padding:"2px 10px",borderRadius:14,
-                background:"linear-gradient(135deg,rgba(0,0,0,0.7),rgba(0,0,0,0.4))",
-                border:`1px solid ${gcHex}33`,backdropFilter:"blur(6px)"}}>
-                <span style={{fontSize:11,fontWeight:900,color:"#fff",letterSpacing:1,
-                  textShadow:`0 0 8px ${gcHex}66`}}>{pName||"You"}</span>
-                <span style={{fontSize:8,fontWeight:700,color:gcHex,fontFamily:"monospace",
-                  background:"rgba(0,0,0,0.5)",borderRadius:6,padding:"1px 5px",
-                  border:`1px solid ${gcHex}22`}}>{"×"+n}</span>
-              </div>
-              {!g.winner&&<div style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:12,fontWeight:900,fontFamily:"monospace",
-                color:turnTimer<=5?"#FF5252":myTurn?"#fff":"#888",
-                background:turnTimer<=5?"rgba(255,82,82,0.15)":myTurn?`${gcHex}25`:"rgba(0,0,0,0.4)",
-                border:`2px solid ${turnTimer<=5?"#FF5252":myTurn?gcHex+"88":"rgba(255,255,255,0.08)"}`,
-                animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>}
-              {!g.winner&&!(g.calledUno||{})[pid]&&(
-                <div onClick={callUno} style={{width:58,height:58,borderRadius:"50%",cursor:"pointer",flexShrink:0,
-                  background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
-                  border:`3px solid ${gcHex}`,
-                  boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
-                  animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                  transition:"border-color 0.5s,box-shadow 0.5s"}}
-                  onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
-                  onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
-                  <span style={{fontSize:10,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
-                    textShadow:`0 0 8px rgba(255,214,0,0.6),0 0 16px ${gcHex}44`}}>UNO</span>
-                  <span style={{fontSize:20,fontWeight:900,color:"#fff",lineHeight:1,
-                    textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
-                </div>)}
-          </div>
 
           {/* PASS TURN button - after drawing */}
           {myTurn&&hasDrawn&&!g.winner&&(
@@ -2223,7 +2200,24 @@ export default function UnoGame(){
             </div>)}
 
           {/* Hand - player's cards */}
-          <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6}}>
+          <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,position:"relative"}}>
+            {!g.winner&&!(g.calledUno||{})[pid]&&(
+              <div onClick={callUno} style={{position:"absolute",right:8,top:-30,width:52,height:52,borderRadius:"50%",cursor:"pointer",zIndex:20,
+                background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
+                border:`3px solid ${gcHex}`,
+                boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
+                animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                transition:"border-color 0.5s,box-shadow 0.5s"}}
+                onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
+                onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
+                <span style={{fontSize:9,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
+                  textShadow:`0 0 8px rgba(255,214,0,0.6),0 0 16px ${gcHex}44`}}>UNO</span>
+                <span style={{fontSize:18,fontWeight:900,color:"#fff",lineHeight:1,
+                  textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
+              </div>)}
+            <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",
+              fontSize:"min(28px, 6vw)",fontWeight:900,color:"rgba(255,255,255,0.06)",letterSpacing:6,
+              pointerEvents:"none",zIndex:0,whiteSpace:"nowrap",textTransform:"uppercase"}}>{pName||"You"}</div>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
