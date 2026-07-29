@@ -1972,8 +1972,8 @@ export default function UnoGame(){
       {turnFx!==null&&<div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center",
         pointerEvents:"none",animation:"turnTextFade 1.8s ease-out forwards"}}>
         <div style={{fontSize:"min(48px, 10vw)",fontWeight:900,fontFamily:"Arial Black",
-          color:turnFx==="YOUR TURN"?`${gcHex}88`:"rgba(255,255,255,0.35)",
-          letterSpacing:6,textShadow:turnFx==="YOUR TURN"?`0 0 40px ${gcHex}44,0 4px 20px rgba(0,0,0,0.6)`:"0 0 30px rgba(255,255,255,0.15),0 4px 20px rgba(0,0,0,0.6)",
+          color:`${gcHex}88`,
+          letterSpacing:6,textShadow:`0 0 40px ${gcHex}44,0 4px 20px rgba(0,0,0,0.6)`,
           textAlign:"center",textTransform:"uppercase"}}>{turnFx}</div></div>}
       {challenge&&<ChallengeModal playerName={challenge.playerName}
         onChallenge={()=>respondChallenge(true)} onAccept={()=>respondChallenge(false)}/>}
@@ -2166,19 +2166,22 @@ export default function UnoGame(){
               </div>
             </div>
           </div>
-          {!g.winner&&<div style={{textAlign:"center",flexShrink:0,zIndex:15,pointerEvents:"none",marginBottom:2}}>
-            <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"3px 14px",borderRadius:14,
-              background:`linear-gradient(135deg,${gcHex}20,rgba(0,0,0,0.5))`,
-              border:`1px solid ${gcHex}44`,boxShadow:`0 0 12px ${gcHex}22`}}>
-              <span style={{fontSize:10,fontWeight:700,color:`${gcHex}cc`,letterSpacing:2}}>
-                {myTurn?(drawStack>0?"COUNTER OR DRAW":"YOUR TURN"):(rd.players[g.currentPlayer]?.name||"...")+"'s turn"}</span>
-              <div style={{width:24,height:24,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:11,fontWeight:900,fontFamily:"monospace",
-                color:turnTimer<=5?"#FF5252":gcHex,
-                background:turnTimer<=5?"rgba(255,82,82,0.15)":`${gcHex}15`,
-                border:`2px solid ${turnTimer<=5?"#FF5252":gcHex+"66"}`,
-                animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>
-            </div></div>}
+          {!g.winner&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexShrink:0,zIndex:15,pointerEvents:"none",marginBottom:2}}>
+              <div style={{position:"relative",width:36,height:36}}>
+                <svg width="36" height="36" viewBox="0 0 36 36" style={{transform:"rotate(-90deg)"}}>
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
+                  <circle cx="18" cy="18" r="15" fill="none"
+                    stroke={turnTimer<=5?"#FF5252":gcHex}
+                    strokeWidth="3" strokeLinecap="round"
+                    strokeDasharray={`${(turnTimer/(settings.turnTime||15))*94.2} 94.2`}
+                    style={{transition:"stroke-dasharray 1s linear,stroke 0.5s"}}/>
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+                  fontSize:12,fontWeight:900,fontFamily:"monospace",
+                  color:turnTimer<=5?"#FF5252":gcHex,
+                  animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>
+              </div>
+            </div>}
           {drawStack>0&&<div style={{textAlign:"center",flexShrink:0,zIndex:15,pointerEvents:"none"}}>
             <span style={{padding:"2px 10px",borderRadius:10,fontSize:9,fontWeight:900,
               background:"linear-gradient(135deg,#FF6F00,#E65100)",color:"#fff",letterSpacing:2,
@@ -2215,9 +2218,10 @@ export default function UnoGame(){
                 <span style={{fontSize:18,fontWeight:900,color:"#fff",lineHeight:1,
                   textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
               </div>)}
-            <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",
-              fontSize:"min(28px, 6vw)",fontWeight:900,color:"rgba(255,255,255,0.06)",letterSpacing:6,
-              pointerEvents:"none",zIndex:0,whiteSpace:"nowrap",textTransform:"uppercase"}}>{pName||"You"}</div>
+            <div style={{position:"absolute",left:10,top:4,
+              fontSize:11,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:2,
+              pointerEvents:"none",zIndex:7,whiteSpace:"nowrap",
+              textShadow:"0 1px 4px rgba(0,0,0,0.8)"}}>{pName||"You"}</div>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
