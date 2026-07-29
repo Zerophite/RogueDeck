@@ -150,23 +150,39 @@ class AnimeSFX{
     const g=this.c.createGain();g.gain.value=0.4;
     b.connect(f);f.connect(g);g.connect(this.c.destination);b.start(t);
     this._bend(80,25,"sine",t,0.5,0.2);this._bend(60,20,"sine",t+0.05,0.4,0.15);}
+  _fNoise(t,dur,freq,q,type,vol=0.2){
+    const buf=this.c.createBuffer(1,this.c.sampleRate*dur,this.c.sampleRate);
+    const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(d.length*0.2));
+    const b=this.c.createBufferSource();b.buffer=buf;const f=this.c.createBiquadFilter();
+    f.type=type;f.frequency.value=freq;f.Q.value=q;
+    const g=this.c.createGain();g.gain.value=vol;
+    b.connect(f);f.connect(g);g.connect(this.c.destination);b.start(t);}
   _fireEl(t){
-    for(let i=0;i<6;i++){this._noise(t+i*0.04+Math.random()*0.02,0.03+Math.random()*0.02,0.12+Math.random()*0.08);}
-    this._bend(150,60,"sawtooth",t,0.35,0.14);this._bend(250,100,"triangle",t+0.05,0.3,0.1);
-    this._shimmer(3200,t+0.08,0.25,0.05);this._osc(80,"sine",t+0.1,0.3,0.1);}
+    for(let i=0;i<10;i++){const d=i*0.035;this._noise(t+d,0.04+Math.random()*0.03,0.2+Math.random()*0.15);}
+    this._fNoise(t,0.5,600,4,"bandpass",0.25);this._fNoise(t+0.1,0.4,1200,3,"bandpass",0.15);
+    this._bend(120,40,"sawtooth",t,0.5,0.22);this._bend(200,60,"triangle",t+0.05,0.45,0.16);
+    this._osc(60,"sine",t,0.5,0.18);this._shimmer(3500,t+0.05,0.3,0.08);
+    this._bend(800,2000,"sine",t+0.1,0.2,0.06);}
   _waterEl(t){
-    this._noise(t,0.22,0.12);
-    for(let i=0;i<6;i++){this._osc(200+Math.random()*400,"sine",t+0.04+i*0.04,0.06,0.07);}
-    this._bend(400,120,"sine",t,0.4,0.1);this._bend(600,200,"sine",t+0.08,0.3,0.07);
-    this._shimmer(800,t+0.15,0.25,0.04);}
+    this._fNoise(t,0.4,400,8,"lowpass",0.3);this._fNoise(t+0.05,0.3,800,5,"bandpass",0.15);
+    for(let i=0;i<10;i++){const f=150+Math.random()*600;this._osc(f,"sine",t+0.03+i*0.035,0.08,0.1);}
+    this._bend(500,80,"sine",t,0.5,0.18);this._bend(800,150,"sine",t+0.08,0.4,0.12);
+    for(let i=0;i<3;i++){this._bend(600-i*100,200-i*30,"sine",t+0.2+i*0.1,0.15,0.08);}
+    this._shimmer(600,t+0.15,0.35,0.06);}
   _windEl(t){
-    this._noise(t,0.35,0.1);this._bend(200,900,"sine",t,0.3,0.09);this._bend(900,200,"sine",t+0.15,0.25,0.07);
-    this._shimmer(1800,t+0.08,0.35,0.05);
-    for(let i=0;i<3;i++){this._bend(300+i*200,800+i*300,"triangle",t+i*0.08,0.15,0.05);}}
+    this._fNoise(t,0.6,300,2,"bandpass",0.2);this._fNoise(t+0.1,0.5,800,3,"bandpass",0.15);
+    this._fNoise(t+0.2,0.4,1500,2,"bandpass",0.1);
+    this._bend(150,1200,"sine",t,0.5,0.15);this._bend(1200,150,"sine",t+0.2,0.4,0.12);
+    this._bend(400,1800,"triangle",t+0.05,0.4,0.08);
+    for(let i=0;i<5;i++){this._osc(2000+i*400,"sine",t+0.1+i*0.06,0.12,0.04);}
+    this._shimmer(2200,t+0.05,0.5,0.07);}
   _lightEl(t){
-    this._bend(4000,200,"square",t,0.06,0.16);this._bend(3000,100,"sawtooth",t+0.02,0.05,0.13);
-    this._noise(t+0.03,0.1,0.18);this._thunder(t+0.08);
-    this._osc(6000,"sine",t,0.02,0.1);this._osc(4500,"sine",t+0.01,0.03,0.08);}
+    this._bend(5000,150,"square",t,0.05,0.25);this._bend(3500,100,"sawtooth",t+0.01,0.04,0.2);
+    this._bend(4500,200,"square",t+0.03,0.04,0.18);
+    this._noise(t+0.02,0.15,0.3);this._fNoise(t+0.04,0.2,3000,5,"highpass",0.2);
+    this._thunder(t+0.06);this._thunder(t+0.2);
+    for(let i=0;i<4;i++){this._osc(5000+i*1000,"sine",t+i*0.015,0.03,0.12);}
+    this._osc(40,"sine",t+0.1,0.4,0.2);}
   pEl(color){if(!this.c)return;try{const t=this.c.currentTime;
     switch(color){case"red":this._fireEl(t);break;case"blue":this._waterEl(t);break;
       case"green":this._windEl(t);break;case"yellow":this._lightEl(t);break;}}catch(e){}}
@@ -1099,6 +1115,7 @@ export default function UnoGame(){
   const[unoCallFx,setUnoCallFx]=useState(null);
   const[unoPenaltyFx,setUnoPenaltyFx]=useState(null);
   const[timeoutFx,setTimeoutFx]=useState(null);
+  const[turnFx,setTurnFx]=useState(null);
   const[showAccount,setShowAccount]=useState(false);
   const[restoreId,setRestoreId]=useState("");
   const[restoreMsg,setRestoreMsg]=useState("");
@@ -1176,8 +1193,12 @@ export default function UnoGame(){
   useEffect(()=>{if(timeoutFx!==null){const t=setTimeout(()=>setTimeoutFx(null),2000);return()=>clearTimeout(t);}},[timeoutFx]);
 
   useEffect(()=>{if(g?.currentPlayer&&g.currentPlayer!==prevT.current){
-    if(g.currentPlayer===pid&&prevT.current!==null)ps("turn");
-    prevT.current=g.currentPlayer;setHasDrawn(false);setDrawnCard(null);setTurnTimer(settings.turnTime);}},[g?.currentPlayer,pid,ps]);
+    if(prevT.current!==null){
+      if(g.currentPlayer===pid){ps("turn");setTurnFx("YOUR TURN");}
+      else setTurnFx((rd?.players?.[g.currentPlayer]?.name||"...")+"'s turn");
+    }
+    prevT.current=g.currentPlayer;setHasDrawn(false);setDrawnCard(null);setTurnTimer(settings.turnTime);}},[g?.currentPlayer,pid,ps,rd?.players]);
+  useEffect(()=>{if(turnFx!==null){const t=setTimeout(()=>setTurnFx(null),1800);return()=>clearTimeout(t);}},[turnFx]);
   useEffect(()=>{setSel(-1);},[myH.length]);
 
   const np=useCallback((cur,dir,skip=false)=>{const i=po.indexOf(cur);const n=po.length;
@@ -1948,6 +1969,12 @@ export default function UnoGame(){
           textAlign:"center",lineHeight:1.2}}>TIMED OUT
           {timeoutFx&&<div style={{fontSize:"min(18px, 4vw)",color:"rgba(255,255,255,0.4)",letterSpacing:4,marginTop:4}}>{timeoutFx}</div>}
         </div></div>}
+      {turnFx!==null&&<div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center",
+        pointerEvents:"none",animation:"turnTextFade 1.8s ease-out forwards"}}>
+        <div style={{fontSize:"min(48px, 10vw)",fontWeight:900,fontFamily:"Arial Black",
+          color:turnFx==="YOUR TURN"?`${gcHex}88`:"rgba(255,255,255,0.35)",
+          letterSpacing:6,textShadow:turnFx==="YOUR TURN"?`0 0 40px ${gcHex}44,0 4px 20px rgba(0,0,0,0.6)`:"0 0 30px rgba(255,255,255,0.15),0 4px 20px rgba(0,0,0,0.6)",
+          textAlign:"center",textTransform:"uppercase"}}>{turnFx}</div></div>}
       {challenge&&<ChallengeModal playerName={challenge.playerName}
         onChallenge={()=>respondChallenge(true)} onAccept={()=>respondChallenge(false)}/>}
 
@@ -2150,34 +2177,21 @@ export default function UnoGame(){
               boxShadow:"0 0 15px rgba(255,111,0,0.4)",animation:"dangerPulse 0.8s infinite",
               display:"inline-block",whiteSpace:"nowrap"}}>⚡ +{drawStack} ⚡</span></div>}
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:1,marginBottom:2,flexShrink:0,zIndex:15,position:"relative"}}>
-              {myTurn?(
-                <div style={{display:"flex",alignItems:"center",gap:6,padding:"5px 16px",borderRadius:20,
-                  background:`linear-gradient(135deg,${gcHex}35,${gcHex}15)`,
-                  border:`2px solid ${gcHex}88`,
-                  boxShadow:`0 0 25px ${gcHex}44,0 0 50px ${gcHex}15,inset 0 0 15px ${gcHex}10`,
-                  animation:"turnGlow 1.5s ease-in-out infinite",whiteSpace:"nowrap"}}>
-                  <span style={{fontSize:13,fontWeight:900,color:"#fff",letterSpacing:3,
-                    textShadow:`0 0 12px ${gcHex},0 0 25px ${gcHex}88`}}>
-                    {drawStack>0?"⚡ COUNTER OR DRAW":"▶ YOUR TURN"}</span>
-                  {!g.winner&&<div style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:12,fontWeight:900,fontFamily:"monospace",
-                    color:turnTimer<=5?"#FF5252":"#fff",
-                    background:turnTimer<=5?"rgba(255,82,82,0.2)":"rgba(0,0,0,0.5)",
-                    border:`2px solid ${turnTimer<=5?"#FF5252":"rgba(255,255,255,0.3)"}`,
-                    animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>}
-                </div>
-              ):(
-                <div style={{display:"flex",alignItems:"center",gap:6,padding:"4px 14px",borderRadius:18,
-                  background:"rgba(0,0,0,0.5)",border:"1px solid rgba(255,255,255,0.06)",whiteSpace:"nowrap"}}>
-                  <span style={{fontSize:11,fontWeight:700,color:"#999",letterSpacing:2}}>
-                    {(rd.players[g.currentPlayer]?.name||"...")+"'s turn"}</span>
-                  {!g.winner&&<div style={{width:26,height:26,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:11,fontWeight:900,fontFamily:"monospace",
-                    color:turnTimer<=5?"#FF5252":"#888",
-                    background:turnTimer<=5?"rgba(255,82,82,0.1)":"rgba(0,0,0,0.4)",
-                    border:`2px solid ${turnTimer<=5?"#FF5252":"rgba(255,255,255,0.08)"}`}}>{turnTimer}</div>}
-                </div>
-              )}
+              <div style={{display:"flex",alignItems:"center",gap:6,padding:"2px 10px",borderRadius:14,
+                background:"linear-gradient(135deg,rgba(0,0,0,0.7),rgba(0,0,0,0.4))",
+                border:`1px solid ${gcHex}33`,backdropFilter:"blur(6px)"}}>
+                <span style={{fontSize:11,fontWeight:900,color:"#fff",letterSpacing:1,
+                  textShadow:`0 0 8px ${gcHex}66`}}>{pName||"You"}</span>
+                <span style={{fontSize:8,fontWeight:700,color:gcHex,fontFamily:"monospace",
+                  background:"rgba(0,0,0,0.5)",borderRadius:6,padding:"1px 5px",
+                  border:`1px solid ${gcHex}22`}}>{"×"+n}</span>
+              </div>
+              {!g.winner&&<div style={{width:28,height:28,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:12,fontWeight:900,fontFamily:"monospace",
+                color:turnTimer<=5?"#FF5252":myTurn?"#fff":"#888",
+                background:turnTimer<=5?"rgba(255,82,82,0.15)":myTurn?`${gcHex}25`:"rgba(0,0,0,0.4)",
+                border:`2px solid ${turnTimer<=5?"#FF5252":myTurn?gcHex+"88":"rgba(255,255,255,0.08)"}`,
+                animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>}
               {!g.winner&&!(g.calledUno||{})[pid]&&(
                 <div onClick={callUno} style={{width:58,height:58,borderRadius:"50%",cursor:"pointer",flexShrink:0,
                   background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
@@ -2210,17 +2224,6 @@ export default function UnoGame(){
 
           {/* Hand - player's cards */}
           <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6}}>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0,padding:"2px 0",position:"relative",zIndex:60}}>
-              <div style={{display:"flex",alignItems:"center",gap:6,padding:"2px 14px",borderRadius:14,
-                background:"linear-gradient(135deg,rgba(0,0,0,0.75),rgba(0,0,0,0.45))",
-                border:`1px solid ${gcHex}44`,boxShadow:`0 0 14px ${gcHex}22,0 2px 8px rgba(0,0,0,0.5)`,
-                backdropFilter:"blur(6px)"}}>
-                <span style={{fontSize:12,fontWeight:900,color:"#fff",letterSpacing:2,
-                  textShadow:`0 0 10px ${gcHex}88,0 1px 4px rgba(0,0,0,0.9)`}}>{pName||"You"}</span>
-                <span style={{fontSize:9,fontWeight:700,color:gcHex,fontFamily:"monospace",
-                  background:"rgba(0,0,0,0.5)",borderRadius:8,padding:"1px 7px",
-                  border:`1px solid ${gcHex}33`}}>{"×"+n}</span>
-              </div></div>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
@@ -2292,6 +2295,7 @@ const globalCSS=`
   @keyframes bgPulse{0%{opacity:0}30%{opacity:1}100%{opacity:0.3}}
   @keyframes screenShake{0%{transform:translate(0,0)}10%{transform:translate(-4px,2px)}20%{transform:translate(4px,-3px)}35%{transform:translate(-3px,3px)}50%{transform:translate(3px,-1px)}65%{transform:translate(-2px,1px)}80%{transform:translate(1px,-1px)}100%{transform:translate(0,0)}}
   @keyframes timeoutFade{0%{opacity:0;transform:scale(0.8)}15%{opacity:1;transform:scale(1.05)}30%{transform:scale(1)}70%{opacity:0.8}100%{opacity:0;transform:scale(1.1)}}
+  @keyframes turnTextFade{0%{opacity:0;transform:scale(0.7)}12%{opacity:1;transform:scale(1.06)}25%{transform:scale(1)}65%{opacity:0.7}100%{opacity:0;transform:scale(1.08)}}
   @keyframes discardPull{0%{opacity:1}30%{transform:translate(0,0) rotate(0deg) scale(1.1);opacity:1}
     70%{transform:translate(0,-20px) rotate(360deg) scale(0.6);opacity:0.8}
     100%{transform:translate(0,-40px) rotate(720deg) scale(0);opacity:0}}
