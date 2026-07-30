@@ -897,57 +897,82 @@ const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy"})=>{
       {/* trip: flailing front arm + sweat */}
       {isTrip&&<><rect x="24" y="96" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(-40 30 100)"/>
         <ellipse cx="30" cy="40" rx="6" ry="9" fill="#5AC8FA" opacity="0.9" style={{animation:"sweatFall 0.9s ease-in forwards"}}/></>}
+      {/* draw stance: two-handed katana held across, ready to unsheathe */}
+      {pose==="draw"&&<g transform="rotate(-11 60 104)">
+        <rect x="-10" y="102" width="68" height="6" rx="3" fill="#CED2DC"/>
+        <rect x="-10" y="102" width="68" height="2" rx="1" fill="#fff" opacity="0.75"/>
+        <rect x="55" y="97" width="5" height="15" rx="2" fill={accent}/>
+        <rect x="60" y="99.5" width="28" height="9" rx="3.5" fill={dark}/>
+        <rect x="62" y="98.5" width="11" height="11" rx="5.5" fill={`url(#chSkin_${u})`}/>
+        <rect x="76" y="98.5" width="11" height="11" rx="5.5" fill={`url(#chSkin_${u})`}/>
+        <rect x="-10" y="103" width="13" height="4" rx="2" fill="#fff" style={{filter:`drop-shadow(0 0 7px ${accent})`}}>
+          <animate attributeName="x" from="50" to="-10" dur="0.5s" begin="0.05s" fill="freeze"/></rect>
+      </g>}
     </g>
   </svg>);};
 
-/* ═══ CHIBI ELEMENTAL SWORD-SLASH (on +4 penalty resolve) ═══ */
+/* ═══ CHIBI SWORD-DRAW CINEMATIC (on +4 penalty) — stance → slash ═══ */
 const ChibiAttackFX=({element,victimName,onDone})=>{
+  const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
-  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2400);return()=>clearTimeout(t);},[]);
-  const em=EM(element);
-  const rays=useMemo(()=>Array.from({length:20},(_,i)=>({id:i,a:(i/20)*360})),[element]);
-  const stars=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:90+Math.random()*70,d:0.2+Math.random()*0.35,e:Math.random()>0.5})),[element]);
-  return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
-    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-    {/* flash + vignette focusing the center */}
-    <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 48%,${em.glow}33,rgba(0,0,0,0.55) 72%)`,
-      animation:"bgPulse 0.5s ease-out"}}/>
-    {/* radial manga speed lines bursting from behind the chibi */}
-    <div style={{position:"absolute",left:"50%",top:"48%",width:0,height:0,zIndex:1}}>
-      {rays.map(r=><div key={r.id} style={{position:"absolute",left:0,top:0,width:"48vmax",height:r.id%2?2:5,
-        background:`linear-gradient(90deg,${em.glow},rgba(255,255,255,0.65) 45%,transparent 78%)`,
-        transformOrigin:"0 50%","--a":`${r.a}deg`,opacity:0,
-        animation:`mangaBurst 0.55s ease-out ${r.id*0.012}s forwards`}}/>)}
-    </div>
-    {/* diagonal element slash across the panel */}
-    <div style={{position:"absolute",top:"46%",left:"-20%",width:"140%",height:12,
-      background:`linear-gradient(90deg,transparent,${em.glow},#fff,${em.glow},transparent)`,
-      boxShadow:`0 0 30px ${em.glow},0 0 60px ${em.glow}88`,transform:"rotate(-13deg)",zIndex:2,
-      animation:"slashSweep 0.5s cubic-bezier(.22,1,.36,1) 0.2s both"}}/>
-    {/* manga label bubble */}
-    <div style={{position:"relative",zIndex:4,marginBottom:8,
-      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.12s both"}}>
-      <div style={{background:"rgba(0,0,0,0.85)",border:`2px solid ${em.glow}`,borderRadius:14,padding:"5px 16px",
-        boxShadow:`0 0 22px ${em.glow}88`,whiteSpace:"nowrap"}}>
-        <span style={{fontSize:15,fontWeight:900,color:em.glow,letterSpacing:1,fontFamily:"Arial Black"}}>{em.emoji} {em.name} SLASH!</span></div>
-    </div>
-    {/* chibi pops front & center */}
-    <div style={{position:"relative",zIndex:4,height:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div style={{transform:"scale(1.7)",transformOrigin:"center bottom",
-        filter:`drop-shadow(0 0 18px ${em.glow}66)`,animation:"chibiPunchIn 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>
-        <Chibi pose="slash" accent={em.glow} dark={em.c3} gender={ELEM_GENDER[element]||"boy"}/>
+  useEffect(()=>{
+    const t1=setTimeout(()=>setPhase(1),880);
+    const t2=setTimeout(()=>doneRef.current(),2600);
+    return()=>{clearTimeout(t1);clearTimeout(t2);};
+  },[]);
+  const em=EM(element);const gen=ELEM_GENDER[element]||"boy";
+  const rays=useMemo(()=>Array.from({length:22},(_,i)=>({id:i,a:(i/22)*360})),[element]);
+  const vlines=useMemo(()=>Array.from({length:26},(_,i)=>({id:i,x:(i/26)*100,d:Math.random()*0.3,w:1+Math.random()*2})),[element]);
+  const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
+
+  if(phase===0){
+    /* ── PHASE 1: transparent stance, unsheathing (SHING) ── */
+    return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
+      background:"radial-gradient(circle at 50% 46%,rgba(22,22,30,0.3),rgba(0,0,0,0.74) 76%)",
+      display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.25s ease-out"}}>
+      {vlines.map(l=><div key={l.id} style={{position:"absolute",top:0,left:`${l.x}%`,width:l.w,height:"100%",
+        background:"linear-gradient(180deg,transparent,rgba(255,255,255,0.12),transparent)",
+        animation:`stanceLine 0.88s ease-out ${l.d}s both`}}/>)}
+      <div style={{position:"relative",zIndex:2,opacity:0.5,
+        filter:`drop-shadow(0 0 16px ${em.glow})`,animation:"stanceRise 0.88s cubic-bezier(.22,1,.36,1) both"}}>
+        <Chibi pose="draw" accent={em.glow} dark={em.c3} gender={gen}/>
       </div>
+      <div style={{position:"absolute",top:"28%",right:"24%",zIndex:3,fontFamily:"Arial Black",fontStyle:"italic",
+        fontSize:"min(32px,7.5vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:2,
+        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 16px ${em.glow},3px 3px 0 rgba(0,0,0,0.5)`,
+        animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.3s both"}}>SHING</div>
+    </div>);
+  }
+
+  /* ── PHASE 2: explosive slash impact ── */
+  return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
+    display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{position:"absolute",inset:0,background:"#fff",animation:"slashFlash 0.4s ease-out forwards"}}/>
+    <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 48%,${em.glow}22,rgba(0,0,0,0.6) 76%)`,
+      animation:"bgPulse 0.6s ease-out"}}/>
+    <div style={{position:"absolute",left:"50%",top:"48%",width:0,height:0,zIndex:1}}>
+      {rays.map(r=><div key={r.id} style={{position:"absolute",left:0,top:0,width:"52vmax",height:r.id%2?2:5,
+        background:`linear-gradient(90deg,#fff,${em.glow} 42%,transparent 80%)`,
+        transformOrigin:"0 50%","--a":`${r.a}deg`,opacity:0,
+        animation:`mangaBurst 0.5s ease-out ${r.id*0.008}s forwards`}}/>)}
     </div>
-    {/* victim + penalty callout */}
-    {victimName&&<div style={{position:"relative",zIndex:4,marginTop:14,
-      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.38s both"}}>
-      <span style={{fontSize:"min(22px,6vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",letterSpacing:1,
-        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 20px ${em.glow},0 3px 8px rgba(0,0,0,0.7)`}}>💥 {victimName} +4!</span></div>}
-    {/* manga impact stars */}
-    {stars.map(s=><div key={s.id} style={{position:"absolute",
-      left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(48% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
-      fontSize:16+Math.random()*14,opacity:0,filter:`drop-shadow(0 0 6px ${em.glow})`,zIndex:3,
-      animation:`trailPop 0.7s ease-out ${s.d}s forwards`}}>{s.e?"✦":em.emoji}</div>)}
+    <div style={{position:"absolute",top:"48%",left:"-25%",width:"150%",height:22,zIndex:3,
+      background:`linear-gradient(90deg,transparent,${em.glow}99,#fff,${em.glow}99,transparent)`,
+      boxShadow:`0 0 40px #fff,0 0 80px ${em.glow}`,animation:"slashArc 0.55s cubic-bezier(.22,1,.36,1) both"}}/>
+    <div style={{position:"absolute",top:"48%",left:"-25%",width:"150%",height:4,zIndex:3,background:"#fff",
+      animation:"slashArc 0.55s cubic-bezier(.22,1,.36,1) 0.04s both"}}/>
+    {dust.map(d=><div key={d.id} style={{position:"absolute",
+      left:`calc(50% + ${Math.round(Math.cos(d.a)*d.r)}px)`,top:`calc(48% + ${Math.round(Math.sin(d.a)*d.r)}px)`,
+      width:d.s,height:d.s,borderRadius:"50%",background:`radial-gradient(circle,${em.glow}cc,transparent)`,
+      opacity:0,zIndex:2,animation:`trailPop 0.7s ease-out ${0.1+d.d}s forwards`}}/>)}
+    <div style={{position:"absolute",left:"32%",top:"54%",transform:"translate(-50%,-50%) scale(1.65)",zIndex:4,
+      filter:`drop-shadow(0 0 16px ${em.glow}88)`,animation:"chibiPunchIn 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>
+      <Chibi pose="slash" accent={em.glow} dark={em.c3} gender={gen}/>
+    </div>
+    {victimName&&<div style={{position:"absolute",bottom:"16%",zIndex:5,
+      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.28s both"}}>
+      <span style={{fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",fontStyle:"italic",letterSpacing:1,
+        WebkitTextStroke:`2.5px ${em.c3}`,textShadow:`0 0 20px ${em.glow},4px 4px 0 rgba(0,0,0,0.6)`}}>💥 {victimName} +4!</span></div>}
   </div>);
 };
 
@@ -1326,7 +1351,7 @@ export default function UnoGame(){
   },[roundTimer,g,isHost,pls,rc,wgs,rd]);
 
   const autoPassRef=useRef(false);
-  useEffect(()=>{if(turnTimer===0&&myTurn&&!g?.winner&&!autoPassRef.current){
+  useEffect(()=>{if(turnTimer===0&&myTurn&&!g?.winner&&!autoPassRef.current&&!snatchModal){
     autoPassRef.current=true;ps("timeout");
     (async()=>{
       if(drawStack>0){
@@ -1348,7 +1373,7 @@ export default function UnoGame(){
       }
       autoPassRef.current=false;
     })();
-  }},[turnTimer,myTurn,g,drawStack,hasDrawn,pid,myH,np,wgs,rd,ps]);
+  }},[turnTimer,myTurn,g,drawStack,hasDrawn,pid,myH,np,wgs,rd,ps,snatchModal]);
   useEffect(()=>{autoPassRef.current=false;},[g?.currentPlayer]);
 
   const autoDrawRef=useRef(false);
@@ -1571,7 +1596,7 @@ export default function UnoGame(){
     const nh={...g.hands};let remainHand=myH.filter((_,i)=>i!==ci);
     const nd=[...g.discardPile];let nDir=g.direction,skip=false,nCol=card.color==="wild"?cc:card.color,draw=0;
     const mn=rd.players[pid]?.name||"P";let m=mn+" played "+gl(card.value);
-    let pendingChallenge=null;let newDrawStack=0;let newDrawStackType=null;
+    let pendingChallenge=null;let newDrawStack=0;let newDrawStackType=null;let snatchHold=false;
     const is2P=po.length===2;
     let ndp2=[...(g.drawPile||[])];
 
@@ -1607,7 +1632,8 @@ export default function UnoGame(){
       const nextId=np(pid,nDir,false);const nextH=nh[nextId]||[];
       if(nextH.length>0){
         m+=" Snatch! Pick a card from "+(rd.players[nextId]?.name)+"!";
-        setSnatchModal({phase:"pick",fromId:nextId,fromName:rd.players[nextId]?.name,cardCount:nextH.length});}
+        snatchHold=true;
+        setSnatchModal({phase:"pick",fromId:nextId,fromName:rd.players[nextId]?.name,cardCount:nextH.length,nextTurn:nextId});}
       else m+=" Snatch! (nothing to take)";}
     const nxt=np(pid,nDir,skip);const dt=skip?np(pid,nDir,false):null;
     if(draw>0&&dt){
@@ -1639,6 +1665,7 @@ export default function UnoGame(){
       nh[pid]=[...nh[pid],...ndp2.splice(0,2)];winner=null;}
     let nextPlayer=winner?pid:nxt;
     if((card.value==="draw2"||card.value==="wild4")&&!winner)nextPlayer=np(pid,nDir,false);
+    if(snatchHold&&!winner)nextPlayer=pid;
     await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,
       currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:false},
       turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
@@ -1733,25 +1760,25 @@ export default function UnoGame(){
 
   const snatchPick=useCallback(async(cardIdx)=>{if(!snatchModal||snatchModal.phase!=="pick"||!g)return;
     const nh={...g.hands};const oppHand=[...(nh[snatchModal.fromId]||[])];
-    if(cardIdx>=oppHand.length){setSnatchModal(null);return;}
+    if(cardIdx>=oppHand.length){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
     const stolen=oppHand[cardIdx];oppHand.splice(cardIdx,1);
     nh[snatchModal.fromId]=oppHand;nh[pid]=[...(nh[pid]||[]),stolen];
     await wgs({hands:nh});
-    setSnatchModal({phase:"swap",fromId:snatchModal.fromId,fromName:snatchModal.fromName,card:stolen});
+    setSnatchModal({phase:"swap",fromId:snatchModal.fromId,fromName:snatchModal.fromName,card:stolen,nextTurn:snatchModal.nextTurn});
   },[snatchModal,g,pid,wgs]);
   const snatchSwap=useCallback(async(myCardIdx)=>{if(!snatchModal||snatchModal.phase!=="swap"||!g)return;
     const nh={...g.hands};const myHand=[...(nh[pid]||[])];const oppHand=[...(nh[snatchModal.fromId]||[])];
     const myCard=myHand[myCardIdx];
     oppHand.push(myCard);nh[snatchModal.fromId]=oppHand;
     nh[pid]=myHand.filter((_,i)=>i!==myCardIdx);
-    await wgs({hands:nh,message:(rd.players[pid]?.name)+" swapped a card with "+(snatchModal.fromName)+"!",turnTimestamp:Date.now()});
+    await wgs({hands:nh,message:(rd.players[pid]?.name)+" swapped a card with "+(snatchModal.fromName)+"!",currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});
     setSnatchModal(null);},[snatchModal,g,pid,wgs,rd]);
   const snatchReturn=useCallback(async()=>{if(!snatchModal||!g)return;
-    if(snatchModal.phase==="pick"){setSnatchModal(null);return;}
+    if(snatchModal.phase==="pick"){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
     const nh={...g.hands};const myHand=[...(nh[pid]||[])];const oppHand=[...(nh[snatchModal.fromId]||[])];
-    const si=myHand.findIndex(c=>c.id===snatchModal.card.id);if(si===-1){setSnatchModal(null);return;}
+    const si=myHand.findIndex(c=>c.id===snatchModal.card.id);if(si===-1){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
     oppHand.push(myHand[si]);nh[pid]=myHand.filter((_,i)=>i!==si);nh[snatchModal.fromId]=oppHand;
-    await wgs({hands:nh,message:(rd.players[pid]?.name)+" returned the snatched card",turnTimestamp:Date.now()});
+    await wgs({hands:nh,message:(rd.players[pid]?.name)+" returned the snatched card",currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});
     setSnatchModal(null);},[snatchModal,g,pid,wgs,rd]);
 
   const cardClick=ci=>{if(!myTurn||g?.winner||drawnCard||challenge||snatchModal)return;if(swap&&isAdm){admSwap(ci);return;}
@@ -2429,11 +2456,9 @@ export default function UnoGame(){
           {/* Hand - player's cards */}
           <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
             position:"relative"}}>
-            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-52,left:"50%",transform:"translateX(-50%)",
+            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-42,left:"50%",transform:"translateX(-50%)",
               zIndex:9,display:"flex",flexDirection:"column",alignItems:"center",pointerEvents:"none"}}>
-              <span style={{fontSize:14,fontWeight:900,color:"#fff",letterSpacing:3,fontFamily:"Arial Black",
-                WebkitTextStroke:`1px ${gcHex}`,textShadow:`0 0 14px ${gcHex},0 0 28px ${gcHex}88,0 2px 4px rgba(0,0,0,0.8)`,marginBottom:0}}>YOUR TURN</span>
-              <span style={{fontSize:32,color:gcHex,lineHeight:0.9,textShadow:`0 0 16px ${gcHex},0 0 30px ${gcHex}aa,0 2px 4px rgba(0,0,0,0.7)`,
+              <span style={{fontSize:38,color:gcHex,lineHeight:0.9,textShadow:`0 0 16px ${gcHex},0 0 32px ${gcHex}aa,0 2px 5px rgba(0,0,0,0.8)`,
                 animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
@@ -2522,6 +2547,10 @@ const globalCSS=`
   @keyframes draw2Ring{0%{transform:scale(0.3);opacity:0.9}70%{opacity:0.4}100%{transform:scale(1.6);opacity:0}}
   @keyframes mangaBurst{0%{opacity:0;transform:rotate(var(--a)) translateX(40px) scaleX(0.2)}30%{opacity:0.95}100%{opacity:0.5;transform:rotate(var(--a)) translateX(64px) scaleX(1)}}
   @keyframes chibiPunchIn{0%{transform:scale(0.2) translateY(30px);opacity:0}45%{transform:scale(1.95) translateY(-6px);opacity:1}70%{transform:scale(1.55)}100%{transform:scale(1.7) translateY(0);opacity:1}}
+  @keyframes stanceLine{0%{opacity:0;transform:scaleY(0.6)}35%{opacity:1}100%{opacity:0;transform:scaleY(1)}}
+  @keyframes stanceRise{0%{opacity:0;transform:scale(1.55) translateY(26px)}55%{opacity:0.5}100%{opacity:0.5;transform:scale(1.75) translateY(0)}}
+  @keyframes slashFlash{0%{opacity:0.85}100%{opacity:0}}
+  @keyframes slashArc{0%{transform:translateX(-60%) rotate(-18deg) scaleX(0.2);opacity:0}25%{opacity:1}70%{opacity:1}100%{transform:translateX(55%) rotate(-18deg) scaleX(1);opacity:0}}
   @keyframes draw2CardL{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(-46px,-6px) rotate(-14deg)}80%{opacity:1}100%{transform:translate(-70px,-70px) rotate(-24deg);opacity:0}}
   @keyframes draw2CardR{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(46px,-6px) rotate(14deg)}80%{opacity:1}100%{transform:translate(70px,-70px) rotate(24deg);opacity:0}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
