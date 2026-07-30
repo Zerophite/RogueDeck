@@ -855,36 +855,51 @@ const Chibi=({pose="slash",accent="#FFD700"})=>{
 /* ═══ CHIBI ELEMENTAL SWORD-SLASH (on +4 penalty resolve) ═══ */
 const ChibiAttackFX=({element,victimName,onDone})=>{
   const doneRef=useRef(onDone);doneRef.current=onDone;
-  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2600);return()=>clearTimeout(t);},[]);
+  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2400);return()=>clearTimeout(t);},[]);
   const em=EM(element);
-  const trail=useMemo(()=>Array.from({length:10},(_,i)=>({id:i,d:i*0.03,x:8+i*9,y:Math.random()*14-7})),[element]);
-  return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden"}}>
-    <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 45%,${em.glow}22,transparent 60%)`,
-      animation:"bgPulse 0.6s ease-out"}}/>
-    <div style={{position:"absolute",top:"38%",left:"-20%",width:"140%",height:14,
-      background:`linear-gradient(90deg,transparent,${em.glow},#fff,${em.glow},transparent)`,
-      boxShadow:`0 0 30px ${em.glow},0 0 60px ${em.glow}88`,transform:"rotate(-12deg)",
-      animation:"slashSweep 0.5s cubic-bezier(.22,1,.36,1) 0.15s both"}}/>
-    <div style={{position:"absolute",top:"41%",left:"-20%",width:"140%",height:4,background:"#fff",
-      transform:"rotate(-12deg)",opacity:0.9,
-      animation:"slashSweep 0.5s cubic-bezier(.22,1,.36,1) 0.15s both"}}/>
-    {trail.map(t=><div key={t.id} style={{position:"absolute",left:`${t.x}%`,top:`calc(40% + ${t.y}px)`,
-      fontSize:16+Math.random()*10,opacity:0,animation:`trailPop 0.6s ease-out ${0.15+t.d}s forwards`}}>{em.emoji}</div>)}
-    <div style={{position:"fixed",bottom:20,right:14,display:"flex",flexDirection:"column",alignItems:"center",
-      animation:"chibiEnter 0.4s cubic-bezier(.34,1.56,.64,1) both"}}>
-      <div style={{background:"rgba(0,0,0,0.82)",border:`1px solid ${em.glow}55`,borderRadius:12,
-        padding:"4px 10px",marginBottom:4,whiteSpace:"nowrap"}}>
-        <span style={{fontSize:11,fontWeight:900,color:em.glow,letterSpacing:1}}>{em.name} SLASH!</span></div>
-      {victimName&&<div style={{background:"rgba(0,0,0,0.7)",borderRadius:8,padding:"2px 8px",marginBottom:4,
-        border:"1px solid rgba(224,64,251,0.3)"}}>
-        <span style={{fontSize:8,color:"#FF8A80",fontWeight:700}}>💥 {victimName}</span></div>}
-      <Chibi pose="slash" accent={em.glow}/>
+  const rays=useMemo(()=>Array.from({length:20},(_,i)=>({id:i,a:(i/20)*360})),[element]);
+  const stars=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:90+Math.random()*70,d:0.2+Math.random()*0.35,e:Math.random()>0.5})),[element]);
+  return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
+    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+    {/* flash + vignette focusing the center */}
+    <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 48%,${em.glow}33,rgba(0,0,0,0.55) 72%)`,
+      animation:"bgPulse 0.5s ease-out"}}/>
+    {/* radial manga speed lines bursting from behind the chibi */}
+    <div style={{position:"absolute",left:"50%",top:"48%",width:0,height:0,zIndex:1}}>
+      {rays.map(r=><div key={r.id} style={{position:"absolute",left:0,top:0,width:"48vmax",height:r.id%2?2:5,
+        background:`linear-gradient(90deg,${em.glow},rgba(255,255,255,0.65) 45%,transparent 78%)`,
+        transformOrigin:"0 50%","--a":`${r.a}deg`,opacity:0,
+        animation:`mangaBurst 0.55s ease-out ${r.id*0.012}s forwards`}}/>)}
     </div>
-    <div style={{position:"absolute",top:"46%",left:"50%",transform:"translate(-50%,-50%)",fontSize:44,fontWeight:900,
-      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.2s both",
-      filter:`drop-shadow(0 0 25px ${em.glow})`,zIndex:2}}>
-      <span style={{background:em.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text",
-        fontFamily:"Arial Black"}}>{em.emoji} HIT!</span></div>
+    {/* diagonal element slash across the panel */}
+    <div style={{position:"absolute",top:"46%",left:"-20%",width:"140%",height:12,
+      background:`linear-gradient(90deg,transparent,${em.glow},#fff,${em.glow},transparent)`,
+      boxShadow:`0 0 30px ${em.glow},0 0 60px ${em.glow}88`,transform:"rotate(-13deg)",zIndex:2,
+      animation:"slashSweep 0.5s cubic-bezier(.22,1,.36,1) 0.2s both"}}/>
+    {/* manga label bubble */}
+    <div style={{position:"relative",zIndex:4,marginBottom:8,
+      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.12s both"}}>
+      <div style={{background:"rgba(0,0,0,0.85)",border:`2px solid ${em.glow}`,borderRadius:14,padding:"5px 16px",
+        boxShadow:`0 0 22px ${em.glow}88`,whiteSpace:"nowrap"}}>
+        <span style={{fontSize:15,fontWeight:900,color:em.glow,letterSpacing:1,fontFamily:"Arial Black"}}>{em.emoji} {em.name} SLASH!</span></div>
+    </div>
+    {/* chibi pops front & center */}
+    <div style={{position:"relative",zIndex:4,height:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+      <div style={{transform:"scale(1.7)",transformOrigin:"center bottom",
+        filter:`drop-shadow(0 0 18px ${em.glow}66)`,animation:"chibiPunchIn 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>
+        <Chibi pose="slash" accent={em.glow}/>
+      </div>
+    </div>
+    {/* victim + penalty callout */}
+    {victimName&&<div style={{position:"relative",zIndex:4,marginTop:14,
+      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.38s both"}}>
+      <span style={{fontSize:"min(22px,6vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",letterSpacing:1,
+        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 20px ${em.glow},0 3px 8px rgba(0,0,0,0.7)`}}>💥 {victimName} +4!</span></div>}
+    {/* manga impact stars */}
+    {stars.map(s=><div key={s.id} style={{position:"absolute",
+      left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(48% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
+      fontSize:16+Math.random()*14,opacity:0,filter:`drop-shadow(0 0 6px ${em.glow})`,zIndex:3,
+      animation:`trailPop 0.7s ease-out ${s.d}s forwards`}}>{s.e?"✦":em.emoji}</div>)}
   </div>);
 };
 
@@ -2459,6 +2474,8 @@ const globalCSS=`
   @keyframes turnArrowBounce{0%,100%{transform:translateY(0);opacity:0.6}50%{transform:translateY(4px);opacity:1}}
   @keyframes draw2Pop{0%{transform:scale(0.2) rotate(-10deg);opacity:0}30%{transform:scale(1.25) rotate(4deg);opacity:1}50%{transform:scale(1) rotate(0)}80%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.1) translateY(-20px)}}
   @keyframes draw2Ring{0%{transform:scale(0.3);opacity:0.9}70%{opacity:0.4}100%{transform:scale(1.6);opacity:0}}
+  @keyframes mangaBurst{0%{opacity:0;transform:rotate(var(--a)) translateX(40px) scaleX(0.2)}30%{opacity:0.95}100%{opacity:0.5;transform:rotate(var(--a)) translateX(64px) scaleX(1)}}
+  @keyframes chibiPunchIn{0%{transform:scale(0.2) translateY(30px);opacity:0}45%{transform:scale(1.95) translateY(-6px);opacity:1}70%{transform:scale(1.55)}100%{transform:scale(1.7) translateY(0);opacity:1}}
   @keyframes draw2CardL{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(-46px,-6px) rotate(-14deg)}80%{opacity:1}100%{transform:translate(-70px,-70px) rotate(-24deg);opacity:0}}
   @keyframes draw2CardR{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(46px,-6px) rotate(14deg)}80%{opacity:1}100%{transform:translate(70px,-70px) rotate(24deg);opacity:0}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
