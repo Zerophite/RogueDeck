@@ -2362,9 +2362,14 @@ export default function UnoGame(){
             </div>)}
 
           {/* Hand - player's cards */}
-          <div style={{flexShrink:0,background:myTurn&&!g.winner?`linear-gradient(0deg,${gcHex}18,${gcHex}08,transparent)`:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
-            borderBottom:myTurn&&!g.winner?`2px solid ${gcHex}55`:"2px solid transparent",
-            transition:"all 0.5s ease"}}>
+          <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
+            position:"relative"}}>
+            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",
+              background:`linear-gradient(90deg,transparent,${gcHex}44,transparent)`,
+              padding:"2px 20px",borderRadius:8,zIndex:7,display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontSize:8,fontWeight:900,color:gcHex,letterSpacing:3,textShadow:`0 0 10px ${gcHex}88`}}>YOUR TURN</span>
+              <span style={{fontSize:10,animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
+            </div>}
             <div style={{flex:1,position:"relative"}}>
             <span style={{position:"absolute",left:4,bottom:8,fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.45)",letterSpacing:1,
               writingMode:"vertical-rl",textOrientation:"mixed",
@@ -2378,11 +2383,11 @@ export default function UnoGame(){
                 const cardSz=isLandscape?"md":"lg";
                 const spacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));const xOff=(i-(n-1)/2)*spacing;
                 return(<div key={card.id} onClick={()=>{if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else setSel(i);}}}
-                  style={{position:"absolute",bottom:isSel?(isLandscape?25:35):2+liftY,left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
+                  style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,
                     transition:"all 0.3s cubic-bezier(.34,1.56,.64,1)",zIndex:isSel?50:i,
-                    animation:playable&&!isSel?`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both, myTurnGlow 1.5s ease-in-out infinite`:`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`,
-                    filter:isSel?`brightness(1.2) drop-shadow(0 0 20px ${CH[card.color]||"#FFD700"}88)`:playable?`brightness(1.1) drop-shadow(0 0 12px ${CH[card.color]||"#FFD700"}66)`:"brightness(0.85)",
+                    animation:`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`,
+                    filter:isSel?`brightness(1.2) drop-shadow(0 0 20px ${CH[card.color]||"#FFD700"}88)`:playable?`brightness(1.08) drop-shadow(0 0 6px ${CH[card.color]||"#FFD700"}44)`:"none",
                     cursor:(myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)?"pointer":"default"}}>
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
@@ -2446,7 +2451,7 @@ const globalCSS=`
   @keyframes neonPulse{0%,100%{filter:brightness(1);opacity:0.9}50%{filter:brightness(1.15);opacity:1}}
   @keyframes turnGlow{0%,100%{box-shadow:0 0 25px var(--gc,#FF6F00)44,0 0 50px var(--gc,#FF6F00)15}50%{box-shadow:0 0 35px var(--gc,#FF6F00)66,0 0 70px var(--gc,#FF6F00)25}}
   @keyframes playableGlow{0%,100%{box-shadow:0 4px 20px currentColor}50%{box-shadow:0 4px 35px currentColor,0 0 20px currentColor}}
-  @keyframes myTurnGlow{0%,100%{filter:brightness(1.1) drop-shadow(0 0 8px currentColor)}50%{filter:brightness(1.25) drop-shadow(0 0 18px currentColor)}}
+  @keyframes turnArrowBounce{0%,100%{transform:translateY(0);opacity:0.6}50%{transform:translateY(4px);opacity:1}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
   @keyframes menuLogo{0%,100%{transform:scale(1) rotate(0deg)}25%{transform:scale(1.06) rotate(2deg)}75%{transform:scale(1.03) rotate(-1deg)}}
   @keyframes menuCardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
