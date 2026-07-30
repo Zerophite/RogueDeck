@@ -1183,16 +1183,16 @@ export default function UnoGame(){
         setChibiAttackFx({element:g?.currentColor||"green",victimName:vm?vm[1]:null});
       }
     }
-    else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);trigImpact(sc);}
-    else if(m.includes("reverse")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);trigImpact(rc2);}
-    else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);trigShake();trigBurst(dc);trigImpact(dc);}
+    else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
+    else if(m.includes("reverse")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
+    else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);trigShake();}
     else if(m.includes("+4")){const wc=g?.currentColor||"green";setWild4Fx(wc);ps("draw4");psE(wc);trigShake();trigBurst(wc);trigImpact(wc);}
-    else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");trigImpact("yellow");}
+    else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");}
     else if(m.includes("wins")){ps("win");trigBurst("yellow");trigImpact("yellow");}
-    else if(m.includes("discard all")){const dac=g?.currentColor||"yellow";setActFx("discardAll");ps("discardAll");psE(dac);trigBurst(dac);trigImpact(dac);trigLightning(dac);}
-    else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("skip");psE(shc);trigBurst(shc);trigImpact(shc);}
-    else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);trigImpact(snc);}
-    else if(m.includes("played")){trigImpact(g?.currentColor||"red");}
+    else if(m.includes("discard all")){const dac=g?.currentColor||"yellow";setActFx("discardAll");ps("discardAll");psE(dac);trigBurst(dac);trigLightning(dac);}
+    else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("skip");psE(shc);trigBurst(shc);}
+    else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
+    else if(m.includes("played")){}
     if(m.includes("timed out")){const tm=g.message.match(/^(.*?)\s+timed out/i);setTimeoutFx(tm?tm[1]:"");}
   },[g?.message,ps,psE,trigShake,trigBurst,trigImpact,trigLightning,g?.currentColor]);
   useEffect(()=>{if(timeoutFx!==null){const t=setTimeout(()=>setTimeoutFx(null),2000);return()=>clearTimeout(t);}},[timeoutFx]);
@@ -1793,22 +1793,13 @@ export default function UnoGame(){
             onPointerLeave={e=>{e.currentTarget.style.transform="translateY(0) scale(1)";e.currentTarget.style.boxShadow="0 6px 30px rgba(229,57,53,0.5)";}}>
             CREATE ROOM</button>
 
-          <div style={{display:"flex",gap:6,marginBottom:8}}>
-            <button onClick={quickPlay1v1} style={{flex:1,padding:"10px 0",borderRadius:12,border:"none",
-              background:"linear-gradient(135deg,#1976D2,#0D47A1)",color:"#fff",
-              fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:3,
-              boxShadow:"0 4px 20px rgba(25,118,210,0.4)",transition:"all 0.25s"}}
-              onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
-              onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
-              1v1 BOT</button>
-            <button onClick={quickPlayFFA} style={{flex:1,padding:"10px 0",borderRadius:12,border:"none",
+          <button onClick={quickPlayFFA} style={{width:"100%",padding:"10px 0",borderRadius:12,border:"none",
               background:"linear-gradient(135deg,#2E7D32,#1B5E20)",color:"#fff",
               fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:3,
-              boxShadow:"0 4px 20px rgba(46,125,50,0.4)",transition:"all 0.25s"}}
+              boxShadow:"0 4px 20px rgba(46,125,50,0.4)",transition:"all 0.25s",marginBottom:8}}
               onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
               onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>
               FREE FOR ALL</button>
-          </div>
 
           <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
             <input value={jc} onChange={e=>setJc(e.target.value.toUpperCase())} placeholder="CODE" maxLength={4}
@@ -2134,8 +2125,9 @@ export default function UnoGame(){
       {turnFx!==null&&timeoutFx===null&&<div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center",
         pointerEvents:"none",animation:"turnTextFade 1.8s ease-out forwards"}}>
         <div style={{fontSize:"min(48px, 10vw)",fontWeight:900,fontFamily:"Arial Black",
-          color:`${gcHex}88`,
-          letterSpacing:6,textShadow:`0 0 40px ${gcHex}44,0 4px 20px rgba(0,0,0,0.6)`,
+          color:"#fff",
+          letterSpacing:6,WebkitTextStroke:`2px ${gcHex}`,
+          textShadow:`0 0 30px ${gcHex},0 0 60px ${gcHex}88,0 4px 20px rgba(0,0,0,0.9)`,
           textAlign:"center",textTransform:"uppercase"}}>{turnFx}</div></div>}
       {challenge&&<ChallengeModal playerName={challenge.playerName}
         onChallenge={()=>respondChallenge(true)} onAccept={()=>respondChallenge(false)}/>}
@@ -2365,10 +2357,12 @@ export default function UnoGame(){
             </div>)}
 
           {/* Hand - player's cards */}
-          <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
-            display:"flex",alignItems:"center",gap:6}}>
-            <div style={{flexShrink:0,width:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
+          <div style={{flexShrink:0,background:myTurn&&!g.winner?`linear-gradient(0deg,${gcHex}18,${gcHex}08,transparent)`:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
+            display:"flex",alignItems:"center",gap:6,
+            borderBottom:myTurn&&!g.winner?`2px solid ${gcHex}55`:"2px solid transparent",
+            transition:"all 0.5s ease"}}>
+            <div style={{flexShrink:0,width:30,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
                 writingMode:"vertical-rl",textOrientation:"mixed",
                 textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap"}}>{pName||"You"}</span>
             </div>
@@ -2385,14 +2379,14 @@ export default function UnoGame(){
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):2+liftY,left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,
                     transition:"all 0.3s cubic-bezier(.34,1.56,.64,1)",zIndex:isSel?50:i,
-                    animation:`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`,
-                    filter:isSel?`brightness(1.2) drop-shadow(0 0 20px ${CH[card.color]||"#FFD700"}88)`:"none",
+                    animation:playable&&!isSel?`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both, myTurnGlow 1.5s ease-in-out infinite`:`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`,
+                    filter:isSel?`brightness(1.2) drop-shadow(0 0 20px ${CH[card.color]||"#FFD700"}88)`:playable?`brightness(1.1) drop-shadow(0 0 12px ${CH[card.color]||"#FFD700"}66)`:"brightness(0.85)",
                     cursor:(myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)?"pointer":"default"}}>
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
             </div>
             </div>
-            <div style={{flexShrink:0,width:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{flexShrink:0,width:36,display:"flex",alignItems:"center",justifyContent:"center"}}>
               {!g.winner&&!(g.calledUno||{})[pid]&&(
                 <div onClick={callUno} style={{width:48,height:48,borderRadius:"50%",cursor:"pointer",
                   background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
@@ -2452,6 +2446,7 @@ const globalCSS=`
   @keyframes neonPulse{0%,100%{filter:brightness(1);opacity:0.9}50%{filter:brightness(1.15);opacity:1}}
   @keyframes turnGlow{0%,100%{box-shadow:0 0 25px var(--gc,#FF6F00)44,0 0 50px var(--gc,#FF6F00)15}50%{box-shadow:0 0 35px var(--gc,#FF6F00)66,0 0 70px var(--gc,#FF6F00)25}}
   @keyframes playableGlow{0%,100%{box-shadow:0 4px 20px currentColor}50%{box-shadow:0 4px 35px currentColor,0 0 20px currentColor}}
+  @keyframes myTurnGlow{0%,100%{filter:brightness(1.1) drop-shadow(0 0 8px currentColor)}50%{filter:brightness(1.25) drop-shadow(0 0 18px currentColor)}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
   @keyframes menuLogo{0%,100%{transform:scale(1) rotate(0deg)}25%{transform:scale(1.06) rotate(2deg)}75%{transform:scale(1.03) rotate(-1deg)}}
   @keyframes menuCardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
