@@ -891,21 +891,25 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
 /* ═══ DRAW 2 — MINOR ELEMENTAL ATTACK (chibi throws projectiles) ═══ */
 const Draw2FX=({color,onDone})=>{
   const doneRef=useRef(onDone);doneRef.current=onDone;
-  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),1800);return()=>clearTimeout(t);},[]);
-  const em=EM(color);
-  const proj={red:"🔥",blue:"🥏",green:"🗡️",yellow:"⚡"}[color]||em.emoji;
-  const shots=useMemo(()=>Array.from({length:5},(_,i)=>({id:i,del:i*0.08,y:-10+Math.random()*20})),[color]);
-  return(<div style={{position:"fixed",inset:0,zIndex:97,pointerEvents:"none",overflow:"hidden"}}>
-    <div style={{position:"fixed",bottom:16,right:10,display:"flex",flexDirection:"column",alignItems:"center",
-      animation:"chibiEnter 0.35s cubic-bezier(.34,1.56,.64,1) both"}}>
-      <div style={{background:"rgba(0,0,0,0.75)",border:`1px solid ${em.glow}55`,borderRadius:10,
-        padding:"3px 8px",marginBottom:3,whiteSpace:"nowrap"}}>
-        <span style={{fontSize:9,fontWeight:900,color:em.glow}}>+2 {em.name}!</span></div>
-      <Chibi pose="throw" accent={em.glow}/>
+  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),1300);return()=>clearTimeout(t);},[]);
+  const em=EM(color);const hex=CH[color]||em.glow;
+  return(<div style={{position:"fixed",inset:0,zIndex:97,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {/* soft ring pulse */}
+      <div style={{position:"absolute",width:150,height:150,borderRadius:"50%",
+        border:`3px solid ${em.glow}`,animation:"draw2Ring 1.3s ease-out forwards"}}/>
+      {/* two small cards sliding in behind */}
+      {[-1,1].map(d=><div key={d} style={{position:"absolute",width:34,height:50,borderRadius:6,
+        background:CG[color]||em.grad,border:"2px solid rgba(255,255,255,0.85)",
+        boxShadow:`0 4px 14px rgba(0,0,0,0.5),0 0 16px ${em.glow}66`,
+        display:"flex",alignItems:"center",justifyContent:"center",
+        animation:`draw2Card${d>0?"R":"L"} 1.3s cubic-bezier(.22,1,.36,1) forwards`}}>
+        <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 3px rgba(0,0,0,0.6)"}}>+2</span></div>)}
+      {/* centered +2 emblem */}
+      <div style={{fontSize:"min(64px,15vw)",fontWeight:900,fontFamily:"Arial Black",color:"#fff",
+        WebkitTextStroke:`3px ${hex}`,textShadow:`0 0 30px ${em.glow},0 4px 14px rgba(0,0,0,0.7)`,
+        animation:"draw2Pop 1.3s cubic-bezier(.34,1.56,.64,1) forwards",zIndex:2}}>+2</div>
     </div>
-    {shots.map(s=><div key={s.id} style={{position:"absolute",right:70,bottom:`calc(70px + ${s.y}px)`,
-      fontSize:22,opacity:0,filter:`drop-shadow(0 0 8px ${em.glow})`,
-      animation:`projFly 0.7s ease-in ${0.1+s.del}s forwards`}}>{proj}</div>)}
   </div>);
 };
 
@@ -2064,6 +2068,8 @@ export default function UnoGame(){
   const opps=po.filter(id=>id!==pid);
   const isLandscape=typeof window!=="undefined"&&window.innerWidth>window.innerHeight;
   const n=myH.length;const spread=Math.min(n*3,32);const st2=-spread/2;
+  const cardSpacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));
+  const clusterHalf=((n-1)/2)*cardSpacing+(isLandscape?35:44);
   const topOpps=opps.length<=2?opps:opps.filter((_,i)=>i>0&&i<opps.length-(opps.length>2?1:0));
   const leftOpp=opps.length>2?opps[0]:null;
   const rightOpp=opps.length>2?opps[opps.length-1]:null;
@@ -2322,25 +2328,24 @@ export default function UnoGame(){
                 <div style={{position:"absolute",top:-8,right:-8,width:isLandscape?16:22,height:isLandscape?16:22,borderRadius:"50%",
                   background:CG[g.currentColor],border:"2px solid rgba(255,255,255,0.7)",
                   boxShadow:`0 0 18px ${gcHex}aa,0 0 35px ${gcHex}44`,transition:"all 0.5s"}}/>
+                {!g.winner&&<div style={{position:"absolute",left:"calc(100% + 14px)",top:"50%",transform:"translateY(-50%)",
+                  width:36,height:36,pointerEvents:"none",zIndex:15}}>
+                  <svg width="36" height="36" viewBox="0 0 36 36" style={{transform:"rotate(-90deg)"}}>
+                    <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="3"/>
+                    <circle cx="18" cy="18" r="15" fill="none"
+                      stroke={turnTimer<=5?"#FF5252":gcHex}
+                      strokeWidth="3" strokeLinecap="round"
+                      strokeDasharray={`${(turnTimer/(settings.turnTime||15))*94.2} 94.2`}
+                      style={{transition:"stroke-dasharray 1s linear,stroke 0.5s"}}/>
+                  </svg>
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+                    fontSize:12,fontWeight:900,fontFamily:"monospace",
+                    color:turnTimer<=5?"#FF5252":gcHex,
+                    animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>
+                </div>}
               </div>
             </div>
           </div>
-          {!g.winner&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,flexShrink:0,zIndex:15,pointerEvents:"none",marginBottom:2}}>
-              <div style={{position:"relative",width:36,height:36}}>
-                <svg width="36" height="36" viewBox="0 0 36 36" style={{transform:"rotate(-90deg)"}}>
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
-                  <circle cx="18" cy="18" r="15" fill="none"
-                    stroke={turnTimer<=5?"#FF5252":gcHex}
-                    strokeWidth="3" strokeLinecap="round"
-                    strokeDasharray={`${(turnTimer/(settings.turnTime||15))*94.2} 94.2`}
-                    style={{transition:"stroke-dasharray 1s linear,stroke 0.5s"}}/>
-                </svg>
-                <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
-                  fontSize:12,fontWeight:900,fontFamily:"monospace",
-                  color:turnTimer<=5?"#FF5252":gcHex,
-                  animation:turnTimer<=5?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>
-              </div>
-            </div>}
           {drawStack>0&&<div style={{textAlign:"center",flexShrink:0,zIndex:15,pointerEvents:"none"}}>
             <span style={{padding:"2px 10px",borderRadius:10,fontSize:9,fontWeight:900,
               background:"linear-gradient(135deg,#FF6F00,#E65100)",color:"#fff",letterSpacing:2,
@@ -2364,16 +2369,16 @@ export default function UnoGame(){
           {/* Hand - player's cards */}
           <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
             position:"relative"}}>
-            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-18,left:"50%",transform:"translateX(-50%)",
-              background:`linear-gradient(90deg,transparent,${gcHex}44,transparent)`,
-              padding:"2px 20px",borderRadius:8,zIndex:7,display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontSize:8,fontWeight:900,color:gcHex,letterSpacing:3,textShadow:`0 0 10px ${gcHex}88`}}>YOUR TURN</span>
-              <span style={{fontSize:10,animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
+            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-24,left:"50%",transform:"translateX(-50%)",
+              zIndex:9,display:"flex",flexDirection:"column",alignItems:"center",pointerEvents:"none"}}>
+              <span style={{fontSize:8,fontWeight:900,color:gcHex,letterSpacing:3,textShadow:`0 0 10px ${gcHex}`,marginBottom:-2}}>YOUR TURN</span>
+              <span style={{fontSize:20,color:gcHex,lineHeight:1,textShadow:`0 0 12px ${gcHex},0 2px 4px rgba(0,0,0,0.6)`,
+                animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
-            <span style={{position:"absolute",left:4,bottom:8,fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.45)",letterSpacing:1,
+            <span style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 16px)`,bottom:10,fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
               writingMode:"vertical-rl",textOrientation:"mixed",
-              textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap",zIndex:7}}>{pName||"You"}</span>
+              textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap",zIndex:7,transition:"left 0.3s ease"}}>{pName||"You"}</span>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
@@ -2393,12 +2398,12 @@ export default function UnoGame(){
                 </div>);})}
             </div>
             {!g.winner&&!(g.calledUno||{})[pid]&&(
-              <div onClick={callUno} style={{position:"absolute",right:4,bottom:10,width:48,height:48,borderRadius:"50%",cursor:"pointer",zIndex:8,
+              <div onClick={callUno} style={{position:"absolute",left:`calc(50% + ${clusterHalf}px + 6px)`,bottom:10,width:48,height:48,borderRadius:"50%",cursor:"pointer",zIndex:8,
                 background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
                 border:`3px solid ${gcHex}`,
                 boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
                 animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                transition:"border-color 0.5s,box-shadow 0.5s"}}
+                transition:"left 0.3s ease,border-color 0.5s,box-shadow 0.5s"}}
                 onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
                 onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
                 <span style={{fontSize:8,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
@@ -2452,6 +2457,10 @@ const globalCSS=`
   @keyframes turnGlow{0%,100%{box-shadow:0 0 25px var(--gc,#FF6F00)44,0 0 50px var(--gc,#FF6F00)15}50%{box-shadow:0 0 35px var(--gc,#FF6F00)66,0 0 70px var(--gc,#FF6F00)25}}
   @keyframes playableGlow{0%,100%{box-shadow:0 4px 20px currentColor}50%{box-shadow:0 4px 35px currentColor,0 0 20px currentColor}}
   @keyframes turnArrowBounce{0%,100%{transform:translateY(0);opacity:0.6}50%{transform:translateY(4px);opacity:1}}
+  @keyframes draw2Pop{0%{transform:scale(0.2) rotate(-10deg);opacity:0}30%{transform:scale(1.25) rotate(4deg);opacity:1}50%{transform:scale(1) rotate(0)}80%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.1) translateY(-20px)}}
+  @keyframes draw2Ring{0%{transform:scale(0.3);opacity:0.9}70%{opacity:0.4}100%{transform:scale(1.6);opacity:0}}
+  @keyframes draw2CardL{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(-46px,-6px) rotate(-14deg)}80%{opacity:1}100%{transform:translate(-70px,-70px) rotate(-24deg);opacity:0}}
+  @keyframes draw2CardR{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(46px,-6px) rotate(14deg)}80%{opacity:1}100%{transform:translate(70px,-70px) rotate(24deg);opacity:0}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
   @keyframes menuLogo{0%,100%{transform:scale(1) rotate(0deg)}25%{transform:scale(1.06) rotate(2deg)}75%{transform:scale(1.03) rotate(-1deg)}}
   @keyframes menuCardFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-15px)}}
