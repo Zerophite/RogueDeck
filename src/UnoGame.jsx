@@ -816,39 +816,87 @@ const ElementalW4FX=({color,onDone})=>{
   </div>);
 };
 
-/* ═══ SHARED MINI CHIBI (SVG, poses: slash / throw / trip) ═══ */
-const Chibi=({pose="slash",accent="#FFD700"})=>{
-  const poseAnim=pose==="trip"?"chibiTripFall 1s ease-in forwards":"chibiBounce 0.32s ease infinite alternate";
-  return(<svg viewBox="0 0 120 160" width="86" height="115" style={{overflow:"visible",filter:"drop-shadow(0 4px 12px rgba(0,0,0,0.6))"}}>
+/* ═══ ELEMENT → CHIBI GENDER (fire/lightning = boy, water/wind = girl) ═══ */
+const ELEM_GENDER={red:"boy",yellow:"boy",blue:"girl",green:"girl"};
+
+/* ═══ MANGA CHIBI (SVG, poses: slash / trip) — boy & girl variants ═══ */
+const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy"})=>{
+  const poseAnim=pose==="trip"?"chibiTripFall 1s ease-in forwards":"chibiBounce 0.4s ease infinite alternate";
+  const isGirl=gender==="girl";const isTrip=pose==="trip";const u=gender;
+  const skin1="#FFE7CE",skin2="#FBD3A8";
+  const hairA=isGirl?accent:"#33334A",hairB=isGirl?dark:"#16161F";
+  return(<svg viewBox="0 0 120 178" width="98" height="145" style={{overflow:"visible",filter:"drop-shadow(0 6px 10px rgba(0,0,0,0.55))"}}>
     <defs>
-      <radialGradient id="chSkin" cx="50%" cy="40%"><stop offset="0%" stopColor="#FFE4C4"/><stop offset="100%" stopColor="#FFDAB0"/></radialGradient>
-      <radialGradient id="chHair" cx="50%" cy="30%"><stop offset="0%" stopColor="#3E2723"/><stop offset="100%" stopColor="#1B0F0C"/></radialGradient>
+      <radialGradient id={`chSkin_${u}`} cx="50%" cy="38%"><stop offset="0%" stopColor={skin1}/><stop offset="100%" stopColor={skin2}/></radialGradient>
+      <linearGradient id={`chHair_${u}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={hairA}/><stop offset="100%" stopColor={hairB}/></linearGradient>
+      <linearGradient id={`chBody_${u}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent}/><stop offset="100%" stopColor={dark}/></linearGradient>
+      <radialGradient id={`chIris_${u}`} cx="50%" cy="35%"><stop offset="0%" stopColor={accent}/><stop offset="100%" stopColor={dark}/></radialGradient>
     </defs>
-    <g style={{animation:poseAnim,transformOrigin:"60px 90px"}}>
-      <ellipse cx="60" cy="135" rx="22" ry="22" fill="#263238" stroke={accent} strokeWidth="2"/>
-      <rect x="45" y="118" width="30" height="28" rx="10" fill="#263238"/>
-      <rect x="42" y="120" width="36" height="8" rx="4" fill={accent} opacity="0.85"/>
-      <line x1="82" y1="128" x2="98" y2="138" stroke="url(#chSkin)" strokeWidth="8" strokeLinecap="round"/>
-      <line x1="38" y1="128" x2="14" y2="110" stroke="url(#chSkin)" strokeWidth="8" strokeLinecap="round">
-        {pose==="slash"&&<animateTransform attributeName="transform" type="rotate" values="55 38 128;-85 38 128;55 38 128" dur="0.4s" repeatCount="indefinite"/>}
-        {pose==="throw"&&<animateTransform attributeName="transform" type="rotate" values="70 38 128;-20 38 128" dur="0.5s" repeatCount="1" fill="freeze"/>}
-      </line>
-      {pose==="slash"&&<rect x="-30" y="104" width="50" height="7" rx="3.5" fill={accent} style={{filter:`drop-shadow(0 0 8px ${accent})`}}>
-        <animateTransform attributeName="transform" type="rotate" values="55 14 110;-85 14 110;55 14 110" dur="0.4s" repeatCount="indefinite"/>
-      </rect>}
-      {pose==="throw"&&<circle cx="14" cy="110" r="7" fill={accent} style={{filter:`drop-shadow(0 0 8px ${accent})`}}>
-        <animateTransform attributeName="transform" type="rotate" values="70 38 128;-20 38 128" dur="0.5s" repeatCount="1" fill="freeze"/>
-      </circle>}
-      <circle cx="60" cy="55" r="40" fill="url(#chSkin)" stroke="#FFDAB0" strokeWidth="1"/>
-      <path d="M20,45 Q25,5 60,10 Q95,5 100,45 Q105,30 95,25 Q85,0 60,2 Q35,0 25,25 Q15,30 20,45Z" fill="url(#chHair)"/>
-      <path d="M22,45 Q20,65 25,70" fill="url(#chHair)" stroke="#1B0F0C" strokeWidth="2"/>
-      <path d="M98,45 Q100,65 95,70" fill="url(#chHair)" stroke="#1B0F0C" strokeWidth="2"/>
-      <rect x="18" y="34" width="84" height="9" rx="4.5" fill={accent} opacity="0.9"/>
-      <ellipse cx="45" cy="52" rx="8" ry={pose==="trip"?3:10} fill="#1A1A2E"/>
-      <ellipse cx="75" cy="52" rx="8" ry={pose==="trip"?3:10} fill="#1A1A2E"/>
-      {pose!=="trip"&&<><circle cx="48" cy="49" r="3" fill="#fff" opacity="0.9"/><circle cx="78" cy="49" r="3" fill="#fff" opacity="0.9"/></>}
-      <path d={pose==="trip"?"M45,74 Q60,66 75,74":"M42,72 Q60,86 78,72"} fill="none" stroke="#C62828" strokeWidth="3" strokeLinecap="round"/>
-      {pose==="trip"&&<ellipse cx="32" cy="45" rx="6" ry="9" fill="#4FC3F7" opacity="0.9" style={{animation:"sweatFall 0.9s ease-in forwards"}}/>}
+    <g style={{animation:poseAnim,transformOrigin:"60px 110px"}}>
+      {/* girl twin-tails behind */}
+      {isGirl&&<><path d="M22,52 Q-2,88 8,132 Q22,124 26,88 Q24,66 32,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
+        <path d="M98,52 Q122,88 112,132 Q98,124 94,88 Q96,66 88,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/></>}
+      {/* legs */}
+      <rect x={isGirl?49:47} y={isGirl?150:142} width={isGirl?10:12} height={isGirl?18:24} rx="6" fill={`url(#chSkin_${u})`}/>
+      <rect x={isGirl?61:61} y={isGirl?150:142} width={isGirl?10:12} height={isGirl?18:24} rx="6" fill={`url(#chSkin_${u})`}/>
+      <ellipse cx={isGirl?54:53} cy={isGirl?168:166} rx="8" ry="5" fill={dark}/>
+      <ellipse cx={isGirl?66:67} cy={isGirl?168:166} rx="8" ry="5" fill={dark}/>
+      {/* body / outfit */}
+      {isGirl
+        ?<path d="M42,100 Q60,94 78,100 L98,158 Q60,172 22,158 Z" fill={`url(#chBody_${u})`} stroke={hairB} strokeWidth="1.5"/>
+        :<path d="M40,100 Q60,94 80,100 L86,146 Q60,154 34,146 Z" fill={`url(#chBody_${u})`} stroke="#0008" strokeWidth="1"/>}
+      <rect x={isGirl?40:38} y="118" width={isGirl?40:44} height="7" rx="3.5" fill="#fff" opacity="0.35"/>
+      {/* back arm (their left / screen right) */}
+      <rect x="78" y="99" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(14 84 102)"/>
+      {/* head */}
+      <ellipse cx="60" cy="58" rx="43" ry="41" fill={`url(#chSkin_${u})`} stroke={skin2} strokeWidth="1"/>
+      {/* ears */}
+      <ellipse cx="18" cy="60" rx="6" ry="9" fill={`url(#chSkin_${u})`}/><ellipse cx="102" cy="60" rx="6" ry="9" fill={`url(#chSkin_${u})`}/>
+      {/* blush */}
+      <ellipse cx="30" cy="72" rx="7" ry="4" fill="#FF9AA2" opacity="0.6"/><ellipse cx="90" cy="72" rx="7" ry="4" fill="#FF9AA2" opacity="0.6"/>
+      {/* eyes */}
+      {isTrip
+        ?<><path d="M38,56 L50,66 M50,56 L38,66" stroke="#2A1622" strokeWidth="3" strokeLinecap="round"/>
+           <path d="M70,56 L82,66 M82,56 L70,66" stroke="#2A1622" strokeWidth="3" strokeLinecap="round"/></>
+        :<>
+           <ellipse cx="44" cy="61" rx="9.5" ry="12.5" fill="#fff"/><ellipse cx="76" cy="61" rx="9.5" ry="12.5" fill="#fff"/>
+           <ellipse cx="45" cy="63" rx="7.5" ry="10" fill={`url(#chIris_${u})`}/><ellipse cx="75" cy="63" rx="7.5" ry="10" fill={`url(#chIris_${u})`}/>
+           <ellipse cx="45" cy="64" rx="3.6" ry="5.2" fill="#161020"/><ellipse cx="75" cy="64" rx="3.6" ry="5.2" fill="#161020"/>
+           <circle cx="41" cy="58" r="3.4" fill="#fff"/><circle cx="71" cy="58" r="3.4" fill="#fff"/>
+           <circle cx="48" cy="67" r="1.8" fill="#fff" opacity="0.85"/><circle cx="78" cy="67" r="1.8" fill="#fff" opacity="0.85"/>
+           <path d="M33,52 Q44,47 55,53" stroke="#241019" strokeWidth="3" fill="none" strokeLinecap="round"/>
+           <path d="M65,53 Q76,47 87,52" stroke="#241019" strokeWidth="3" fill="none" strokeLinecap="round"/>
+           <path d={pose==="slash"?"M34,42 Q44,40 52,44":"M35,43 Q44,41 53,45"} stroke={hairB} strokeWidth="3" fill="none" strokeLinecap="round"/>
+           <path d={pose==="slash"?"M68,44 Q76,40 86,42":"M67,45 Q76,41 85,43"} stroke={hairB} strokeWidth="3" fill="none" strokeLinecap="round"/>
+         </>}
+      {/* mouth */}
+      {isTrip
+        ?<ellipse cx="60" cy="82" rx="5" ry="6" fill="#7A2523"/>
+        :pose==="slash"
+          ?<><path d="M50,79 Q60,92 70,79 Q60,84 50,79 Z" fill="#7A2523"/><path d="M53,82 Q60,88 67,82 Z" fill="#E8636B"/></>
+          :<path d="M51,80 Q60,88 69,80" stroke="#C0392B" strokeWidth="3" fill="none" strokeLinecap="round"/>}
+      {/* hair front */}
+      {isGirl
+        ?<path d="M14,54 Q10,14 60,10 Q110,14 106,54 Q101,28 82,23 Q91,41 80,45 L71,27 Q66,42 60,45 Q54,42 49,27 L40,45 Q29,41 38,23 Q19,28 14,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
+        :<path d="M16,52 Q12,16 32,13 L28,31 L41,9 L45,29 L57,6 L61,28 L75,8 L77,29 L90,14 L87,33 Q106,21 104,52 Q95,31 76,29 Q60,27 44,29 Q25,31 16,52 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>}
+      {/* boy headband */}
+      {!isGirl&&<><rect x="14" y="41" width="92" height="10" rx="5" fill={accent}/><rect x="14" y="41" width="92" height="3" rx="1.5" fill="#fff" opacity="0.4"/></>}
+      {/* girl bows at tails + top */}
+      {isGirl&&[[20,54],[100,54]].map(([bx,by],i)=><g key={i}>
+        <path d={`M${bx},${by} l-11,-6 l0,12 Z`} fill={accent} stroke={hairB} strokeWidth="1"/>
+        <path d={`M${bx},${by} l11,-6 l0,12 Z`} fill={accent} stroke={hairB} strokeWidth="1"/>
+        <circle cx={bx} cy={by} r="4" fill={dark}/></g>)}
+      {/* front slash arm + energy blade */}
+      {pose==="slash"&&<g>
+        <animateTransform attributeName="transform" type="rotate" values="48 40 104;-66 40 104;48 40 104" dur="0.5s" repeatCount="indefinite"/>
+        <rect x="34" y="76" width="12" height="32" rx="6" fill={`url(#chSkin_${u})`}/>
+        <rect x="33" y="70" width="14" height="9" rx="3" fill={dark}/>
+        <rect x="36.5" y="14" width="7" height="58" rx="3.5" fill={accent} style={{filter:`drop-shadow(0 0 10px ${accent})`}}/>
+        <rect x="38.5" y="14" width="3" height="58" rx="1.5" fill="#fff" opacity="0.6"/>
+      </g>}
+      {/* trip: flailing front arm + sweat */}
+      {isTrip&&<><rect x="24" y="96" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(-40 30 100)"/>
+        <ellipse cx="30" cy="40" rx="6" ry="9" fill="#5AC8FA" opacity="0.9" style={{animation:"sweatFall 0.9s ease-in forwards"}}/></>}
     </g>
   </svg>);};
 
@@ -887,7 +935,7 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
     <div style={{position:"relative",zIndex:4,height:200,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
       <div style={{transform:"scale(1.7)",transformOrigin:"center bottom",
         filter:`drop-shadow(0 0 18px ${em.glow}66)`,animation:"chibiPunchIn 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>
-        <Chibi pose="slash" accent={em.glow}/>
+        <Chibi pose="slash" accent={em.glow} dark={em.c3} gender={ELEM_GENDER[element]||"boy"}/>
       </div>
     </div>
     {/* victim + penalty callout */}
@@ -910,20 +958,17 @@ const Draw2FX=({color,onDone})=>{
   const em=EM(color);const hex=CH[color]||em.glow;
   return(<div style={{position:"fixed",inset:0,zIndex:97,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{position:"relative",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      {/* soft ring pulse */}
-      <div style={{position:"absolute",width:150,height:150,borderRadius:"50%",
-        border:`3px solid ${em.glow}`,animation:"draw2Ring 1.3s ease-out forwards"}}/>
-      {/* two small cards sliding in behind */}
-      {[-1,1].map(d=><div key={d} style={{position:"absolute",width:34,height:50,borderRadius:6,
+      {/* two small cards tossing outward */}
+      {[-1,1].map(d=><div key={d} style={{position:"absolute",width:28,height:42,borderRadius:5,
         background:CG[color]||em.grad,border:"2px solid rgba(255,255,255,0.85)",
-        boxShadow:`0 4px 14px rgba(0,0,0,0.5),0 0 16px ${em.glow}66`,
+        boxShadow:"0 3px 12px rgba(0,0,0,0.5)",
         display:"flex",alignItems:"center",justifyContent:"center",
-        animation:`draw2Card${d>0?"R":"L"} 1.3s cubic-bezier(.22,1,.36,1) forwards`}}>
-        <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 3px rgba(0,0,0,0.6)"}}>+2</span></div>)}
-      {/* centered +2 emblem */}
-      <div style={{fontSize:"min(64px,15vw)",fontWeight:900,fontFamily:"Arial Black",color:"#fff",
-        WebkitTextStroke:`3px ${hex}`,textShadow:`0 0 30px ${em.glow},0 4px 14px rgba(0,0,0,0.7)`,
-        animation:"draw2Pop 1.3s cubic-bezier(.34,1.56,.64,1) forwards",zIndex:2}}>+2</div>
+        animation:`draw2Card${d>0?"R":"L"} 1.1s cubic-bezier(.22,1,.36,1) forwards`}}>
+        <span style={{fontSize:10,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+2</span></div>)}
+      {/* compact +2 badge */}
+      <div style={{fontSize:"min(44px,11vw)",fontWeight:900,fontFamily:"Arial Black",fontStyle:"italic",color:"#fff",
+        WebkitTextStroke:`2.5px ${hex}`,textShadow:`0 0 16px ${em.glow},0 3px 8px rgba(0,0,0,0.6)`,
+        animation:"draw2Pop 1.1s cubic-bezier(.34,1.56,.64,1) forwards",zIndex:2}}>+2</div>
     </div>
   </div>);
 };
@@ -995,7 +1040,7 @@ const UnoPenaltyFX=({victimName,onDone})=>{
       border:"1px solid rgba(255,82,82,0.3)"}}>
       <span style={{fontSize:8,color:"#FF8A80",fontWeight:700}}>😵 {victimName}</span></div>}
     <div style={{position:"relative"}}>
-      <Chibi pose="trip" accent="#FF5252"/>
+      <Chibi pose="trip" accent="#FF5252" dark="#B71C1C" gender="boy"/>
       <div style={{position:"absolute",fontSize:20,top:10,left:-10,animation:"sweatFall 0.8s ease-in 0.1s both"}}>💦</div>
     </div>
   </div>);
@@ -1190,7 +1235,7 @@ export default function UnoGame(){
   useEffect(()=>{if(!g?.message||g.message===prevM.current)return;prevM.current=g.message;const m=g.message.toLowerCase();
     if(m.includes("challenge")&&m.includes("guilty")){setActFx("challenge");ps("challenge");trigShake();trigBurst("red");trigImpact("red");}
     else if(m.includes("challenge")&&m.includes("innocent")){setActFx("challenge");ps("challenge");trigBurst("blue");trigImpact("blue");}
-    else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);trigImpact(stc);trigLightning(stc);}
+    else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);}
     else if(m.includes("called uno")){setUnoCallFx(g?.currentColor||"red");ps("uno");trigShake();}
     else if(m.includes("forgot uno")||m.includes("caught!")){ps("penalty");trigShake();
       const fm=g.message.match(/^(.*?)\s+played\s/i);const cm=g.message.match(/^(.*?)\s+caught!/i);
@@ -1204,11 +1249,11 @@ export default function UnoGame(){
     }
     else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
     else if(m.includes("reverse")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
-    else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);trigShake();}
+    else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);}
     else if(m.includes("+4")){const wc=g?.currentColor||"green";setWild4Fx(wc);ps("draw4");psE(wc);trigShake();trigBurst(wc);trigImpact(wc);}
     else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");}
     else if(m.includes("wins")){ps("win");trigBurst("yellow");trigImpact("yellow");}
-    else if(m.includes("discard all")){const dac=g?.currentColor||"yellow";setActFx("discardAll");ps("discardAll");psE(dac);trigBurst(dac);trigLightning(dac);}
+    else if(m.includes("discard all")){const dac=g?.currentColor||"yellow";setActFx("discardAll");ps("discardAll");psE(dac);trigBurst(dac);}
     else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("skip");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
     else if(m.includes("played")){}
@@ -2145,15 +2190,15 @@ export default function UnoGame(){
       {discardFx&&<DiscardAllFX color={discardFx.color} count={discardFx.count} onDone={()=>setDiscardFx(null)}/>}
       {timeoutFx!==null&&<div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",
         pointerEvents:"none",animation:"timeoutFade 2s ease-out forwards"}}>
-        <div style={{fontSize:"min(60px, 12vw)",fontWeight:900,color:"rgba(255,82,82,0.7)",fontFamily:"Arial Black",
-          letterSpacing:8,textShadow:"0 0 40px rgba(255,82,82,0.4),0 4px 20px rgba(0,0,0,0.8)",
-          textAlign:"center"}}>TIMED OUT</div></div>}
+        <div style={{fontSize:"min(66px, 13vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",fontStyle:"italic",
+          letterSpacing:4,transform:"skewX(-7deg)",WebkitTextStroke:"3px #C62828",
+          textShadow:"4px 4px 0 rgba(0,0,0,0.6),0 0 26px rgba(255,82,82,0.85),0 0 55px rgba(255,82,82,0.4)",
+          textAlign:"center"}}>TIMED OUT!</div></div>}
       {turnFx!==null&&timeoutFx===null&&<div style={{position:"fixed",inset:0,zIndex:55,display:"flex",alignItems:"center",justifyContent:"center",
         pointerEvents:"none",animation:"turnTextFade 1.8s ease-out forwards"}}>
-        <div style={{fontSize:"min(48px, 10vw)",fontWeight:900,fontFamily:"Arial Black",
-          color:"#fff",
-          letterSpacing:6,WebkitTextStroke:`2px ${gcHex}`,
-          textShadow:`0 0 30px ${gcHex},0 0 60px ${gcHex}88,0 4px 20px rgba(0,0,0,0.9)`,
+        <div style={{fontSize:"min(54px, 11vw)",fontWeight:900,fontFamily:"Arial Black",fontStyle:"italic",
+          color:"#fff",letterSpacing:3,transform:"skewX(-7deg)",WebkitTextStroke:`3px ${gcHex}`,
+          textShadow:`4px 4px 0 rgba(0,0,0,0.55),0 0 26px ${gcHex},0 0 55px ${gcHex}66`,
           textAlign:"center",textTransform:"uppercase"}}>{turnFx}</div></div>}
       {challenge&&<ChallengeModal playerName={challenge.playerName}
         onChallenge={()=>respondChallenge(true)} onAccept={()=>respondChallenge(false)}/>}
@@ -2384,10 +2429,11 @@ export default function UnoGame(){
           {/* Hand - player's cards */}
           <div style={{flexShrink:0,background:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
             position:"relative"}}>
-            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-24,left:"50%",transform:"translateX(-50%)",
+            {myTurn&&!g.winner&&<div style={{position:"absolute",top:-52,left:"50%",transform:"translateX(-50%)",
               zIndex:9,display:"flex",flexDirection:"column",alignItems:"center",pointerEvents:"none"}}>
-              <span style={{fontSize:8,fontWeight:900,color:gcHex,letterSpacing:3,textShadow:`0 0 10px ${gcHex}`,marginBottom:-2}}>YOUR TURN</span>
-              <span style={{fontSize:20,color:gcHex,lineHeight:1,textShadow:`0 0 12px ${gcHex},0 2px 4px rgba(0,0,0,0.6)`,
+              <span style={{fontSize:14,fontWeight:900,color:"#fff",letterSpacing:3,fontFamily:"Arial Black",
+                WebkitTextStroke:`1px ${gcHex}`,textShadow:`0 0 14px ${gcHex},0 0 28px ${gcHex}88,0 2px 4px rgba(0,0,0,0.8)`,marginBottom:0}}>YOUR TURN</span>
+              <span style={{fontSize:32,color:gcHex,lineHeight:0.9,textShadow:`0 0 16px ${gcHex},0 0 30px ${gcHex}aa,0 2px 4px rgba(0,0,0,0.7)`,
                 animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
