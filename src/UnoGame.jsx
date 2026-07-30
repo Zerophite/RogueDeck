@@ -1236,21 +1236,26 @@ export default function UnoGame(){
         (async()=>{
           const mn=rd.players[winnerId]?.name||"Player";
           const baseScore=Math.max(20,calcScore(hands,winnerId));
-          const lbSnap=await get(ref(db,"leaderboard/"+winnerId));const prev=lbSnap.val()||{totalPoints:0,gamesPlayed:0,wins:0,name:mn};
-          const wRank=getRank(prev.totalPoints,prev.gamesPlayed);let totalWin=0;
-          for(const[oppId]of pls){if(oppId===winnerId)continue;
-            const isOppBot2=isBot(oppId);
-            const op=isOppBot2?{totalPoints:0,gamesPlayed:0,wins:0}:(await get(ref(db,"leaderboard/"+oppId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
-            const oRank=getRank(op.totalPoints,op.gamesPlayed);
-            const elo=calcElo(wRank.idx,oRank.idx,baseScore);totalWin+=elo.winPts;
-            if(!isOppBot2){const newPts=Math.max(0,(op.totalPoints||0)-elo.losePts);
-            await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
-              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}}
-          const curScores=rd.scores||{};curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
-          await update(ref(db,"rooms/"+rc),{scores:curScores});
-          await update(ref(db,"leaderboard/"+winnerId),{name:mn,totalPoints:(prev.totalPoints||0)+totalWin,
-            gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:Date.now()});
-          await wgs({winner:winnerId,message:"⏰ Time's up! "+mn+" wins with fewest cards! (+"+totalWin+" pts)"});
+          const winnerIsBot=isBot(winnerId);
+          if(!winnerIsBot){
+            const lbSnap=await get(ref(db,"leaderboard/"+winnerId));const prev=lbSnap.val()||{totalPoints:0,gamesPlayed:0,wins:0,name:mn};
+            const wRank=getRank(prev.totalPoints,prev.gamesPlayed);let totalWin=0;
+            for(const[oppId]of pls){if(oppId===winnerId)continue;
+              const isOppBot2=isBot(oppId);
+              const op=isOppBot2?{totalPoints:0,gamesPlayed:0,wins:0}:(await get(ref(db,"leaderboard/"+oppId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
+              const oRank=getRank(op.totalPoints,op.gamesPlayed);
+              const elo=calcElo(wRank.idx,oRank.idx,baseScore);totalWin+=elo.winPts;
+              if(!isOppBot2){const newPts=Math.max(0,(op.totalPoints||0)-elo.losePts);
+              await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
+                gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}}
+            const curScores=rd.scores||{};curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
+            await update(ref(db,"rooms/"+rc),{scores:curScores});
+            await update(ref(db,"leaderboard/"+winnerId),{name:mn,totalPoints:(prev.totalPoints||0)+totalWin,
+              gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:Date.now()});
+            await wgs({winner:winnerId,message:"⏰ Time's up! "+mn+" wins with fewest cards! (+"+totalWin+" pts)"});
+          }else{
+            await wgs({winner:winnerId,message:"⏰ Time's up! "+mn+" wins with fewest cards!"});
+          }
         })();
       }
     }
@@ -2358,15 +2363,12 @@ export default function UnoGame(){
 
           {/* Hand - player's cards */}
           <div style={{flexShrink:0,background:myTurn&&!g.winner?`linear-gradient(0deg,${gcHex}18,${gcHex}08,transparent)`:"linear-gradient(0deg,rgba(0,0,0,0.5),rgba(0,0,0,0.1),transparent)",paddingBottom:3,zIndex:6,
-            display:"flex",alignItems:"center",gap:6,
             borderBottom:myTurn&&!g.winner?`2px solid ${gcHex}55`:"2px solid transparent",
             transition:"all 0.5s ease"}}>
-            <div style={{flexShrink:0,width:30,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
-                writingMode:"vertical-rl",textOrientation:"mixed",
-                textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap"}}>{pName||"You"}</span>
-            </div>
             <div style={{flex:1,position:"relative"}}>
+            <span style={{position:"absolute",left:4,bottom:8,fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.45)",letterSpacing:1,
+              writingMode:"vertical-rl",textOrientation:"mixed",
+              textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap",zIndex:7}}>{pName||"You"}</span>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
@@ -2385,22 +2387,20 @@ export default function UnoGame(){
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
             </div>
-            </div>
-            <div style={{flexShrink:0,width:36,display:"flex",alignItems:"center",justifyContent:"center"}}>
-              {!g.winner&&!(g.calledUno||{})[pid]&&(
-                <div onClick={callUno} style={{width:48,height:48,borderRadius:"50%",cursor:"pointer",
-                  background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
-                  border:`3px solid ${gcHex}`,
-                  boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
-                  animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                  transition:"border-color 0.5s,box-shadow 0.5s"}}
-                  onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
-                  onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
-                  <span style={{fontSize:8,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
-                    textShadow:`0 0 8px rgba(255,214,0,0.6)`}}>UNO</span>
-                  <span style={{fontSize:16,fontWeight:900,color:"#fff",lineHeight:1,
-                    textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
-                </div>)}
+            {!g.winner&&!(g.calledUno||{})[pid]&&(
+              <div onClick={callUno} style={{position:"absolute",right:4,bottom:10,width:48,height:48,borderRadius:"50%",cursor:"pointer",zIndex:8,
+                background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
+                border:`3px solid ${gcHex}`,
+                boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
+                animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                transition:"border-color 0.5s,box-shadow 0.5s"}}
+                onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
+                onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
+                <span style={{fontSize:8,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
+                  textShadow:`0 0 8px rgba(255,214,0,0.6)`}}>UNO</span>
+                <span style={{fontSize:16,fontWeight:900,color:"#fff",lineHeight:1,
+                  textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
+              </div>)}
             </div>
           </div>
         </div>
