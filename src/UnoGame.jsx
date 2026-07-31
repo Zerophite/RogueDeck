@@ -820,7 +820,7 @@ const ElementalW4FX=({color,onDone})=>{
 const ELEM_GENDER={red:"boy",yellow:"boy",blue:"girl",green:"girl"};
 
 /* ═══ MANGA CHIBI (SVG, poses: slash / trip) — boy & girl variants ═══ */
-const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy"})=>{
+const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy",element="red"})=>{
   const poseAnim=pose==="trip"?"chibiTripFall 1s ease-in forwards":"chibiBounce 0.4s ease infinite alternate";
   const isGirl=gender==="girl";const isTrip=pose==="trip";const u=gender;
   const skin1="#FFE7CE",skin2="#FBD3A8";
@@ -848,37 +848,53 @@ const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy"})=>{
       <rect x={isGirl?40:38} y="118" width={isGirl?40:44} height="7" rx="3.5" fill="#fff" opacity="0.35"/>
       {/* back arm (their left / screen right) */}
       <rect x="78" y="99" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(14 84 102)"/>
+      {/* neck + collar */}
+      <rect x="52" y="90" width="16" height="14" rx="5" fill={`url(#chSkin_${u})`}/>
+      <path d="M44,96 Q60,105 76,96 L73,104 Q60,111 47,104 Z" fill={dark} stroke={hairB} strokeWidth="1"/>
       {/* head */}
-      <ellipse cx="60" cy="58" rx="43" ry="41" fill={`url(#chSkin_${u})`} stroke={skin2} strokeWidth="1"/>
+      <ellipse cx="60" cy="58" rx="43" ry="41" fill={`url(#chSkin_${u})`} stroke="#E8B08A" strokeWidth="1.5"/>
+      <ellipse cx="46" cy="42" rx="19" ry="14" fill="#fff" opacity="0.16"/>
+      <path d="M92,52 Q98,76 72,94 Q90,72 84,52 Z" fill="#E39A6E" opacity="0.28"/>
       {/* ears */}
       <ellipse cx="18" cy="60" rx="6" ry="9" fill={`url(#chSkin_${u})`}/><ellipse cx="102" cy="60" rx="6" ry="9" fill={`url(#chSkin_${u})`}/>
       {/* blush */}
-      <ellipse cx="30" cy="72" rx="7" ry="4" fill="#FF9AA2" opacity="0.6"/><ellipse cx="90" cy="72" rx="7" ry="4" fill="#FF9AA2" opacity="0.6"/>
+      <ellipse cx="29" cy="73" rx="7.5" ry="4" fill="#FF9AA2" opacity="0.55"/><ellipse cx="91" cy="73" rx="7.5" ry="4" fill="#FF9AA2" opacity="0.55"/>
       {/* eyes */}
       {isTrip
-        ?<><path d="M38,56 L50,66 M50,56 L38,66" stroke="#2A1622" strokeWidth="3" strokeLinecap="round"/>
-           <path d="M70,56 L82,66 M82,56 L70,66" stroke="#2A1622" strokeWidth="3" strokeLinecap="round"/></>
+        ?<><path d="M37,55 L51,67 M51,55 L37,67" stroke="#2A1622" strokeWidth="3.5" strokeLinecap="round"/>
+           <path d="M69,55 L83,67 M83,55 L69,67" stroke="#2A1622" strokeWidth="3.5" strokeLinecap="round"/></>
         :<>
-           <ellipse cx="44" cy="61" rx="9.5" ry="12.5" fill="#fff"/><ellipse cx="76" cy="61" rx="9.5" ry="12.5" fill="#fff"/>
-           <ellipse cx="45" cy="63" rx="7.5" ry="10" fill={`url(#chIris_${u})`}/><ellipse cx="75" cy="63" rx="7.5" ry="10" fill={`url(#chIris_${u})`}/>
-           <ellipse cx="45" cy="64" rx="3.6" ry="5.2" fill="#161020"/><ellipse cx="75" cy="64" rx="3.6" ry="5.2" fill="#161020"/>
-           <circle cx="41" cy="58" r="3.4" fill="#fff"/><circle cx="71" cy="58" r="3.4" fill="#fff"/>
-           <circle cx="48" cy="67" r="1.8" fill="#fff" opacity="0.85"/><circle cx="78" cy="67" r="1.8" fill="#fff" opacity="0.85"/>
-           <path d="M33,52 Q44,47 55,53" stroke="#241019" strokeWidth="3" fill="none" strokeLinecap="round"/>
-           <path d="M65,53 Q76,47 87,52" stroke="#241019" strokeWidth="3" fill="none" strokeLinecap="round"/>
-           <path d={pose==="slash"?"M34,42 Q44,40 52,44":"M35,43 Q44,41 53,45"} stroke={hairB} strokeWidth="3" fill="none" strokeLinecap="round"/>
-           <path d={pose==="slash"?"M68,44 Q76,40 86,42":"M67,45 Q76,41 85,43"} stroke={hairB} strokeWidth="3" fill="none" strokeLinecap="round"/>
+           <ellipse cx="43" cy="61" rx="10.5" ry="13.5" fill="#fff"/><ellipse cx="77" cy="61" rx="10.5" ry="13.5" fill="#fff"/>
+           <ellipse cx="44" cy="63" rx="8.5" ry="11" fill={`url(#chIris_${u})`}/><ellipse cx="76" cy="63" rx="8.5" ry="11" fill={`url(#chIris_${u})`}/>
+           <ellipse cx="44" cy="64" rx="8.5" ry="11" fill="none" stroke="#000" strokeWidth="1" opacity="0.22"/>
+           <ellipse cx="76" cy="64" rx="8.5" ry="11" fill="none" stroke="#000" strokeWidth="1" opacity="0.22"/>
+           <ellipse cx="44" cy="65" rx="4" ry="5.6" fill="#120c1a"/><ellipse cx="76" cy="65" rx="4" ry="5.6" fill="#120c1a"/>
+           <ellipse cx="40" cy="58" rx="3.6" ry="4.4" fill="#fff"/><ellipse cx="72" cy="58" rx="3.6" ry="4.4" fill="#fff"/>
+           <circle cx="47" cy="68" r="2" fill="#fff" opacity="0.9"/><circle cx="79" cy="68" r="2" fill="#fff" opacity="0.9"/>
+           <path d="M35,69 Q44,73 52,69" stroke="#fff" strokeWidth="1.4" fill="none" opacity="0.45"/>
+           <path d="M68,69 Q76,73 85,69" stroke="#fff" strokeWidth="1.4" fill="none" opacity="0.45"/>
+           <path d="M31,53 Q43,47 55,54" stroke="#1c0e18" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+           <path d="M65,54 Q77,47 89,53" stroke="#1c0e18" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+           <path d="M31,53 L26,49" stroke="#1c0e18" strokeWidth="3" fill="none" strokeLinecap="round"/>
+           <path d="M89,53 L94,49" stroke="#1c0e18" strokeWidth="3" fill="none" strokeLinecap="round"/>
+           <path d={pose==="slash"?"M31,41 Q43,37 51,43":"M32,42 Q43,38 52,44"} stroke={hairB} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
+           <path d={pose==="slash"?"M69,43 Q77,37 89,41":"M68,44 Q77,38 88,42"} stroke={hairB} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
          </>}
+      {/* nose */}
+      {!isTrip&&<path d="M60,70 Q57.5,74 60.5,74.5" stroke="#D2916B" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.75"/>}
       {/* mouth */}
       {isTrip
-        ?<ellipse cx="60" cy="82" rx="5" ry="6" fill="#7A2523"/>
+        ?<ellipse cx="60" cy="83" rx="5" ry="6" fill="#7A2523"/>
         :pose==="slash"
-          ?<><path d="M50,79 Q60,92 70,79 Q60,84 50,79 Z" fill="#7A2523"/><path d="M53,82 Q60,88 67,82 Z" fill="#E8636B"/></>
-          :<path d="M51,80 Q60,88 69,80" stroke="#C0392B" strokeWidth="3" fill="none" strokeLinecap="round"/>}
+          ?<><path d="M50,80 Q60,93 70,80 Q60,85 50,80 Z" fill="#7A2523"/><path d="M53,83 Q60,89 67,83 Z" fill="#E8636B"/><path d="M50,80 Q60,83 70,80" stroke="#fff" strokeWidth="1.5" fill="none" opacity="0.6"/></>
+          :<path d="M52,81 Q60,88 68,81" stroke="#B23A2E" strokeWidth="2.5" fill="none" strokeLinecap="round"/>}
       {/* hair front */}
       {isGirl
-        ?<path d="M14,54 Q10,14 60,10 Q110,14 106,54 Q101,28 82,23 Q91,41 80,45 L71,27 Q66,42 60,45 Q54,42 49,27 L40,45 Q29,41 38,23 Q19,28 14,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
-        :<path d="M16,52 Q12,16 32,13 L28,31 L41,9 L45,29 L57,6 L61,28 L75,8 L77,29 L90,14 L87,33 Q106,21 104,52 Q95,31 76,29 Q60,27 44,29 Q25,31 16,52 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>}
+        ?<><path d="M14,54 Q10,14 60,10 Q110,14 106,54 Q101,28 82,23 Q91,41 80,45 L71,27 Q66,42 60,45 Q54,42 49,27 L40,45 Q29,41 38,23 Q19,28 14,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
+           <path d="M30,30 Q42,19 58,21" stroke="#fff" strokeWidth="3" opacity="0.28" fill="none" strokeLinecap="round"/>
+           <path d="M66,22 Q80,25 90,36" stroke="#fff" strokeWidth="2.5" opacity="0.22" fill="none" strokeLinecap="round"/></>
+        :<><path d="M16,52 Q12,16 32,13 L28,31 L41,9 L45,29 L57,6 L61,28 L75,8 L77,29 L90,14 L87,33 Q106,21 104,52 Q95,31 76,29 Q60,27 44,29 Q25,31 16,52 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
+           <path d="M40,20 L44,31 M57,13 L59,29 M73,17 L71,30" stroke="#fff" strokeWidth="2" opacity="0.22" strokeLinecap="round"/></>}
       {/* boy headband */}
       {!isGirl&&<><rect x="14" y="41" width="92" height="10" rx="5" fill={accent}/><rect x="14" y="41" width="92" height="3" rx="1.5" fill="#fff" opacity="0.4"/></>}
       {/* girl bows at tails + top */}
@@ -890,57 +906,133 @@ const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy"})=>{
       {pose==="slash"&&<g>
         <animateTransform attributeName="transform" type="rotate" values="48 40 104;-66 40 104;48 40 104" dur="0.5s" repeatCount="indefinite"/>
         <rect x="34" y="76" width="12" height="32" rx="6" fill={`url(#chSkin_${u})`}/>
-        <rect x="33" y="70" width="14" height="9" rx="3" fill={dark}/>
-        <rect x="36.5" y="14" width="7" height="58" rx="3.5" fill={accent} style={{filter:`drop-shadow(0 0 10px ${accent})`}}/>
-        <rect x="38.5" y="14" width="3" height="58" rx="1.5" fill="#fff" opacity="0.6"/>
+        <g transform="translate(40,74) scale(0.52)"><ElementBlade element={element} accent={accent} dark={dark}/></g>
       </g>}
       {/* trip: flailing front arm + sweat */}
       {isTrip&&<><rect x="24" y="96" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(-40 30 100)"/>
         <ellipse cx="30" cy="40" rx="6" ry="9" fill="#5AC8FA" opacity="0.9" style={{animation:"sweatFall 0.9s ease-in forwards"}}/></>}
-      {/* draw stance: two-handed katana held across, ready to unsheathe */}
+      {/* draw stance: element blade held across, ready to unsheathe */}
       {pose==="draw"&&<g transform="rotate(-11 60 104)">
-        <rect x="-10" y="102" width="68" height="6" rx="3" fill="#CED2DC"/>
-        <rect x="-10" y="102" width="68" height="2" rx="1" fill="#fff" opacity="0.75"/>
-        <rect x="55" y="97" width="5" height="15" rx="2" fill={accent}/>
-        <rect x="60" y="99.5" width="28" height="9" rx="3.5" fill={dark}/>
+        <g transform="translate(84,105) rotate(-90) scale(0.52)"><ElementBlade element={element} accent={accent} dark={dark}/></g>
         <rect x="62" y="98.5" width="11" height="11" rx="5.5" fill={`url(#chSkin_${u})`}/>
         <rect x="76" y="98.5" width="11" height="11" rx="5.5" fill={`url(#chSkin_${u})`}/>
-        <rect x="-10" y="103" width="13" height="4" rx="2" fill="#fff" style={{filter:`drop-shadow(0 0 7px ${accent})`}}>
-          <animate attributeName="x" from="50" to="-10" dur="0.5s" begin="0.05s" fill="freeze"/></rect>
       </g>}
     </g>
   </svg>);};
+
+/* ═══ ELEMENTAL BLADE (energy weapon, shape varies by element) ═══ */
+/* Authored vertical: grip near y=0, blade tip toward y=-len. */
+const ElementBlade=({element,accent,dark})=>{
+  let blade;
+  if(element==="yellow"){/* lightning — jagged bolt */
+    blade=<path d="M0,2 L-8,-22 L5,-38 L-7,-62 L6,-82 L-4,-104 L3,-126 L9,-100 L-2,-80 L8,-58 L-3,-36 L9,-20 L4,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
+  }else if(element==="blue"){/* water — crescent curve */
+    blade=<path d="M-5,2 Q-26,-60 3,-128 Q13,-64 7,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
+  }else if(element==="green"){/* wind — slim glaive */
+    blade=<path d="M-4,2 L-6,-72 Q-3,-126 5,-130 Q11,-72 6,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
+  }else{/* fire — wavy flame blade */
+    blade=<path d="M-6,2 Q-11,-28 -3,-50 Q-12,-74 -2,-96 Q-9,-114 3,-130 Q12,-108 5,-86 Q13,-62 4,-44 Q11,-22 6,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
+  }
+  return(<g style={{filter:`drop-shadow(0 0 7px ${accent}) drop-shadow(0 0 15px ${accent}aa)`}}>
+    {blade}
+    <rect x="-3.5" y="0" width="7" height="20" rx="3" fill={dark}/>
+    <rect x="-10" y="-3" width="20" height="6" rx="3" fill={dark}/>
+    <rect x="-1.5" y="-118" width="3" height="112" rx="1.5" fill="#fff" opacity="0.55"/>
+  </g>);
+};
+
+/* ═══ ORNATE FRAME (gold filigree border, manhwa cover style) ═══ */
+const OrnateFrame=({accent})=>(
+  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:6}}>
+    <defs><linearGradient id="ornGold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stopColor="#FFF3C4"/><stop offset="45%" stopColor="#E6B23A"/><stop offset="100%" stopColor="#9A6B12"/></linearGradient></defs>
+    <rect x="2.2" y="3" width="95.6" height="94" rx="1.2" fill="none" stroke="url(#ornGold)" strokeWidth="1.4"/>
+    <rect x="4" y="5" width="92" height="90" rx="0.8" fill="none" stroke="url(#ornGold)" strokeWidth="0.5" opacity="0.8"/>
+    {/* corner flourishes */}
+    {[[0,0,1,1],[100,0,-1,1],[0,100,1,-1],[100,100,-1,-1]].map(([cx,cy,sx,sy],i)=>(
+      <g key={i} transform={`translate(${cx} ${cy}) scale(${sx} ${sy})`} fill="url(#ornGold)">
+        <path d="M2.2,14 Q2.2,2.2 14,2.2 L22,2.2 Q9,3 5,9 Q3,13 2.2,22 Z" opacity="0.95"/>
+        <path d="M6,7 Q13,4 20,4.5 Q13,6.5 8.5,11 Q5.5,15 5,20 Q4.5,13 6,7 Z" opacity="0.9"/>
+        <circle cx="4.4" cy="4.4" r="1.5"/>
+      </g>))}
+  </svg>
+);
+
+/* ═══ +2 PENALTY — cards fan in the air then fly to the penalized player ═══ */
+const CardFlyFX=({element,count,toSelf,onDone})=>{
+  const doneRef=useRef(onDone);doneRef.current=onDone;
+  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),1050);return()=>clearTimeout(t);},[]);
+  const em=EM(element);const n=Math.min(count,10);
+  const cards=useMemo(()=>Array.from({length:n},(_,i)=>({id:i,
+    sx:n<=1?0:-100+i*(200/(n-1)),del:i*0.05,rot:-18+Math.random()*36})),[n]);
+  const fy=toSelf?280:-230;
+  return(<div style={{position:"fixed",inset:0,zIndex:96,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{position:"absolute",width:170,height:170,borderRadius:"50%",
+      background:`radial-gradient(circle,${em.glow}33,transparent 70%)`,animation:"bgPulse 0.6s ease-out"}}/>
+    {cards.map(c=><div key={c.id} style={{position:"absolute",
+      "--fx":`${c.sx}px`,"--fy":`${fy}px`,"--fr":`${c.rot}deg`,
+      animation:`cardFly 0.95s cubic-bezier(.5,0,.72,1) ${c.del}s forwards`}}>
+      <div style={{width:40,height:58,borderRadius:6,background:CG[element]||em.grad,
+        border:"2px solid rgba(255,255,255,0.85)",boxShadow:`0 5px 16px rgba(0,0,0,0.5),0 0 16px ${em.glow}77`,
+        display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize:14,fontWeight:900,color:"#fff",textShadow:"0 1px 3px rgba(0,0,0,0.6)"}}>+2</span></div>
+    </div>)}
+  </div>);
+};
 
 /* ═══ CHIBI SWORD-DRAW CINEMATIC (on +4 penalty) — stance → slash ═══ */
 const ChibiAttackFX=({element,victimName,onDone})=>{
   const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
   useEffect(()=>{
-    const t1=setTimeout(()=>setPhase(1),880);
-    const t2=setTimeout(()=>doneRef.current(),2600);
+    const t1=setTimeout(()=>setPhase(1),850);
+    const t2=setTimeout(()=>doneRef.current(),2500);
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
   const em=EM(element);const gen=ELEM_GENDER[element]||"boy";
   const rays=useMemo(()=>Array.from({length:22},(_,i)=>({id:i,a:(i/22)*360})),[element]);
   const vlines=useMemo(()=>Array.from({length:26},(_,i)=>({id:i,x:(i/26)*100,d:Math.random()*0.3,w:1+Math.random()*2})),[element]);
   const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
+  const splashes=useMemo(()=>Array.from({length:11},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:95+Math.random()*115,rot:Math.random()*360,w:14+Math.random()*32,h:5+Math.random()*7,d:Math.random()*0.4})),[element]);
+  const cardSplash=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:34+Math.random()*74,rot:Math.random()*360,w:10+Math.random()*20,h:4+Math.random()*5,d:Math.random()*0.4})),[element]);
+  const Splashes=()=>splashes.map(s=><div key={s.id} style={{position:"absolute",
+    left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(50% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
+    width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
+    filter:`drop-shadow(0 0 6px ${em.glow})`,animation:`splashPop 0.6s ease-out ${s.d}s both`}}/>);
 
   if(phase===0){
-    /* ── PHASE 1: transparent stance, unsheathing (SHING) ── */
+    /* ── PHASE 1: "drawing type" character card reveal (SHING) ── */
     return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
-      background:"radial-gradient(circle at 50% 46%,rgba(22,22,30,0.3),rgba(0,0,0,0.74) 76%)",
+      background:"radial-gradient(circle at 50% 48%,rgba(10,14,24,0.55),rgba(0,0,0,0.82) 80%)",
       display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.25s ease-out"}}>
-      {vlines.map(l=><div key={l.id} style={{position:"absolute",top:0,left:`${l.x}%`,width:l.w,height:"100%",
-        background:"linear-gradient(180deg,transparent,rgba(255,255,255,0.12),transparent)",
-        animation:`stanceLine 0.88s ease-out ${l.d}s both`}}/>)}
-      <div style={{position:"relative",zIndex:2,opacity:0.5,
-        filter:`drop-shadow(0 0 16px ${em.glow})`,animation:"stanceRise 0.88s cubic-bezier(.22,1,.36,1) both"}}>
-        <Chibi pose="draw" accent={em.glow} dark={em.c3} gender={gen}/>
+      <div style={{position:"relative",width:"min(54vh,232px)",height:"min(82vh,348px)",borderRadius:12,
+        overflow:"hidden",background:"linear-gradient(160deg,#28324c,#111a2c 58%,#0a0f1a)",
+        boxShadow:`0 22px 60px rgba(0,0,0,0.75),0 0 42px ${em.glow}66`,
+        animation:"cardFlipIn 0.7s cubic-bezier(.34,1.56,.64,1) both"}}>
+        <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 38%,${em.glow}3a,transparent 62%)`}}/>
+        {vlines.map(l=><div key={l.id} style={{position:"absolute",top:0,left:`${l.x}%`,width:l.w,height:"100%",
+          background:"linear-gradient(180deg,transparent,rgba(255,255,255,0.09),transparent)",
+          animation:`stanceLine 0.88s ease-out ${l.d}s both`}}/>)}
+        {cardSplash.map(s=><div key={s.id} style={{position:"absolute",
+          left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(46% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
+          width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
+          filter:`drop-shadow(0 0 5px ${em.glow})`,animation:`splashPop 0.6s ease-out ${0.2+s.d}s both`}}/>)}
+        <div style={{position:"absolute",left:"50%",top:"45%",transform:"translate(-50%,-50%) scale(1.28)",zIndex:3,
+          filter:`drop-shadow(0 0 14px ${em.glow})`,animation:"stanceRise 0.88s cubic-bezier(.22,1,.36,1) both"}}>
+          <Chibi pose="draw" accent={em.glow} dark={em.c3} gender={gen} element={element}/>
+        </div>
+        <div style={{position:"absolute",top:"12%",right:"9%",zIndex:4,fontFamily:"Arial Black",fontStyle:"italic",
+          fontSize:"min(24px,5.5vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:1,
+          WebkitTextStroke:`1.5px ${em.c3}`,textShadow:`0 0 14px ${em.glow},2px 2px 0 rgba(0,0,0,0.5)`,
+          animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.35s both"}}>SHING</div>
+        <div style={{position:"absolute",bottom:"6%",left:0,right:0,textAlign:"center",zIndex:4,
+          animation:"cardTitleIn 0.5s ease-out 0.4s both"}}>
+          <div style={{fontSize:"min(24px,5.5vw)",fontWeight:900,fontFamily:"Georgia,'Times New Roman',serif",letterSpacing:3,
+            color:"#F3D98A",textShadow:`0 0 14px ${em.glow},0 2px 4px rgba(0,0,0,0.9)`}}>{em.emoji} {em.name}</div>
+          <div style={{fontSize:9,fontWeight:800,letterSpacing:4,color:"#C9A24B",marginTop:1}}>SWORD MASTER</div>
+        </div>
+        <OrnateFrame accent={em.glow}/>
       </div>
-      <div style={{position:"absolute",top:"28%",right:"24%",zIndex:3,fontFamily:"Arial Black",fontStyle:"italic",
-        fontSize:"min(32px,7.5vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:2,
-        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 16px ${em.glow},3px 3px 0 rgba(0,0,0,0.5)`,
-        animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.3s both"}}>SHING</div>
     </div>);
   }
 
@@ -965,9 +1057,10 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
       left:`calc(50% + ${Math.round(Math.cos(d.a)*d.r)}px)`,top:`calc(48% + ${Math.round(Math.sin(d.a)*d.r)}px)`,
       width:d.s,height:d.s,borderRadius:"50%",background:`radial-gradient(circle,${em.glow}cc,transparent)`,
       opacity:0,zIndex:2,animation:`trailPop 0.7s ease-out ${0.1+d.d}s forwards`}}/>)}
+    <Splashes/>
     <div style={{position:"absolute",left:"32%",top:"54%",transform:"translate(-50%,-50%) scale(1.65)",zIndex:4,
       filter:`drop-shadow(0 0 16px ${em.glow}88)`,animation:"chibiPunchIn 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>
-      <Chibi pose="slash" accent={em.glow} dark={em.c3} gender={gen}/>
+      <Chibi pose="slash" accent={em.glow} dark={em.c3} gender={gen} element={element}/>
     </div>
     {victimName&&<div style={{position:"absolute",bottom:"16%",zIndex:5,
       animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.28s both"}}>
@@ -1202,6 +1295,7 @@ export default function UnoGame(){
   const[snatchModal,setSnatchModal]=useState(null);
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
+  const[cardFlyFx,setCardFlyFx]=useState(null);
   const[draw2Fx,setDraw2Fx]=useState(null);
   const[reverseFx,setReverseFx]=useState(null);
   const[skipFx,setSkipFx]=useState(null);
@@ -1266,11 +1360,8 @@ export default function UnoGame(){
       const fm=g.message.match(/^(.*?)\s+played\s/i);const cm=g.message.match(/^(.*?)\s+caught!/i);
       setUnoPenaltyFx((cm&&cm[1])||(fm&&fm[1])||"");}
     else if(/has no counter! draws|timed out! draws|accepts\. draws|draws \d+ cards!/i.test(m)){
-      ps("penalty");trigShake();
-      if(lastStackTypeRef.current==="wild4"){
-        const vm=g.message.match(/^(.*?)\s+(has no counter|timed out|accepts\.|draws)/i);
-        setChibiAttackFx({element:g?.currentColor||"green",victimName:vm?vm[1]:null});
-      }
+      ps("penalty");
+      if(lastStackTypeRef.current!=="wild4")trigShake();
     }
     else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
     else if(m.includes("reverse")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
@@ -1298,6 +1389,40 @@ export default function UnoGame(){
   const np=useCallback((cur,dir,skip=false)=>{const i=po.indexOf(cur);const n=po.length;
     let x=(i+dir+n)%n;if(skip)x=(x+dir+n)%n;return po[x];},[po]);
   const wgs=useCallback(async u=>{try{await update(ref(db,"rooms/"+rc+"/game"),u);}catch(e){}},[rc]);
+
+  /* Resolve a draw-stack penalty. Play an animation first, then deliver the
+     penalty cards when it lands: +4 (wild4) → sword-draw cinematic (~850ms),
+     +2 (draw2) → cards fly to the penalized player (~650ms). */
+  const SLASH_DELAY=850,DRAW2_DELAY=650;
+  const applyStackDraw=useCallback(async(victimId,victimHand,reasonBase,nextPlayer)=>{
+    const cnt=g.drawStack||0;const type=g.drawStackType;const element=g.currentColor||"green";
+    let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
+    if(ndp.length<cnt){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
+    const drawn=ndp.splice(0,Math.min(cnt,ndp.length));
+    const nh={...g.hands};nh[victimId]=[...victimHand,...drawn];
+    const drawWrite={hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,
+      currentPlayer:nextPlayer,message:reasonBase+" Draws "+cnt+"!",turnTimestamp:Date.now()};
+    const delay=type==="wild4"?SLASH_DELAY:DRAW2_DELAY;
+    await wgs({pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:type||"draw2",count:cnt,ts:Date.now()}});
+    setTimeout(()=>{wgs({...drawWrite,pendingSlash:null});},delay);
+  },[g,wgs,rd]);
+
+  /* Watch pendingSlash → +4 sword cinematic, or +2 card-fly to the victim */
+  const slashRef=useRef(null);
+  useEffect(()=>{
+    const psl=g?.pendingSlash;
+    if(psl&&psl.ts&&psl.ts!==slashRef.current){
+      slashRef.current=psl.ts;
+      ps("penalty");
+      if(psl.type==="wild4"){
+        setChibiAttackFx({element:psl.element||"green",victimName:psl.name});
+        const t=setTimeout(()=>trigShake(),SLASH_DELAY);
+        return()=>clearTimeout(t);
+      }else{
+        setCardFlyFx({element:psl.element||"yellow",count:psl.count||2,toSelf:psl.victim===pid});
+      }
+    }
+  },[g?.pendingSlash,ps,trigShake,pid]);
 
   useEffect(()=>{if(!g||g.winner||!g.currentPlayer)return;
     setTurnTimer(settings.turnTime);
@@ -1355,13 +1480,8 @@ export default function UnoGame(){
     autoPassRef.current=true;ps("timeout");
     (async()=>{
       if(drawStack>0){
-        let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
-        if(ndp.length<drawStack){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
-        const drawn=ndp.splice(0,Math.min(drawStack,ndp.length));
-        const nh={...g.hands};nh[pid]=[...myH,...drawn];
-        await wgs({hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,
-          currentPlayer:np(pid,g.direction),
-          message:(rd.players[pid]?.name)+" timed out",turnTimestamp:Date.now()});
+        await applyStackDraw(pid,myH,(rd.players[pid]?.name)+" timed out!",np(pid,g.direction));
+        return;
       } else if(!hasDrawn){
         const dp=[...(g.drawPile||[])];
         if(dp.length){const drawn=dp.shift();const nh={...g.hands};nh[pid]=[...myH,drawn];
@@ -1373,7 +1493,7 @@ export default function UnoGame(){
       }
       autoPassRef.current=false;
     })();
-  }},[turnTimer,myTurn,g,drawStack,hasDrawn,pid,myH,np,wgs,rd,ps,snatchModal]);
+  }},[turnTimer,myTurn,g,drawStack,hasDrawn,pid,myH,np,wgs,rd,ps,snatchModal,applyStackDraw]);
   useEffect(()=>{autoPassRef.current=false;},[g?.currentPlayer]);
 
   const autoDrawRef=useRef(false);
@@ -1384,20 +1504,13 @@ export default function UnoGame(){
       :myH.some(c=>c.value==="draw2"||c.value==="wild4"||c.value==="shadow");
     if(!hasCounter){
       autoDrawRef.current=true;
-      const timer=setTimeout(async()=>{
-        ps("penalty");trigShake();
-        let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
-        if(ndp.length<drawStack){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
-        const drawn=ndp.splice(0,Math.min(drawStack,ndp.length));
-        const nh={...g.hands};nh[pid]=[...myH,...drawn];
-        await wgs({hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,
-          currentPlayer:np(pid,g.direction),
-          message:(rd.players[pid]?.name)+" has no counter! Draws "+drawStack+"!",turnTimestamp:Date.now()});
-        autoDrawRef.current=false;
+      const timer=setTimeout(()=>{
+        ps("penalty");
+        applyStackDraw(pid,myH,(rd.players[pid]?.name)+" has no counter!",np(pid,g.direction));
       },1200);
       return()=>clearTimeout(timer);
     }
-  },[myTurn,g,drawStack,myH,pid,np,wgs,rd,ps,trigShake]);
+  },[myTurn,g,drawStack,drawStackType,myH,pid,np,wgs,rd,ps,applyStackDraw]);
   useEffect(()=>{autoDrawRef.current=false;},[g?.currentPlayer]);
 
   /* ═══ BOT AI ═══ */
@@ -1445,9 +1558,7 @@ export default function UnoGame(){
               currentPlayer:w?cp:np(cp,dir,false),winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
               pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
           }else{
-            const drawn=ensure(ds);nh[cp]=[...hand,...drawn];
-            await wgs({hands:nh,drawPile:ndp2,discardPile:nd,drawStack:0,drawStackType:null,
-              currentPlayer:np(cp,dir),message:bn+" draws "+ds+" cards!",turnTimestamp:Date.now()});}
+            await applyStackDraw(cp,hand,bn+" has no counter!",np(cp,dir));}
           return;}
 
         const playable=hand.filter(c=>canPlay(c,topCard,curColor));
@@ -1569,15 +1680,13 @@ export default function UnoGame(){
     let deck=sh(mkD());
     if(!settings.specialCards)deck=deck.filter(c=>c.value!=="shadow"&&c.value!=="snatch"&&c.value!=="discardAll");
     const hands={};for(const[p]of pls)hands[p]=deck.splice(0,settings.startCards);
-    const badFirst=v=>v==="wild4"||v==="discardAll"||v==="shadow"||v==="snatch";
+    const badFirst=v=>v==="wild4"||v==="discardAll"||v==="shadow"||v==="snatch"||v==="draw2";
     let fc;while(true){let fi=deck.findIndex(c=>!badFirst(c.value));
       if(fi===-1){deck=sh(deck);fi=0;}fc=deck.splice(fi,1)[0];if(!badFirst(fc.value))break;deck.push(fc);deck=sh(deck);}
     let firstPlayer=po[0];let direction=1;let currentColor=fc.color;let m="Game started!";let drawPile=[...deck];
     if(fc.value==="skip"){firstPlayer=po[1%po.length];m="Game started! First player skipped!";}
     else if(fc.value==="reverse"){direction=-1;
       if(po.length===2)firstPlayer=po[0];else firstPlayer=po[po.length-1];m="Game started! Direction reversed!";}
-    else if(fc.value==="draw2"){const dr=drawPile.splice(0,2);hands[po[0]]=[...hands[po[0]],...dr];
-      firstPlayer=po[1%po.length];m="Game started! "+pls[0][1].name+" draws 2!";}
     else if(fc.type==="wild"){currentColor=COLORS[Math.floor(Math.random()*4)];m="Game started! Color is "+currentColor.toUpperCase()+"!";}
     await update(ref(db,"rooms/"+rc),{status:"playing",game:{
       hands,drawPile,discardPile:[fc],currentPlayer:firstPlayer,direction,
@@ -1641,7 +1750,8 @@ export default function UnoGame(){
       const dr=ndp2.splice(0,draw);nh[dt]=[...(nh[dt]||[]),...dr];
       m+=" "+(rd.players[dt]?.name)+" draws "+draw+"!";}
     let winner=null;
-    if(nh[pid].length===0&&!lbUpdated.current){winner=pid;lbUpdated.current=true;const baseScore=calcScore(nh,pid);
+    if(nh[pid].length===0){winner=pid;
+      if(!lbUpdated.current){lbUpdated.current=true;const baseScore=calcScore(nh,pid);
       const lbSnap=await get(ref(db,"leaderboard/"+pid));const prev=lbSnap.val()||{totalPoints:0,gamesPlayed:0,wins:0,name:mn};
       const wRank=getRank(prev.totalPoints,prev.gamesPlayed);
       let totalWin=0;
@@ -1658,6 +1768,7 @@ export default function UnoGame(){
       await update(ref(db,"rooms/"+rc),{scores:curScores});
       await update(ref(db,"leaderboard/"+pid),{name:mn,totalPoints:(prev.totalPoints||0)+totalWin,
         gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:Date.now()});
+      }else{m=mn+" WINS!";}
     }
     const cu=g.calledUno||{};
     if(nh[pid].length===1&&!cu[pid]&&!winner){m+=" | Forgot UNO! +2 penalty!";
@@ -1667,7 +1778,7 @@ export default function UnoGame(){
     if((card.value==="draw2"||card.value==="wild4")&&!winner)nextPlayer=np(pid,nDir,false);
     if(snatchHold&&!winner)nextPlayer=pid;
     await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,
-      currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:false},
+      currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:(nh[pid].length===1&&cu[pid])?true:false},
       turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
       drawStack:winner?0:newDrawStack,drawStackType:winner?null:newDrawStackType});
   },[g,myTurn,myH,pid,po,np,wgs,rd,ps,rc,trigBurst,trigImpact]);
@@ -1688,18 +1799,12 @@ export default function UnoGame(){
       message:m,pendingChallenge:null,turnTimestamp:Date.now()});
   },[g,challenge,pid,np,wgs,rd,ps,trigShake,trigBurst]);
 
-  const doDraw=useCallback(async()=>{if(!myTurn||g?.winner||drawnCard||hasDrawn)return;
-    if(drawStack>0){
-      ps("penalty");trigShake();
-      let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
-      if(ndp.length<drawStack){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
-      const drawn=ndp.splice(0,Math.min(drawStack,ndp.length));
-      const nh={...g.hands};nh[pid]=[...myH,...drawn];
-      await wgs({hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,
-        currentPlayer:np(pid,g.direction),
-        message:(rd.players[pid]?.name)+" draws "+drawStack+" cards!",turnTimestamp:Date.now()});
-      return;}
+  const doDraw=useCallback(async()=>{
     if(pickDr&&isAdm){setShowDk(true);return;}
+    if(!myTurn||g?.winner||drawnCard||hasDrawn)return;
+    if(drawStack>0){
+      await applyStackDraw(pid,myH,(rd.players[pid]?.name)+" has no counter!",np(pid,g.direction));
+      return;}
     ps("draw");const dp=[...(g.drawPile||[])];const nd=[...g.discardPile];
     if(!dp.length){const reshuf=sh(nd.slice(0,-1));dp.push(...reshuf);nd.splice(0,nd.length-1);}
     if(settings.drawTilPlay){
@@ -1733,7 +1838,7 @@ export default function UnoGame(){
         ps("notPlayable");setLMsg("Drew — can't play");setTimeout(()=>setLMsg(""),1200);
       }
     }
-  },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay]);
+  },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay,applyStackDraw]);
 
   const passTurn=async()=>{if(!myTurn||g?.winner)return;setDrawnCard(null);setHasDrawn(false);
     await wgs({currentPlayer:np(pid,g.direction),message:(rd.players[pid]?.name)+" passed",turnTimestamp:Date.now()});};
@@ -1781,7 +1886,8 @@ export default function UnoGame(){
     await wgs({hands:nh,message:(rd.players[pid]?.name)+" returned the snatched card",currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});
     setSnatchModal(null);},[snatchModal,g,pid,wgs,rd]);
 
-  const cardClick=ci=>{if(!myTurn||g?.winner||drawnCard||challenge||snatchModal)return;if(swap&&isAdm){admSwap(ci);return;}
+  const cardClick=ci=>{if(swap&&isAdm){admSwap(ci);return;}
+    if(!myTurn||g?.winner||drawnCard||challenge||snatchModal)return;
     const card=myH[ci];
     if(drawStack>0){
       if(card.value==="shadow"){playC(ci);return;}
@@ -2191,6 +2297,13 @@ export default function UnoGame(){
         fontSize:7,color:"#FF9800",fontWeight:800,
         background:"rgba(0,0,0,0.9)",padding:"2px 7px",borderRadius:5,animation:"pulse 0.6s infinite",
         whiteSpace:"nowrap",border:"1px solid rgba(255,152,0,0.25)"}}>CATCH!</div>}
+      {turn&&!g.winner&&<div style={{position:"absolute",zIndex:6,pointerEvents:"none",
+        ...(pos==="left"?{right:-17,top:"50%",transform:"translateY(-50%)"}
+          :pos==="right"?{left:-17,top:"50%",transform:"translateY(-50%)"}
+          :{bottom:-19,left:"50%",transform:"translateX(-50%)"})}}>
+        <span style={{display:"block",fontSize:20,lineHeight:1,color:gcHex,
+          textShadow:`0 0 10px ${gcHex},0 0 20px ${gcHex}aa,0 1px 3px rgba(0,0,0,0.8)`,
+          animation:"arrowPulse 0.8s ease-in-out infinite"}}>{pos==="left"?"◀":pos==="right"?"▶":"▲"}</span></div>}
     </div>);};
 
   return(
@@ -2209,6 +2322,7 @@ export default function UnoGame(){
       {actFx&&<ActFX type={actFx} onDone={()=>setActFx(null)}/>}
       {wild4Fx&&<ElementalW4FX color={wild4Fx} onDone={()=>setWild4Fx(null)}/>}
       {chibiAttackFx&&<ChibiAttackFX element={chibiAttackFx.element} victimName={chibiAttackFx.victimName} onDone={()=>setChibiAttackFx(null)}/>}
+      {cardFlyFx&&<CardFlyFX element={cardFlyFx.element} count={cardFlyFx.count} toSelf={cardFlyFx.toSelf} onDone={()=>setCardFlyFx(null)}/>}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
       {reverseFx&&<ReverseFX color={reverseFx} onDone={()=>setReverseFx(null)}/>}
       {skipFx&&<SkipFX color={skipFx} onDone={()=>setSkipFx(null)}/>}
@@ -2399,8 +2513,8 @@ export default function UnoGame(){
               </div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
-              <div onClick={myTurn&&!g.winner&&!drawnCard&&!challenge?doDraw:undefined}
-                style={{cursor:myTurn&&!drawnCard&&!challenge?"pointer":"default",transition:"transform 0.3s",position:"relative",
+              <div onClick={(pickDr&&isAdm)||(myTurn&&!g.winner&&!drawnCard&&!challenge)?doDraw:undefined}
+                style={{cursor:(pickDr&&isAdm)||(myTurn&&!drawnCard&&!challenge)?"pointer":"default",transition:"transform 0.3s",position:"relative",
                   animation:drawStack>0&&myTurn?"dangerPulse 0.8s infinite":(myTurn&&!drawnCard&&!challenge?"deckIdle 3s ease-in-out infinite":"none"),
                   border:drawStack>0&&myTurn?"2px solid #FF5252":"2px solid transparent",borderRadius:12,
                   boxShadow:drawStack>0&&myTurn?"0 0 20px rgba(255,82,82,0.4)":"none"}}
@@ -2551,6 +2665,11 @@ const globalCSS=`
   @keyframes stanceRise{0%{opacity:0;transform:scale(1.55) translateY(26px)}55%{opacity:0.5}100%{opacity:0.5;transform:scale(1.75) translateY(0)}}
   @keyframes slashFlash{0%{opacity:0.85}100%{opacity:0}}
   @keyframes slashArc{0%{transform:translateX(-60%) rotate(-18deg) scaleX(0.2);opacity:0}25%{opacity:1}70%{opacity:1}100%{transform:translateX(55%) rotate(-18deg) scaleX(1);opacity:0}}
+  @keyframes splashPop{0%{opacity:0}40%{opacity:0.85}100%{opacity:0.65}}
+  @keyframes arrowPulse{0%,100%{opacity:0.55;transform:scale(0.88)}50%{opacity:1;transform:scale(1.18)}}
+  @keyframes cardFlipIn{0%{opacity:0;transform:perspective(700px) rotateY(-78deg) scale(0.82)}55%{opacity:1}100%{opacity:1;transform:perspective(700px) rotateY(0deg) scale(1)}}
+  @keyframes cardTitleIn{0%{opacity:0;transform:translateY(10px) scale(0.8)}100%{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes cardFly{0%{opacity:0;transform:translate(var(--fx),-24px) rotate(var(--fr)) scale(0.55)}22%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1)}45%{opacity:1;transform:translate(calc(var(--fx)*0.5),0) rotate(calc(var(--fr)*0.5)) scale(1)}100%{opacity:0;transform:translate(0,var(--fy)) rotate(0) scale(0.5)}}
   @keyframes draw2CardL{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(-46px,-6px) rotate(-14deg)}80%{opacity:1}100%{transform:translate(-70px,-70px) rotate(-24deg);opacity:0}}
   @keyframes draw2CardR{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(46px,-6px) rotate(14deg)}80%{opacity:1}100%{transform:translate(70px,-70px) rotate(24deg);opacity:0}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
