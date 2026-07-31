@@ -988,13 +988,13 @@ const CardFlyFX=({element,count,toSelf,onDone})=>{
   </div>);
 };
 
-/* ═══ CHIBI SWORD-DRAW CINEMATIC (on +4 penalty) — stance → slash ═══ */
-const ChibiAttackFX=({element,victimName,onDone})=>{
+/* ═══ +4 PENALTY CINEMATIC — character card → element skill whirls the cards ═══ */
+const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
   const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
   useEffect(()=>{
     const t1=setTimeout(()=>setPhase(1),850);
-    const t2=setTimeout(()=>doneRef.current(),2500);
+    const t2=setTimeout(()=>doneRef.current(),2650);
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
   const em0=EM(element);const em={...em0,glow:ART_GLOW[element]||em0.glow,c3:ART_DARK[element]||em0.c3};
@@ -1004,9 +1004,10 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
   const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
   const splashes=useMemo(()=>Array.from({length:11},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:95+Math.random()*115,rot:Math.random()*360,w:14+Math.random()*32,h:5+Math.random()*7,d:Math.random()*0.4})),[element]);
   const cardSplash=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:34+Math.random()*74,rot:Math.random()*360,w:10+Math.random()*20,h:4+Math.random()*5,d:Math.random()*0.4})),[element]);
-  const fx=useMemo(()=>Array.from({length:element==="green"?16:18},(_,i)=>({id:i,
-    x:-100+Math.random()*200,y:-90+Math.random()*180,d:Math.random()*0.55,dur:0.85+Math.random()*0.7,
-    sz:4+Math.random()*9,drift:-28+Math.random()*56,rot:Math.random()*360,a:(i/16)*360,r:55+Math.random()*95})),[element]);
+  const FXN=element==="green"?26:32;
+  const fx=useMemo(()=>Array.from({length:FXN},(_,i)=>({id:i,
+    x:-130+Math.random()*260,y:-110+Math.random()*220,d:Math.random()*0.6,dur:0.8+Math.random()*0.7,
+    sz:7+Math.random()*13,drift:-45+Math.random()*90,rot:Math.random()*360,a:(i/FXN)*360,r:75+Math.random()*135})),[element]);
   const Splashes=()=>splashes.map(s=><div key={s.id} style={{position:"absolute",
     left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(50% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
     width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
@@ -1057,25 +1058,41 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
       backgroundSize:"400% 100%",backgroundPosition:`${posX}% center`,backgroundRepeat:"no-repeat",
       WebkitMaskImage:edgeMask,maskImage:edgeMask,
       mixBlendMode:"screen",animation:"skillErupt 0.85s cubic-bezier(.22,1,.36,1) both"}}/>
-    {/* FIRE — rising embers */}
-    {element==="red"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"14%",
-      width:p.sz,height:p.sz,borderRadius:"50%",background:"radial-gradient(circle,#FFE082,#FF7A18)",
-      boxShadow:"0 0 8px #FF7A18",opacity:0,"--ex":`${p.drift}px`,zIndex:3,
+    {/* FIRE — rising embers + flame licks */}
+    {element==="red"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"12%",
+      width:p.sz,height:p.sz*(p.id%3?1:1.7),borderRadius:p.id%3?"50%":"50% 50% 50% 50% / 60% 60% 40% 40%",
+      background:"radial-gradient(circle,#FFF3C4,#FF7A18 70%)",
+      boxShadow:`0 0 14px #FF7A18,0 0 26px ${em.glow}`,opacity:0,"--ex":`${p.drift}px`,zIndex:3,
       animation:`emberRise ${p.dur}s ease-out ${p.d}s forwards`}}/>)}
-    {/* LIGHTNING — flashing sparks */}
+    {/* LIGHTNING — big flashing bolts */}
     {element==="yellow"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,top:`calc(48% + ${p.y}px)`,
-      width:2.5,height:p.sz*2.2,background:"#F0EAFF",borderRadius:2,transform:`rotate(${p.rot}deg)`,opacity:0,zIndex:3,
-      boxShadow:`0 0 8px ${em.glow},0 0 16px ${em.glow}`,animation:`sparkFlash 0.45s steps(1,end) ${p.d}s forwards`}}/>)}
-    {/* WATER — rising bubbles */}
-    {element==="blue"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"12%",
-      width:p.sz,height:p.sz,borderRadius:"50%",border:`1.5px solid ${em.glow}`,
-      background:`radial-gradient(circle at 35% 30%,rgba(255,255,255,0.6),${em.glow}33)`,opacity:0,"--bx":`${p.drift}px`,zIndex:3,
+      width:p.id%4?4:6,height:p.sz*3.2,background:"linear-gradient(#fff,#E0D0FF)",borderRadius:2,transform:`rotate(${p.rot}deg)`,opacity:0,zIndex:3,
+      boxShadow:`0 0 14px ${em.glow},0 0 30px ${em.glow},0 0 46px ${em.glow}`,animation:`sparkFlash 0.5s steps(1,end) ${p.d}s forwards`}}/>)}
+    {/* WATER — rising bubbles + droplets */}
+    {element==="blue"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"10%",
+      width:p.sz,height:p.sz,borderRadius:"50%",border:`2px solid ${em.glow}`,
+      background:`radial-gradient(circle at 35% 30%,rgba(255,255,255,0.85),${em.glow}44)`,
+      boxShadow:`0 0 12px ${em.glow}`,opacity:0,"--bx":`${p.drift}px`,zIndex:3,
       animation:`bubbleRise ${p.dur+0.3}s ease-in-out ${p.d}s forwards`}}/>)}
     {/* WIND — spiralling leaves */}
     {element==="green"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:"50%",top:"48%",
-      width:p.sz+4,height:(p.sz+4)*0.5,borderRadius:"0 50% 0 50%",background:em.glow,opacity:0,
-      transformOrigin:"0 0",filter:`drop-shadow(0 0 5px ${em.glow})`,"--la":`${p.a}deg`,"--lr":`${p.r}px`,zIndex:3,
-      animation:`leafSpiral 1s ease-out ${p.d}s forwards`}}/>)}
+      width:p.sz+7,height:(p.sz+7)*0.5,borderRadius:"0 50% 0 50%",background:`linear-gradient(120deg,#C5F5A8,${em.glow})`,opacity:0,
+      transformOrigin:"0 0",filter:`drop-shadow(0 0 9px ${em.glow})`,"--la":`${p.a}deg`,"--lr":`${p.r}px`,zIndex:3,
+      animation:`leafSpiral 1.05s ease-out ${p.d}s forwards`}}/>)}
+    {/* the penalty cards — caught in the element, then flung to the victim */}
+    {(()=>{const nC=Math.max(2,Math.min(count||4,8));
+      return(<div style={{position:"absolute",left:"50%",top:"45%",width:0,height:0,zIndex:4,
+        "--tx":"0px","--ty":toSelf?"330px":"-290px",
+        animation:`${element}CardGroup 1.5s cubic-bezier(.55,0,.55,1) 0.1s both`}}>
+        {Array.from({length:nC}).map((_,i)=>{const a=(i/nC)*360;
+          return(<div key={i} style={{position:"absolute",left:0,top:0,
+            transform:`translate(-50%,-50%) rotate(${a}deg) translateY(-70px)`}}>
+            <div style={{width:34,height:49,borderRadius:5,background:CG[element]||em.grad,
+              border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 3px 11px rgba(0,0,0,0.55),0 0 13px ${em.glow}99`,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+4</span></div>
+          </div>);})}
+      </div>);})()}
     {victimName&&<div style={{position:"absolute",bottom:"15%",zIndex:5,
       animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.28s both"}}>
       <span style={{fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",fontStyle:"italic",letterSpacing:1,
@@ -1407,7 +1424,7 @@ export default function UnoGame(){
   /* Resolve a draw-stack penalty. Play an animation first, then deliver the
      penalty cards when it lands: +4 (wild4) → sword-draw cinematic (~850ms),
      +2 (draw2) → cards fly to the penalized player (~650ms). */
-  const SLASH_DELAY=850,DRAW2_DELAY=650;
+  const SLASH_DELAY=2100,DRAW2_DELAY=650;
   const applyStackDraw=useCallback(async(victimId,victimHand,reasonBase,nextPlayer)=>{
     const cnt=g.drawStack||0;const type=g.drawStackType;const element=g.currentColor||"green";
     let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
@@ -1429,7 +1446,7 @@ export default function UnoGame(){
       slashRef.current=psl.ts;
       ps("penalty");
       if(psl.type==="wild4"){
-        setChibiAttackFx({element:psl.element||"green",victimName:psl.name});
+        setChibiAttackFx({element:psl.element||"green",victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid});
         const t=setTimeout(()=>trigShake(),SLASH_DELAY);
         return()=>clearTimeout(t);
       }else{
@@ -2686,11 +2703,16 @@ const globalCSS=`
   @keyframes cardFly{0%{opacity:0;transform:translate(var(--fx),-24px) rotate(var(--fr)) scale(0.55)}22%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1)}45%{opacity:1;transform:translate(calc(var(--fx)*0.5),0) rotate(calc(var(--fr)*0.5)) scale(1)}100%{opacity:0;transform:translate(0,var(--fy)) rotate(0) scale(0.5)}}
   @keyframes charZoom{0%{transform:scale(1.14)}100%{transform:scale(1)}}
   @keyframes skillErupt{0%{opacity:0;transform:translateX(-50%) scaleY(0.35)}35%{opacity:1}100%{opacity:0.92;transform:translateX(-50%) scaleY(1)}}
-  @keyframes emberRise{0%{opacity:0;transform:translate(0,0) scale(1)}18%{opacity:1}100%{opacity:0;transform:translate(var(--ex),-240px) scale(0.25)}}
+  @keyframes emberRise{0%{opacity:0;transform:translate(0,0) scale(1)}15%{opacity:1}100%{opacity:0;transform:translate(var(--ex),-330px) scale(0.2)}}
   @keyframes sparkFlash{0%{opacity:0}12%{opacity:1}24%{opacity:0}44%{opacity:0.9}58%{opacity:0}100%{opacity:0}}
   @keyframes strobeFlash{0%{opacity:0}8%{opacity:0.85}16%{opacity:0}28%{opacity:0.6}36%{opacity:0}52%{opacity:0.75}60%{opacity:0}100%{opacity:0}}
-  @keyframes bubbleRise{0%{opacity:0;transform:translate(0,0) scale(0.7)}20%{opacity:0.9}100%{opacity:0;transform:translate(var(--bx),-250px) scale(1.1)}}
+  @keyframes bubbleRise{0%{opacity:0;transform:translate(0,0) scale(0.7)}20%{opacity:0.95}100%{opacity:0;transform:translate(var(--bx),-330px) scale(1.15)}}
   @keyframes leafSpiral{0%{opacity:0;transform:rotate(var(--la)) translateX(12px) scale(0.4)}20%{opacity:1}100%{opacity:0;transform:rotate(calc(var(--la) + 260deg)) translateX(var(--lr)) scale(1)}}
+  /* +4 penalty-card groups: element handles the cards, then flings them to the victim */
+  @keyframes greenCardGroup{0%{opacity:0;transform:rotate(0deg) scale(0.4)}16%{opacity:1;transform:rotate(0deg) scale(1)}58%{transform:rotate(500deg) scale(1.06)}78%{opacity:1;transform:rotate(640deg) scale(0.9)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) rotate(760deg) scale(0.28)}}
+  @keyframes redCardGroup{0%{opacity:0;transform:translateY(18px) rotate(0deg) scale(0.4)}16%{opacity:1;transform:translateY(0) rotate(0deg) scale(1)}58%{transform:translateY(-18px) rotate(150deg) scale(1.06)}78%{opacity:1;transform:translateY(-26px) rotate(210deg) scale(0.92)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) rotate(250deg) scale(0.3)}}
+  @keyframes yellowCardGroup{0%{opacity:0;transform:translate(0,0) scale(0.4)}14%{opacity:1;transform:translate(0,0) scale(1)}22%{transform:translate(-8px,5px) scale(1)}30%{transform:translate(8px,-6px)}38%{transform:translate(-7px,-5px)}46%{transform:translate(8px,6px)}54%{transform:translate(-6px,3px)}62%{transform:translate(0,0) scale(1.1)}76%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0.28)}}
+  @keyframes blueCardGroup{0%{opacity:0;transform:rotate(0deg) translateY(0) scale(0.4)}16%{opacity:1;transform:rotate(0deg) translateY(0) scale(1)}40%{transform:rotate(70deg) translateY(-10px) scale(1.04)}62%{transform:rotate(150deg) translateY(10px) scale(1.04)}80%{opacity:1;transform:rotate(210deg) translateY(-6px) scale(0.92)}100%{opacity:0;transform:translate(var(--tx),var(--ty)) rotate(250deg) scale(0.3)}}
   @keyframes draw2CardL{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(-46px,-6px) rotate(-14deg)}80%{opacity:1}100%{transform:translate(-70px,-70px) rotate(-24deg);opacity:0}}
   @keyframes draw2CardR{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(46px,-6px) rotate(14deg)}80%{opacity:1}100%{transform:translate(70px,-70px) rotate(24deg);opacity:0}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
