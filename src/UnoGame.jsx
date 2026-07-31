@@ -83,31 +83,49 @@ class BGMusic{
     b.connect(f);f.connect(g);g.connect(this.master);b.start(t);}
   _playLoop(){
     if(!this.playing||!this.ctx)return;
-    const bpm=112;const step=60/bpm;const bd=step*8;
-    const progs=[
-      {pad:[261.63,329.63,392],bass:[65.41,82.41,98,82.41,65.41,98,82.41,65.41],pl:[[523,659],[392,523],[440,659],[523,784]]},
-      {pad:[293.66,349.23,440],bass:[73.42,87.31,98,110,98,87.31,73.42,98],pl:[[587,784],[440,587],[523,659],[587,880]]},
-      {pad:[349.23,440,523],bass:[87.31,110,130.81,110,87.31,130.81,110,87.31],pl:[[698,880],[523,698],[587,784],[698,1047]]},
-      {pad:[329.63,392,493.88],bass:[82.41,98,110,130.81,110,98,82.41,110],pl:[[659,880],[493,659],[523,784],[659,987]]}];
+    const bpm=this.bpm;const step=60/bpm;const bd=step*8;const tr=this.transpose;
     const t=this.ctx.currentTime+0.05;
-    const prog=progs[this.bar%progs.length];
-    this._pad(prog.pad,t,bd+0.6);
-    this._wBass(prog.bass,t,bpm);
+    const prog=this.progs[this.bar%this.progs.length];
+    this._pad(prog.pad.map(f=>f*tr),t,bd+0.6);
+    this._wBass(prog.bass.map(f=>f*tr),t,bpm);
     prog.pl.forEach((notes,ci)=>{const ct=t+ci*step*2;
-      notes.forEach((f,fi)=>this._pluck(f,ct+fi*step*0.5+(Math.random()*0.008),step*1.5));});
+      notes.forEach((f,fi)=>this._pluck(f*tr,ct+fi*step*0.5+(Math.random()*0.008),step*1.5));});
     const bossa=[1,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1];
     for(let b=0;b<8;b++){
       const bt=t+b*step;
-      this._hat(bt,b%4===0);
-      if(b%4===2)this._snap(bt);
-      if(bossa[b*2%16])this._kick(bt);
-      if(bossa[(b*2+1)%16])this._hat(bt+step*0.5,false);}
+      if(this.groove===0){/* bossa */
+        this._hat(bt,b%4===0);
+        if(b%4===2)this._snap(bt);
+        if(bossa[b*2%16])this._kick(bt);
+        if(bossa[(b*2+1)%16])this._hat(bt+step*0.5,false);
+      }else{/* straight backbeat */
+        this._hat(bt,b%4===0);this._hat(bt+step*0.5,false);
+        if(b%2===0)this._kick(bt);
+        if(b%4===2)this._snap(bt);}}
     this.bar++;
     this.timer=setTimeout(()=>this._playLoop(),(bd-0.15)*1000);}
   start(){
     if(this.playing||!this.ctx)return;
     if(this.ctx.state==="suspended")this.ctx.resume();
     this.playing=true;this.bar=0;
+    /* pick a random happy song each game: progression set + key + tempo + groove */
+    const sets=[
+      [{pad:[261.63,329.63,392],bass:[65.41,82.41,98,82.41,65.41,98,82.41,65.41],pl:[[523,659],[392,523],[440,659],[523,784]]},
+       {pad:[293.66,349.23,440],bass:[73.42,87.31,98,110,98,87.31,73.42,98],pl:[[587,784],[440,587],[523,659],[587,880]]},
+       {pad:[349.23,440,523],bass:[87.31,110,130.81,110,87.31,130.81,110,87.31],pl:[[698,880],[523,698],[587,784],[698,1047]]},
+       {pad:[329.63,392,493.88],bass:[82.41,98,110,130.81,110,98,82.41,110],pl:[[659,880],[493,659],[523,784],[659,987]]}],
+      [{pad:[261.63,329.63,392],bass:[65.41,98,65.41,82.41,65.41,98,82.41,98],pl:[[523,659],[659,784],[523,659],[784,988]]},
+       {pad:[392,493.88,587.33],bass:[98,73.42,98,146.83,98,123.47,98,73.42],pl:[[587,784],[784,988],[587,784],[988,784]]},
+       {pad:[261.63,329.63,440],bass:[55,82.41,110,82.41,55,110,82.41,55],pl:[[440,659],[523,659],[440,523],[659,880]]},
+       {pad:[349.23,440,523.25],bass:[87.31,130.81,87.31,110,87.31,130.81,110,87.31],pl:[[523,698],[698,880],[523,698],[880,1047]]}],
+      [{pad:[293.66,349.23,440],bass:[73.42,110,73.42,87.31,73.42,110,87.31,110],pl:[[587,698],[698,880],[587,698],[880,698]]},
+       {pad:[392,493.88,587.33],bass:[98,146.83,98,123.47,98,146.83,123.47,98],pl:[[784,988],[587,784],[698,880],[988,784]]},
+       {pad:[261.63,329.63,392],bass:[65.41,98,130.81,98,65.41,130.81,98,65.41],pl:[[523,659],[784,659],[523,659],[784,1047]]},
+       {pad:[261.63,329.63,440],bass:[55,82.41,110,82.41,55,110,82.41,55],pl:[[440,659],[523,659],[440,523],[659,880]]}]];
+    this.progs=sets[Math.floor(Math.random()*sets.length)];
+    this.bpm=100+Math.floor(Math.random()*30);
+    this.transpose=Math.pow(2,(Math.floor(Math.random()*8)-3)/12);
+    this.groove=Math.random()<0.5?0:1;
     this.master=this.ctx.createGain();this.master.gain.setValueAtTime(0,this.ctx.currentTime);
     this.master.gain.linearRampToValueAtTime(this.vol,this.ctx.currentTime+2.5);
     this.master.connect(this.ctx.destination);this._playLoop();}
@@ -727,9 +745,9 @@ const Card=({card,onClick,sz="md",faceDown,highlighted,lifted,style,animate})=>{
       cursor:onClick?"pointer":"default",
       transition:"transform 0.35s cubic-bezier(.34,1.56,.64,1),box-shadow 0.35s ease",
       boxShadow:lifted?`0 20px 50px rgba(0,0,0,0.95),0 0 0 2px ${gc},0 0 40px ${gc}66`
-        :highlighted?`0 4px 25px ${gc}55,0 0 20px ${gc}33,0 0 0 2px ${gc}44`
+        :highlighted?`0 4px 22px ${gc}66,0 0 0 2px ${gc}55`
         :"0 4px 18px rgba(0,0,0,0.65),0 1px 4px rgba(0,0,0,0.3)",
-      animation:animate||(highlighted?"playableGlow 1.2s ease-in-out infinite":"none"),...style}}
+      animation:animate||"none",...style}}
       onPointerEnter={e=>{if(onClick&&isLg){e.currentTarget.style.transform=(style?.transform||"")+" translateY(-24px) scale(1.14)";sfx.p("cardSlide");}}}
       onPointerLeave={e=>{if(!lifted)e.currentTarget.style.transform=style?.transform||"none";}}>
       <canvas ref={canvasRef} style={{width:dm.w,height:dm.h,borderRadius:dm.r,display:"block"}}/>
@@ -824,8 +842,8 @@ const ART_URL=import.meta.env.BASE_URL+"art/";
 const ELEM_COL={red:0,yellow:1,blue:2,green:3};
 const artPosX=el=>((ELEM_COL[el]??0)/3)*100;
 /* Effect colors matched to the art (lightning art is purple, not yellow) */
-const ART_GLOW={red:"#FF7A18",yellow:"#B388FF",blue:"#29B6F6",green:"#66BB6A"};
-const ART_DARK={red:"#BF360C",yellow:"#4527A0",blue:"#01579B",green:"#1B5E20"};
+const ART_GLOW={red:"#FF7A18",yellow:"#FFD21A",blue:"#29B6F6",green:"#66BB6A"};
+const ART_DARK={red:"#BF360C",yellow:"#F57F17",blue:"#01579B",green:"#1B5E20"};
 
 /* ═══ MANGA CHIBI (SVG, poses: slash / trip) — boy & girl variants ═══ */
 const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy",element="red"})=>{
@@ -993,8 +1011,8 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
   const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
   useEffect(()=>{
-    const t1=setTimeout(()=>setPhase(1),1250);
-    const t2=setTimeout(()=>doneRef.current(),3350);
+    const t1=setTimeout(()=>setPhase(1),750);
+    const t2=setTimeout(()=>doneRef.current(),2850);
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
   const em0=EM(element);const em={...em0,glow:ART_GLOW[element]||em0.glow,c3:ART_DARK[element]||em0.c3};
@@ -1004,64 +1022,69 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
   const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
   const splashes=useMemo(()=>Array.from({length:11},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:95+Math.random()*115,rot:Math.random()*360,w:14+Math.random()*32,h:5+Math.random()*7,d:Math.random()*0.4})),[element]);
   const cardSplash=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:34+Math.random()*74,rot:Math.random()*360,w:10+Math.random()*20,h:4+Math.random()*5,d:Math.random()*0.4})),[element]);
-  const FXN=element==="green"?38:46;
+  const FXN=element==="green"?32:38;
   const fx=useMemo(()=>Array.from({length:FXN},(_,i)=>({id:i,
-    x:-150+Math.random()*300,y:-120+Math.random()*240,d:Math.random()*1.2,dur:0.85+Math.random()*0.75,
-    sz:7+Math.random()*13,drift:-50+Math.random()*100,rot:Math.random()*360,a:(i/FXN)*360,r:80+Math.random()*150})),[element]);
+    x:-175+Math.random()*350,y:-140+Math.random()*280,d:Math.random()*1.2,dur:0.9+Math.random()*0.8,
+    sz:12+Math.random()*20,drift:-60+Math.random()*120,rot:Math.random()*360,a:(i/FXN)*360,r:95+Math.random()*185})),[element]);
+  const bolts=useMemo(()=>element!=="yellow"?[]:Array.from({length:4},(_,i)=>{
+    let x=50,p="M50,0";const segs=9;
+    for(let s=1;s<=segs;s++){const y=Math.round((s/segs)*300);x=50+(Math.random()-0.5)*48;p+=` L${Math.round(x)},${y}`;}
+    return{id:i,x:-150+i*95+(Math.random()-0.5)*22,d:0.05+i*0.1+Math.random()*0.07,path:p};}),[element]);
   const Splashes=()=>splashes.map(s=><div key={s.id} style={{position:"absolute",
     left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(50% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
     width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
     filter:`drop-shadow(0 0 6px ${em.glow})`,animation:`splashPop 0.6s ease-out ${s.d}s both`}}/>);
 
   if(phase===0){
-    /* ── PHASE 1: fullscreen character reveal (semi-transparent) with SHING ── */
+    /* ── PHASE 1: element energy gathers (buildup) ── */
     return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
-      background:"radial-gradient(circle at 50% 48%,rgba(10,14,24,0.5),rgba(0,0,0,0.8) 82%)",
-      display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.25s ease-out"}}>
-      {/* blurred fullscreen atmosphere */}
-      <div style={{position:"absolute",inset:0,backgroundImage:`url(${ART_URL}Characters.png)`,
-        backgroundSize:"400% auto",backgroundPosition:`${posX}% 50%`,backgroundRepeat:"no-repeat",
-        filter:"blur(42px) brightness(0.7)",opacity:0.4,animation:"fadeIn 0.5s ease-out"}}/>
-      {/* crisp character, tall & centered, transparent */}
-      <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:"min(44vh,320px)",transform:"translateX(-50%)",zIndex:2}}>
-        <div style={{width:"100%",height:"100%",backgroundImage:`url(${ART_URL}Characters.png)`,backgroundSize:"400% 100%",
-          backgroundPosition:`${posX}% center`,backgroundRepeat:"no-repeat",opacity:0.58,
-          animation:"cardFlipIn 0.7s cubic-bezier(.34,1.56,.64,1) both"}}/>
-      </div>
-      <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 42%,${em.glow}1f,transparent 68%)`,mixBlendMode:"screen",zIndex:2}}/>
-      <div style={{position:"absolute",left:0,right:0,bottom:0,height:"28%",background:"linear-gradient(180deg,transparent,rgba(0,0,0,0.78))",zIndex:3}}/>
-      <div style={{position:"absolute",top:"14%",right:"18%",zIndex:4,fontFamily:"Arial Black",fontStyle:"italic",
-        fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:1,
-        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 14px ${em.glow},2px 2px 0 rgba(0,0,0,0.5)`,
-        animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.35s both"}}>SHING</div>
-      <div style={{position:"absolute",bottom:"7%",left:0,right:0,textAlign:"center",zIndex:4,
-        animation:"cardTitleIn 0.5s ease-out 0.4s both"}}>
-        <div style={{fontSize:"min(30px,7vw)",fontWeight:900,fontFamily:"Georgia,'Times New Roman',serif",letterSpacing:4,
-          color:"#F3D98A",textShadow:`0 0 16px ${em.glow},0 2px 5px rgba(0,0,0,0.95)`}}>{em.emoji} {em.name}</div>
-        <div style={{fontSize:11,fontWeight:800,letterSpacing:5,color:"#C9A24B",marginTop:2}}>SWORD MASTER</div>
-      </div>
+      background:"radial-gradient(circle at 50% 48%,rgba(10,14,24,0.16),rgba(0,0,0,0.34) 88%)",
+      display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.2s ease-out"}}>
+      {/* charging energy core */}
+      <div style={{position:"absolute",width:"46vmin",height:"46vmin",borderRadius:"50%",
+        background:`radial-gradient(circle,${em.glow}77,${em.glow}22 44%,transparent 70%)`,
+        mixBlendMode:"screen",animation:"chargePulse 0.75s ease-out both"}}/>
+      {/* converging sparks */}
+      {fx.slice(0,14).map(p=><div key={p.id} style={{position:"absolute",left:"50%",top:"48%",
+        width:6+p.sz%7,height:6+p.sz%7,borderRadius:"50%",background:em.glow,opacity:0,zIndex:3,
+        boxShadow:`0 0 10px ${em.glow}`,
+        "--sx":`${Math.round(Math.cos(p.a)*p.r*1.35)}px`,"--sy":`${Math.round(Math.sin(p.a)*p.r*1.35)}px`,
+        animation:`convergeIn 0.68s ease-in ${(p.d*0.4).toFixed(2)}s forwards`}}/>)}
+      {/* SHING */}
+      <div style={{position:"absolute",top:"22%",zIndex:4,fontFamily:"Arial Black",fontStyle:"italic",
+        fontSize:"min(34px,8vw)",fontWeight:900,color:"#fff",transform:"rotate(-6deg)",letterSpacing:2,
+        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 16px ${em.glow},2px 2px 0 rgba(0,0,0,0.5)`,
+        animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.2s both"}}>SHING</div>
     </div>);
   }
 
   /* ── PHASE 2: element effect (particles + cards, no skill image) ── */
   return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
     display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div style={{position:"absolute",inset:0,background:element==="yellow"?"#E8E0FF":"#fff",animation:"slashFlash 0.4s ease-out forwards"}}/>
+    <div style={{position:"absolute",inset:0,background:element==="yellow"?"#FFFBE6":"#fff",animation:"slashFlash 0.4s ease-out forwards"}}/>
     <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 50%,${em.glow}22,rgba(0,0,0,0.62) 76%)`,
       animation:"bgPulse 0.6s ease-out"}}/>
     {/* lightning strobe */}
-    {element==="yellow"&&<div style={{position:"absolute",inset:0,background:`${em.glow}44`,mixBlendMode:"screen",
+    {element==="yellow"&&<div style={{position:"absolute",inset:0,background:`${em.glow}55`,mixBlendMode:"screen",
       animation:"strobeFlash 0.85s steps(1,end) forwards"}}/>}
+    {/* LIGHTNING — big jagged bolts striking down */}
+    {element==="yellow"&&bolts.map(b=>(
+      <svg key={b.id} viewBox="0 0 100 300" preserveAspectRatio="none"
+        style={{position:"absolute",left:`calc(50% + ${b.x}px)`,top:0,width:70,height:"54%",transform:"translateX(-50%)",zIndex:3,
+          filter:`drop-shadow(0 0 8px ${em.glow})`,animation:`boltFlash 0.7s steps(1,end) ${b.d}s both`}}>
+        <path d={b.path} fill="none" stroke={em.glow} strokeWidth="10" strokeLinejoin="round" strokeLinecap="round" opacity="0.6"/>
+        <path d={b.path} fill="none" stroke="#fff" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
+      </svg>))}
     {/* FIRE — rising embers + flame licks */}
     {element==="red"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"12%",
       width:p.sz,height:p.sz*(p.id%3?1:1.7),borderRadius:p.id%3?"50%":"50% 50% 50% 50% / 60% 60% 40% 40%",
       background:"radial-gradient(circle,#FFF3C4,#FF7A18 70%)",
-      boxShadow:`0 0 14px #FF7A18,0 0 26px ${em.glow}`,opacity:0,"--ex":`${p.drift}px`,zIndex:3,
+      boxShadow:`0 0 16px #FF7A18`,opacity:0,"--ex":`${p.drift}px`,zIndex:3,
       animation:`emberRise ${p.dur}s ease-out ${p.d}s forwards`}}/>)}
-    {/* LIGHTNING — big flashing bolts */}
-    {element==="yellow"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,top:`calc(48% + ${p.y}px)`,
-      width:p.id%4?4:6,height:p.sz*3.2,background:"linear-gradient(#fff,#E0D0FF)",borderRadius:2,transform:`rotate(${p.rot}deg)`,opacity:0,zIndex:3,
-      boxShadow:`0 0 14px ${em.glow},0 0 30px ${em.glow},0 0 46px ${em.glow}`,animation:`sparkFlash 0.5s steps(1,end) ${p.d}s forwards`}}/>)}
+    {/* LIGHTNING — electric sparks */}
+    {element==="yellow"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,top:`calc(46% + ${p.y}px)`,
+      width:p.id%4?3:5,height:p.sz*2.6,background:"linear-gradient(#fff,#FFE066)",borderRadius:2,transform:`rotate(${p.rot}deg)`,opacity:0,zIndex:3,
+      boxShadow:`0 0 14px ${em.glow}`,animation:`sparkFlash 0.5s steps(1,end) ${p.d}s forwards`}}/>)}
     {/* WATER — rising bubbles + droplets */}
     {element==="blue"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"10%",
       width:p.sz,height:p.sz,borderRadius:"50%",border:`2px solid ${em.glow}`,
@@ -1171,21 +1194,36 @@ const UnoCallFX=({color,onDone})=>{
 /* ═══ UNO CALL PENALTY — CAUGHT OFF GUARD ═══ */
 const UnoPenaltyFX=({victimName,onDone})=>{
   const doneRef=useRef(onDone);doneRef.current=onDone;
-  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2200);return()=>clearTimeout(t);},[]);
-  return(<div style={{position:"fixed",bottom:20,right:10,zIndex:98,pointerEvents:"none",
-    display:"flex",flexDirection:"column",alignItems:"center",
-    animation:"chibiEnter 0.4s cubic-bezier(.34,1.56,.64,1) both"}}>
-    <div style={{position:"absolute",top:-40,transform:"rotate(-18deg)",background:"rgba(180,0,0,0.85)",
-      border:"3px solid #FF5252",borderRadius:8,padding:"3px 12px",opacity:0,
-      animation:"stampSlam 0.4s ease-out 0.5s forwards",zIndex:3}}>
-      <span style={{fontSize:14,fontWeight:900,color:"#fff",letterSpacing:1}}>PENALTY!</span></div>
-    {victimName&&<div style={{background:"rgba(0,0,0,0.7)",borderRadius:8,padding:"2px 8px",marginBottom:4,
-      border:"1px solid rgba(255,82,82,0.3)"}}>
-      <span style={{fontSize:8,color:"#FF8A80",fontWeight:700}}>😵 {victimName}</span></div>}
-    <div style={{position:"relative"}}>
-      <Chibi pose="trip" accent="#FF5252" dark="#B71C1C" gender="boy"/>
-      <div style={{position:"absolute",fontSize:20,top:10,left:-10,animation:"sweatFall 0.8s ease-in 0.1s both"}}>💦</div>
+  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2000);return()=>clearTimeout(t);},[]);
+  const rings=useMemo(()=>Array.from({length:14},(_,i)=>({id:i,a:(i/14)*360,d:i*0.02})),[]);
+  return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 50% 45%,rgba(255,82,82,0.2),transparent 60%)",animation:"bgPulse 0.6s ease-out"}}/>
+    {/* red impact spikes */}
+    <div style={{position:"absolute",left:"50%",top:"45%",width:0,height:0}}>
+      {rings.map(r=><div key={r.id} style={{position:"absolute",left:0,top:0,width:"34vmax",height:r.id%2?2:4,
+        background:"linear-gradient(90deg,#FF5252,transparent 75%)",transformOrigin:"0 50%","--a":`${r.a}deg`,opacity:0,
+        animation:`mangaBurst 0.5s ease-out ${r.d}s forwards`}}/>)}
     </div>
+    {/* PENALTY stamp */}
+    <div style={{position:"relative",transform:"rotate(-9deg)",zIndex:3,
+      animation:"stampSlam 0.45s cubic-bezier(.34,1.56,.64,1) both"}}>
+      <div style={{border:"5px solid #FF5252",borderRadius:14,padding:"4px 26px",background:"rgba(120,0,0,0.35)",
+        boxShadow:"0 0 34px rgba(255,82,82,0.55),inset 0 0 14px rgba(255,82,82,0.25)"}}>
+        <div style={{fontSize:"min(42px,9.5vw)",fontWeight:900,fontFamily:"Arial Black",color:"#fff",letterSpacing:3,
+          textShadow:"0 0 18px rgba(255,82,82,0.9),0 3px 6px rgba(0,0,0,0.7)"}}>PENALTY!</div>
+      </div>
+    </div>
+    {/* two penalty cards dropping onto the victim */}
+    {[-1,1].map(d=><div key={d} style={{position:"absolute",top:"18%",left:`calc(50% + ${d*34}px)`,
+      width:36,height:52,borderRadius:6,background:"linear-gradient(145deg,#E53935,#B71C1C)",border:"2px solid #fff",
+      boxShadow:"0 4px 14px rgba(0,0,0,0.5)",opacity:0,zIndex:2,
+      display:"flex",alignItems:"center",justifyContent:"center",
+      animation:`penaltyDrop 0.8s ease-in ${0.15+(d>0?0.12:0)}s forwards`}}>
+      <span style={{fontSize:13,fontWeight:900,color:"#fff"}}>+2</span></div>)}
+    {victimName&&<div style={{position:"absolute",bottom:"30%",zIndex:3,
+      animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.3s both"}}>
+      <span style={{fontSize:"min(24px,6vw)",fontWeight:900,color:"#FFD54F",fontFamily:"Arial Black",fontStyle:"italic",letterSpacing:1,
+        WebkitTextStroke:"2px #7a1010",textShadow:"0 0 16px rgba(255,82,82,0.8),0 3px 6px rgba(0,0,0,0.7)"}}>😵 {victimName} +2</span></div>}
   </div>);
 };
 
@@ -1418,7 +1456,7 @@ export default function UnoGame(){
   /* Resolve a draw-stack penalty. Play an animation first, then deliver the
      penalty cards when it lands: +4 (wild4) → sword-draw cinematic (~850ms),
      +2 (draw2) → cards fly to the penalized player (~650ms). */
-  const SLASH_DELAY=2750,DRAW2_DELAY=650;
+  const SLASH_DELAY=2150,DRAW2_DELAY=650;
   const applyStackDraw=useCallback(async(victimId,victimHand,reasonBase,nextPlayer)=>{
     const cnt=g.drawStack||0;const type=g.drawStackType;const element=g.currentColor||"green";
     let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
@@ -1879,14 +1917,17 @@ export default function UnoGame(){
     setSwpC(null);setShowDk(false);setSwap(false);setLMsg("Swapped!");setTimeout(()=>setLMsg(""),1500);};
 
   const catchUno=useCallback(async(targetId)=>{if(!g||g.winner)return;
-    const targetHand=g.hands?.[targetId]||[];const cu=g.calledUno||{};
+    // Re-read the latest state so a just-called UNO (still syncing) isn't wrongly caught
+    let fg=g;try{const snap=await get(ref(db,"rooms/"+rc+"/game"));if(snap.exists())fg=snap.val();}catch(e){}
+    if(fg.winner)return;
+    const targetHand=fg.hands?.[targetId]||[];const cu=fg.calledUno||{};
     if(targetHand.length===1&&!cu[targetId]){ps("catchUno");trigShake();
-      const nh={...g.hands};let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
+      const nh={...fg.hands};let ndp=[...(fg.drawPile||[])];const nd=[...fg.discardPile];
       if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];}
       nh[targetId]=[...(nh[targetId]||[]),...ndp.splice(0,2)];
       await wgs({hands:nh,drawPile:ndp,message:(rd.players[targetId]?.name)+" caught! UNO penalty +2!",
         calledUno:{...cu,[targetId]:true}});}
-  },[g,ps,wgs,rd,trigShake]);
+  },[g,ps,wgs,rd,trigShake,rc]);
 
   const snatchPick=useCallback(async(cardIdx)=>{if(!snatchModal||snatchModal.phase!=="pick"||!g)return;
     const nh={...g.hands};const oppHand=[...(nh[snatchModal.fromId]||[])];
@@ -2615,9 +2656,9 @@ export default function UnoGame(){
                 return(<div key={card.id} onClick={()=>{if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else setSel(i);}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,
-                    transition:"all 0.3s cubic-bezier(.34,1.56,.64,1)",zIndex:isSel?50:i,
+                    transition:"left 0.28s cubic-bezier(.34,1.56,.64,1),bottom 0.28s ease,transform 0.28s ease",zIndex:isSel?50:i,
                     animation:`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`,
-                    filter:isSel?`brightness(1.2) drop-shadow(0 0 20px ${CH[card.color]||"#FFD700"}88)`:playable?`brightness(1.08) drop-shadow(0 0 6px ${CH[card.color]||"#FFD700"}44)`:"none",
+                    filter:isSel?"brightness(1.2)":playable?"brightness(1.06)":"none",
                     cursor:(myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)?"pointer":"default"}}>
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
@@ -2700,6 +2741,10 @@ const globalCSS=`
   @keyframes emberRise{0%{opacity:0;transform:translate(0,0) scale(1)}15%{opacity:1}100%{opacity:0;transform:translate(var(--ex),-330px) scale(0.2)}}
   @keyframes sparkFlash{0%{opacity:0}12%{opacity:1}24%{opacity:0}44%{opacity:0.9}58%{opacity:0}100%{opacity:0}}
   @keyframes strobeFlash{0%{opacity:0}8%{opacity:0.85}16%{opacity:0}28%{opacity:0.6}36%{opacity:0}52%{opacity:0.75}60%{opacity:0}100%{opacity:0}}
+  @keyframes chargePulse{0%{opacity:0;transform:scale(0.3)}40%{opacity:1}100%{opacity:0.85;transform:scale(1.05)}}
+  @keyframes convergeIn{0%{opacity:0;transform:translate(var(--sx),var(--sy)) scale(0.4)}35%{opacity:1}100%{opacity:0.9;transform:translate(0,0) scale(1)}}
+  @keyframes boltFlash{0%{opacity:0}9%{opacity:1}22%{opacity:0}40%{opacity:0.95}54%{opacity:0}72%{opacity:0.8}84%{opacity:0}100%{opacity:0}}
+  @keyframes penaltyDrop{0%{opacity:0;transform:translateY(-60px) scale(0.8) rotate(-8deg)}25%{opacity:1}100%{opacity:0;transform:translateY(170px) scale(0.9) rotate(10deg)}}
   @keyframes bubbleRise{0%{opacity:0;transform:translate(0,0) scale(0.7)}20%{opacity:0.95}100%{opacity:0;transform:translate(var(--bx),-330px) scale(1.15)}}
   @keyframes leafSpiral{0%{opacity:0;transform:rotate(var(--la)) translateX(12px) scale(0.4)}20%{opacity:1}100%{opacity:0;transform:rotate(calc(var(--la) + 260deg)) translateX(var(--lr)) scale(1)}}
   /* +4 penalty-card groups: element handles the cards, then flings them to the victim */
