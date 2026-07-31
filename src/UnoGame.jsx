@@ -819,6 +819,14 @@ const ElementalW4FX=({color,onDone})=>{
 /* ═══ ELEMENT → CHIBI GENDER (fire/lightning = boy, water/wind = girl) ═══ */
 const ELEM_GENDER={red:"boy",yellow:"boy",blue:"girl",green:"girl"};
 
+/* ═══ ELEMENTAL ART SHEETS (4 columns: fire | lightning | water | wind) ═══ */
+const ART_URL=import.meta.env.BASE_URL+"art/";
+const ELEM_COL={red:0,yellow:1,blue:2,green:3};
+const artPosX=el=>((ELEM_COL[el]??0)/3)*100;
+/* Effect colors matched to the art (lightning art is purple, not yellow) */
+const ART_GLOW={red:"#FF7A18",yellow:"#B388FF",blue:"#29B6F6",green:"#66BB6A"};
+const ART_DARK={red:"#BF360C",yellow:"#4527A0",blue:"#01579B",green:"#1B5E20"};
+
 /* ═══ MANGA CHIBI (SVG, poses: slash / trip) — boy & girl variants ═══ */
 const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy",element="red"})=>{
   const poseAnim=pose==="trip"?"chibiTripFall 1s ease-in forwards":"chibiBounce 0.4s ease infinite alternate";
@@ -989,38 +997,35 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
     const t2=setTimeout(()=>doneRef.current(),2500);
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
-  const em=EM(element);const gen=ELEM_GENDER[element]||"boy";
+  const em0=EM(element);const em={...em0,glow:ART_GLOW[element]||em0.glow,c3:ART_DARK[element]||em0.c3};
+  const gen=ELEM_GENDER[element]||"boy";const posX=artPosX(element);
   const rays=useMemo(()=>Array.from({length:22},(_,i)=>({id:i,a:(i/22)*360})),[element]);
   const vlines=useMemo(()=>Array.from({length:26},(_,i)=>({id:i,x:(i/26)*100,d:Math.random()*0.3,w:1+Math.random()*2})),[element]);
   const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
   const splashes=useMemo(()=>Array.from({length:11},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:95+Math.random()*115,rot:Math.random()*360,w:14+Math.random()*32,h:5+Math.random()*7,d:Math.random()*0.4})),[element]);
   const cardSplash=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:34+Math.random()*74,rot:Math.random()*360,w:10+Math.random()*20,h:4+Math.random()*5,d:Math.random()*0.4})),[element]);
+  const fx=useMemo(()=>Array.from({length:element==="green"?16:18},(_,i)=>({id:i,
+    x:-100+Math.random()*200,y:-90+Math.random()*180,d:Math.random()*0.55,dur:0.85+Math.random()*0.7,
+    sz:4+Math.random()*9,drift:-28+Math.random()*56,rot:Math.random()*360,a:(i/16)*360,r:55+Math.random()*95})),[element]);
   const Splashes=()=>splashes.map(s=><div key={s.id} style={{position:"absolute",
     left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(50% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
     width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
     filter:`drop-shadow(0 0 6px ${em.glow})`,animation:`splashPop 0.6s ease-out ${s.d}s both`}}/>);
 
   if(phase===0){
-    /* ── PHASE 1: "drawing type" character card reveal (SHING) ── */
+    /* ── PHASE 1: character card reveal (real art) with SHING ── */
     return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
       background:"radial-gradient(circle at 50% 48%,rgba(10,14,24,0.55),rgba(0,0,0,0.82) 80%)",
       display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.25s ease-out"}}>
-      <div style={{position:"relative",width:"min(54vh,232px)",height:"min(82vh,348px)",borderRadius:12,
-        overflow:"hidden",background:"linear-gradient(160deg,#28324c,#111a2c 58%,#0a0f1a)",
+      <div style={{position:"relative",width:"min(54vh,236px)",height:"min(82vh,352px)",borderRadius:12,
+        overflow:"hidden",background:"#0a0f1a",
         boxShadow:`0 22px 60px rgba(0,0,0,0.75),0 0 42px ${em.glow}66`,
         animation:"cardFlipIn 0.7s cubic-bezier(.34,1.56,.64,1) both"}}>
-        <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 38%,${em.glow}3a,transparent 62%)`}}/>
-        {vlines.map(l=><div key={l.id} style={{position:"absolute",top:0,left:`${l.x}%`,width:l.w,height:"100%",
-          background:"linear-gradient(180deg,transparent,rgba(255,255,255,0.09),transparent)",
-          animation:`stanceLine 0.88s ease-out ${l.d}s both`}}/>)}
-        {cardSplash.map(s=><div key={s.id} style={{position:"absolute",
-          left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(46% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
-          width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
-          filter:`drop-shadow(0 0 5px ${em.glow})`,animation:`splashPop 0.6s ease-out ${0.2+s.d}s both`}}/>)}
-        <div style={{position:"absolute",left:"50%",top:"45%",transform:"translate(-50%,-50%) scale(1.28)",zIndex:3,
-          filter:`drop-shadow(0 0 14px ${em.glow})`,animation:"stanceRise 0.88s cubic-bezier(.22,1,.36,1) both"}}>
-          <Chibi pose="draw" accent={em.glow} dark={em.c3} gender={gen} element={element}/>
-        </div>
+        <div style={{position:"absolute",inset:0,backgroundImage:`url(${ART_URL}Characters.png)`,
+          backgroundSize:"400% auto",backgroundPosition:`${posX}% 62%`,backgroundRepeat:"no-repeat",
+          animation:"charZoom 2.6s ease-out both"}}/>
+        <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 42%,${em.glow}26,transparent 66%)`,mixBlendMode:"screen"}}/>
+        <div style={{position:"absolute",left:0,right:0,bottom:0,height:"40%",background:"linear-gradient(180deg,transparent,rgba(0,0,0,0.88))"}}/>
         <div style={{position:"absolute",top:"12%",right:"9%",zIndex:4,fontFamily:"Arial Black",fontStyle:"italic",
           fontSize:"min(24px,5.5vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:1,
           WebkitTextStroke:`1.5px ${em.c3}`,textShadow:`0 0 14px ${em.glow},2px 2px 0 rgba(0,0,0,0.5)`,
@@ -1036,33 +1041,42 @@ const ChibiAttackFX=({element,victimName,onDone})=>{
     </div>);
   }
 
-  /* ── PHASE 2: explosive slash impact ── */
+  /* ── PHASE 2: element skill unleashed (unique effect per element) ── */
+  const edgeMask="linear-gradient(90deg,transparent 0%,#000 21%,#000 79%,transparent 100%)";
   return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
     display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div style={{position:"absolute",inset:0,background:"#fff",animation:"slashFlash 0.4s ease-out forwards"}}/>
-    <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 48%,${em.glow}22,rgba(0,0,0,0.6) 76%)`,
+    <div style={{position:"absolute",inset:0,background:element==="yellow"?"#E8E0FF":"#fff",animation:"slashFlash 0.4s ease-out forwards"}}/>
+    <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 50%,${em.glow}22,rgba(0,0,0,0.62) 76%)`,
       animation:"bgPulse 0.6s ease-out"}}/>
-    <div style={{position:"absolute",left:"50%",top:"48%",width:0,height:0,zIndex:1}}>
-      {rays.map(r=><div key={r.id} style={{position:"absolute",left:0,top:0,width:"52vmax",height:r.id%2?2:5,
-        background:`linear-gradient(90deg,#fff,${em.glow} 42%,transparent 80%)`,
-        transformOrigin:"0 50%","--a":`${r.a}deg`,opacity:0,
-        animation:`mangaBurst 0.5s ease-out ${r.id*0.008}s forwards`}}/>)}
-    </div>
-    <div style={{position:"absolute",top:"48%",left:"-25%",width:"150%",height:22,zIndex:3,
-      background:`linear-gradient(90deg,transparent,${em.glow}99,#fff,${em.glow}99,transparent)`,
-      boxShadow:`0 0 40px #fff,0 0 80px ${em.glow}`,animation:"slashArc 0.55s cubic-bezier(.22,1,.36,1) both"}}/>
-    <div style={{position:"absolute",top:"48%",left:"-25%",width:"150%",height:4,zIndex:3,background:"#fff",
-      animation:"slashArc 0.55s cubic-bezier(.22,1,.36,1) 0.04s both"}}/>
-    {dust.map(d=><div key={d.id} style={{position:"absolute",
-      left:`calc(50% + ${Math.round(Math.cos(d.a)*d.r)}px)`,top:`calc(48% + ${Math.round(Math.sin(d.a)*d.r)}px)`,
-      width:d.s,height:d.s,borderRadius:"50%",background:`radial-gradient(circle,${em.glow}cc,transparent)`,
-      opacity:0,zIndex:2,animation:`trailPop 0.7s ease-out ${0.1+d.d}s forwards`}}/>)}
-    <Splashes/>
-    <div style={{position:"absolute",left:"32%",top:"54%",transform:"translate(-50%,-50%) scale(1.65)",zIndex:4,
-      filter:`drop-shadow(0 0 16px ${em.glow}88)`,animation:"chibiPunchIn 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>
-      <Chibi pose="slash" accent={em.glow} dark={em.c3} gender={gen} element={element}/>
-    </div>
-    {victimName&&<div style={{position:"absolute",bottom:"16%",zIndex:5,
+    {/* lightning strobe */}
+    {element==="yellow"&&<div style={{position:"absolute",inset:0,background:`${em.glow}44`,mixBlendMode:"screen",
+      animation:"strobeFlash 0.85s steps(1,end) forwards"}}/>}
+    {/* the elemental skill art beam (black dropped via screen) */}
+    <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:"min(46vh,250px)",zIndex:2,
+      transformOrigin:"50% 100%",backgroundImage:`url(${ART_URL}skills.png)`,
+      backgroundSize:"400% 100%",backgroundPosition:`${posX}% center`,backgroundRepeat:"no-repeat",
+      WebkitMaskImage:edgeMask,maskImage:edgeMask,
+      mixBlendMode:"screen",animation:"skillErupt 0.85s cubic-bezier(.22,1,.36,1) both"}}/>
+    {/* FIRE — rising embers */}
+    {element==="red"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"14%",
+      width:p.sz,height:p.sz,borderRadius:"50%",background:"radial-gradient(circle,#FFE082,#FF7A18)",
+      boxShadow:"0 0 8px #FF7A18",opacity:0,"--ex":`${p.drift}px`,zIndex:3,
+      animation:`emberRise ${p.dur}s ease-out ${p.d}s forwards`}}/>)}
+    {/* LIGHTNING — flashing sparks */}
+    {element==="yellow"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,top:`calc(48% + ${p.y}px)`,
+      width:2.5,height:p.sz*2.2,background:"#F0EAFF",borderRadius:2,transform:`rotate(${p.rot}deg)`,opacity:0,zIndex:3,
+      boxShadow:`0 0 8px ${em.glow},0 0 16px ${em.glow}`,animation:`sparkFlash 0.45s steps(1,end) ${p.d}s forwards`}}/>)}
+    {/* WATER — rising bubbles */}
+    {element==="blue"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"12%",
+      width:p.sz,height:p.sz,borderRadius:"50%",border:`1.5px solid ${em.glow}`,
+      background:`radial-gradient(circle at 35% 30%,rgba(255,255,255,0.6),${em.glow}33)`,opacity:0,"--bx":`${p.drift}px`,zIndex:3,
+      animation:`bubbleRise ${p.dur+0.3}s ease-in-out ${p.d}s forwards`}}/>)}
+    {/* WIND — spiralling leaves */}
+    {element==="green"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:"50%",top:"48%",
+      width:p.sz+4,height:(p.sz+4)*0.5,borderRadius:"0 50% 0 50%",background:em.glow,opacity:0,
+      transformOrigin:"0 0",filter:`drop-shadow(0 0 5px ${em.glow})`,"--la":`${p.a}deg`,"--lr":`${p.r}px`,zIndex:3,
+      animation:`leafSpiral 1s ease-out ${p.d}s forwards`}}/>)}
+    {victimName&&<div style={{position:"absolute",bottom:"15%",zIndex:5,
       animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.28s both"}}>
       <span style={{fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",fontStyle:"italic",letterSpacing:1,
         WebkitTextStroke:`2.5px ${em.c3}`,textShadow:`0 0 20px ${em.glow},4px 4px 0 rgba(0,0,0,0.6)`}}>💥 {victimName} +4!</span></div>}
@@ -2670,6 +2684,13 @@ const globalCSS=`
   @keyframes cardFlipIn{0%{opacity:0;transform:perspective(700px) rotateY(-78deg) scale(0.82)}55%{opacity:1}100%{opacity:1;transform:perspective(700px) rotateY(0deg) scale(1)}}
   @keyframes cardTitleIn{0%{opacity:0;transform:translateY(10px) scale(0.8)}100%{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes cardFly{0%{opacity:0;transform:translate(var(--fx),-24px) rotate(var(--fr)) scale(0.55)}22%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1)}45%{opacity:1;transform:translate(calc(var(--fx)*0.5),0) rotate(calc(var(--fr)*0.5)) scale(1)}100%{opacity:0;transform:translate(0,var(--fy)) rotate(0) scale(0.5)}}
+  @keyframes charZoom{0%{transform:scale(1.14)}100%{transform:scale(1)}}
+  @keyframes skillErupt{0%{opacity:0;transform:translateX(-50%) scaleY(0.35)}35%{opacity:1}100%{opacity:0.92;transform:translateX(-50%) scaleY(1)}}
+  @keyframes emberRise{0%{opacity:0;transform:translate(0,0) scale(1)}18%{opacity:1}100%{opacity:0;transform:translate(var(--ex),-240px) scale(0.25)}}
+  @keyframes sparkFlash{0%{opacity:0}12%{opacity:1}24%{opacity:0}44%{opacity:0.9}58%{opacity:0}100%{opacity:0}}
+  @keyframes strobeFlash{0%{opacity:0}8%{opacity:0.85}16%{opacity:0}28%{opacity:0.6}36%{opacity:0}52%{opacity:0.75}60%{opacity:0}100%{opacity:0}}
+  @keyframes bubbleRise{0%{opacity:0;transform:translate(0,0) scale(0.7)}20%{opacity:0.9}100%{opacity:0;transform:translate(var(--bx),-250px) scale(1.1)}}
+  @keyframes leafSpiral{0%{opacity:0;transform:rotate(var(--la)) translateX(12px) scale(0.4)}20%{opacity:1}100%{opacity:0;transform:rotate(calc(var(--la) + 260deg)) translateX(var(--lr)) scale(1)}}
   @keyframes draw2CardL{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(-46px,-6px) rotate(-14deg)}80%{opacity:1}100%{transform:translate(-70px,-70px) rotate(-24deg);opacity:0}}
   @keyframes draw2CardR{0%{transform:translate(0,0) rotate(0);opacity:0}25%{opacity:1}45%{transform:translate(46px,-6px) rotate(14deg)}80%{opacity:1}100%{transform:translate(70px,-70px) rotate(24deg);opacity:0}}
   @keyframes dangerPulse{0%,100%{transform:scale(1);opacity:0.9}50%{transform:scale(1.05);opacity:1}}
