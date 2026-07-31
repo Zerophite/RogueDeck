@@ -993,8 +993,8 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
   const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
   useEffect(()=>{
-    const t1=setTimeout(()=>setPhase(1),850);
-    const t2=setTimeout(()=>doneRef.current(),2650);
+    const t1=setTimeout(()=>setPhase(1),1250);
+    const t2=setTimeout(()=>doneRef.current(),3350);
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
   const em0=EM(element);const em={...em0,glow:ART_GLOW[element]||em0.glow,c3:ART_DARK[element]||em0.c3};
@@ -1004,46 +1004,46 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
   const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
   const splashes=useMemo(()=>Array.from({length:11},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:95+Math.random()*115,rot:Math.random()*360,w:14+Math.random()*32,h:5+Math.random()*7,d:Math.random()*0.4})),[element]);
   const cardSplash=useMemo(()=>Array.from({length:9},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:34+Math.random()*74,rot:Math.random()*360,w:10+Math.random()*20,h:4+Math.random()*5,d:Math.random()*0.4})),[element]);
-  const FXN=element==="green"?26:32;
+  const FXN=element==="green"?38:46;
   const fx=useMemo(()=>Array.from({length:FXN},(_,i)=>({id:i,
-    x:-130+Math.random()*260,y:-110+Math.random()*220,d:Math.random()*0.6,dur:0.8+Math.random()*0.7,
-    sz:7+Math.random()*13,drift:-45+Math.random()*90,rot:Math.random()*360,a:(i/FXN)*360,r:75+Math.random()*135})),[element]);
+    x:-150+Math.random()*300,y:-120+Math.random()*240,d:Math.random()*1.2,dur:0.85+Math.random()*0.75,
+    sz:7+Math.random()*13,drift:-50+Math.random()*100,rot:Math.random()*360,a:(i/FXN)*360,r:80+Math.random()*150})),[element]);
   const Splashes=()=>splashes.map(s=><div key={s.id} style={{position:"absolute",
     left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(50% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
     width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
     filter:`drop-shadow(0 0 6px ${em.glow})`,animation:`splashPop 0.6s ease-out ${s.d}s both`}}/>);
 
   if(phase===0){
-    /* ── PHASE 1: character card reveal (real art) with SHING ── */
+    /* ── PHASE 1: fullscreen character reveal (semi-transparent) with SHING ── */
     return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
-      background:"radial-gradient(circle at 50% 48%,rgba(10,14,24,0.55),rgba(0,0,0,0.82) 80%)",
+      background:"radial-gradient(circle at 50% 48%,rgba(10,14,24,0.5),rgba(0,0,0,0.8) 82%)",
       display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.25s ease-out"}}>
-      <div style={{position:"relative",width:"min(54vh,236px)",height:"min(82vh,352px)",borderRadius:12,
-        overflow:"hidden",background:"#0a0f1a",
-        boxShadow:`0 22px 60px rgba(0,0,0,0.75),0 0 42px ${em.glow}66`,
-        animation:"cardFlipIn 0.7s cubic-bezier(.34,1.56,.64,1) both"}}>
-        <div style={{position:"absolute",inset:0,backgroundImage:`url(${ART_URL}Characters.png)`,
-          backgroundSize:"400% auto",backgroundPosition:`${posX}% 62%`,backgroundRepeat:"no-repeat",
-          animation:"charZoom 2.6s ease-out both"}}/>
-        <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 42%,${em.glow}26,transparent 66%)`,mixBlendMode:"screen"}}/>
-        <div style={{position:"absolute",left:0,right:0,bottom:0,height:"40%",background:"linear-gradient(180deg,transparent,rgba(0,0,0,0.88))"}}/>
-        <div style={{position:"absolute",top:"12%",right:"9%",zIndex:4,fontFamily:"Arial Black",fontStyle:"italic",
-          fontSize:"min(24px,5.5vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:1,
-          WebkitTextStroke:`1.5px ${em.c3}`,textShadow:`0 0 14px ${em.glow},2px 2px 0 rgba(0,0,0,0.5)`,
-          animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.35s both"}}>SHING</div>
-        <div style={{position:"absolute",bottom:"6%",left:0,right:0,textAlign:"center",zIndex:4,
-          animation:"cardTitleIn 0.5s ease-out 0.4s both"}}>
-          <div style={{fontSize:"min(24px,5.5vw)",fontWeight:900,fontFamily:"Georgia,'Times New Roman',serif",letterSpacing:3,
-            color:"#F3D98A",textShadow:`0 0 14px ${em.glow},0 2px 4px rgba(0,0,0,0.9)`}}>{em.emoji} {em.name}</div>
-          <div style={{fontSize:9,fontWeight:800,letterSpacing:4,color:"#C9A24B",marginTop:1}}>SWORD MASTER</div>
-        </div>
-        <OrnateFrame accent={em.glow}/>
+      {/* blurred fullscreen atmosphere */}
+      <div style={{position:"absolute",inset:0,backgroundImage:`url(${ART_URL}Characters.png)`,
+        backgroundSize:"400% auto",backgroundPosition:`${posX}% 50%`,backgroundRepeat:"no-repeat",
+        filter:"blur(42px) brightness(0.7)",opacity:0.4,animation:"fadeIn 0.5s ease-out"}}/>
+      {/* crisp character, tall & centered, transparent */}
+      <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:"min(44vh,320px)",transform:"translateX(-50%)",zIndex:2}}>
+        <div style={{width:"100%",height:"100%",backgroundImage:`url(${ART_URL}Characters.png)`,backgroundSize:"400% 100%",
+          backgroundPosition:`${posX}% center`,backgroundRepeat:"no-repeat",opacity:0.58,
+          animation:"cardFlipIn 0.7s cubic-bezier(.34,1.56,.64,1) both"}}/>
+      </div>
+      <div style={{position:"absolute",inset:0,background:`radial-gradient(circle at 50% 42%,${em.glow}1f,transparent 68%)`,mixBlendMode:"screen",zIndex:2}}/>
+      <div style={{position:"absolute",left:0,right:0,bottom:0,height:"28%",background:"linear-gradient(180deg,transparent,rgba(0,0,0,0.78))",zIndex:3}}/>
+      <div style={{position:"absolute",top:"14%",right:"18%",zIndex:4,fontFamily:"Arial Black",fontStyle:"italic",
+        fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",transform:"rotate(-8deg)",letterSpacing:1,
+        WebkitTextStroke:`2px ${em.c3}`,textShadow:`0 0 14px ${em.glow},2px 2px 0 rgba(0,0,0,0.5)`,
+        animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.35s both"}}>SHING</div>
+      <div style={{position:"absolute",bottom:"7%",left:0,right:0,textAlign:"center",zIndex:4,
+        animation:"cardTitleIn 0.5s ease-out 0.4s both"}}>
+        <div style={{fontSize:"min(30px,7vw)",fontWeight:900,fontFamily:"Georgia,'Times New Roman',serif",letterSpacing:4,
+          color:"#F3D98A",textShadow:`0 0 16px ${em.glow},0 2px 5px rgba(0,0,0,0.95)`}}>{em.emoji} {em.name}</div>
+        <div style={{fontSize:11,fontWeight:800,letterSpacing:5,color:"#C9A24B",marginTop:2}}>SWORD MASTER</div>
       </div>
     </div>);
   }
 
-  /* ── PHASE 2: element skill unleashed (unique effect per element) ── */
-  const edgeMask="linear-gradient(90deg,transparent 0%,#000 21%,#000 79%,transparent 100%)";
+  /* ── PHASE 2: element effect (particles + cards, no skill image) ── */
   return(<div style={{position:"fixed",inset:0,zIndex:98,pointerEvents:"none",overflow:"hidden",
     display:"flex",alignItems:"center",justifyContent:"center"}}>
     <div style={{position:"absolute",inset:0,background:element==="yellow"?"#E8E0FF":"#fff",animation:"slashFlash 0.4s ease-out forwards"}}/>
@@ -1052,12 +1052,6 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
     {/* lightning strobe */}
     {element==="yellow"&&<div style={{position:"absolute",inset:0,background:`${em.glow}44`,mixBlendMode:"screen",
       animation:"strobeFlash 0.85s steps(1,end) forwards"}}/>}
-    {/* the elemental skill art beam (black dropped via screen) */}
-    <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:"min(46vh,250px)",zIndex:2,
-      transformOrigin:"50% 100%",backgroundImage:`url(${ART_URL}skills.png)`,
-      backgroundSize:"400% 100%",backgroundPosition:`${posX}% center`,backgroundRepeat:"no-repeat",
-      WebkitMaskImage:edgeMask,maskImage:edgeMask,
-      mixBlendMode:"screen",animation:"skillErupt 0.85s cubic-bezier(.22,1,.36,1) both"}}/>
     {/* FIRE — rising embers + flame licks */}
     {element==="red"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"12%",
       width:p.sz,height:p.sz*(p.id%3?1:1.7),borderRadius:p.id%3?"50%":"50% 50% 50% 50% / 60% 60% 40% 40%",
@@ -1424,7 +1418,7 @@ export default function UnoGame(){
   /* Resolve a draw-stack penalty. Play an animation first, then deliver the
      penalty cards when it lands: +4 (wild4) → sword-draw cinematic (~850ms),
      +2 (draw2) → cards fly to the penalized player (~650ms). */
-  const SLASH_DELAY=2100,DRAW2_DELAY=650;
+  const SLASH_DELAY=2750,DRAW2_DELAY=650;
   const applyStackDraw=useCallback(async(victimId,victimHand,reasonBase,nextPlayer)=>{
     const cnt=g.drawStack||0;const type=g.drawStackType;const element=g.currentColor||"green";
     let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
