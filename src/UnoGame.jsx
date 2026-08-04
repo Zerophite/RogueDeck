@@ -1026,10 +1026,10 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
   const fx=useMemo(()=>Array.from({length:FXN},(_,i)=>({id:i,
     x:-175+Math.random()*350,y:-140+Math.random()*280,d:Math.random()*1.2,dur:0.9+Math.random()*0.8,
     sz:12+Math.random()*20,drift:-60+Math.random()*120,rot:Math.random()*360,a:(i/FXN)*360,r:95+Math.random()*185})),[element]);
-  const bolts=useMemo(()=>element!=="yellow"?[]:Array.from({length:4},(_,i)=>{
-    let x=50,p="M50,0";const segs=9;
-    for(let s=1;s<=segs;s++){const y=Math.round((s/segs)*300);x=50+(Math.random()-0.5)*48;p+=` L${Math.round(x)},${y}`;}
-    return{id:i,x:-150+i*95+(Math.random()-0.5)*22,d:0.05+i*0.1+Math.random()*0.07,path:p};}),[element]);
+  const bolts=useMemo(()=>element!=="yellow"?[]:Array.from({length:3},(_,i)=>{
+    let x=50,p="M50,0";const segs=8;
+    for(let s=1;s<=segs;s++){const y=Math.round((s/segs)*300);x=50+(Math.random()-0.5)*40;p+=` L${Math.round(x)},${y}`;}
+    return{id:i,x:-120+i*120+(Math.random()-0.5)*24,d:0.06+i*0.18+Math.random()*0.06,path:p};}),[element]);
   const Splashes=()=>splashes.map(s=><div key={s.id} style={{position:"absolute",
     left:`calc(50% + ${Math.round(Math.cos(s.a)*s.r)}px)`,top:`calc(50% + ${Math.round(Math.sin(s.a)*s.r)}px)`,
     width:s.w,height:s.h,borderRadius:s.h,background:em.glow,opacity:0,transform:`rotate(${s.rot}deg)`,zIndex:2,
@@ -1070,10 +1070,11 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
     {/* LIGHTNING — big jagged bolts striking down */}
     {element==="yellow"&&bolts.map(b=>(
       <svg key={b.id} viewBox="0 0 100 300" preserveAspectRatio="none"
-        style={{position:"absolute",left:`calc(50% + ${b.x}px)`,top:0,width:70,height:"54%",transform:"translateX(-50%)",zIndex:3,
-          filter:`drop-shadow(0 0 8px ${em.glow})`,animation:`boltFlash 0.7s steps(1,end) ${b.d}s both`}}>
-        <path d={b.path} fill="none" stroke={em.glow} strokeWidth="10" strokeLinejoin="round" strokeLinecap="round" opacity="0.6"/>
-        <path d={b.path} fill="none" stroke="#fff" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round"/>
+        style={{position:"absolute",left:`calc(50% + ${b.x}px)`,top:0,width:96,height:"64%",transform:"translateX(-50%)",zIndex:3,
+          filter:`drop-shadow(0 0 12px ${em.glow})`,animation:`boltStrike 0.95s steps(1,end) ${b.d}s both`}}>
+        <path d={b.path} fill="none" stroke={em.glow} strokeWidth="13" strokeLinejoin="round" strokeLinecap="round" opacity="0.55"/>
+        <path d={b.path} fill="none" stroke="#FFF6BF" strokeWidth="6" strokeLinejoin="round" strokeLinecap="round"/>
+        <path d={b.path} fill="none" stroke="#fff" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
       </svg>))}
     {/* FIRE — rising embers + flame licks */}
     {element==="red"&&fx.map(p=><div key={p.id} style={{position:"absolute",left:`calc(50% + ${p.x}px)`,bottom:"12%",
@@ -1300,10 +1301,12 @@ const ChallengeModal=({playerName,onChallenge,onAccept})=>(
 
 const CWheel=({onPick,onCancel})=>{
   const[h,setH]=useState(null);
-  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
-    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,
-    backdropFilter:"blur(16px)",animation:"fadeIn 0.2s ease-out"}}>
-    <div style={{color:"#fff",fontSize:22,fontWeight:800,letterSpacing:4}}>Choose Color</div>
+  return(<div style={{position:"fixed",inset:0,zIndex:200,
+    background:"linear-gradient(180deg,rgba(4,8,10,0.9) 44%,rgba(4,8,10,0.55) 64%,transparent 80%)",
+    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",gap:14,
+    paddingTop:"7vh",animation:"fadeIn 0.2s ease-out"}}>
+    <div style={{color:"#fff",fontSize:22,fontWeight:800,letterSpacing:4,textShadow:"0 2px 10px #000"}}>Choose Color</div>
+    <div style={{color:"#9fb",fontSize:10,letterSpacing:2,marginTop:-8}}>(your cards are shown below)</div>
     <div style={{position:"relative",width:220,height:220}}>
       {COLORS.map((c,i)=>{const a=(i*90-45)*Math.PI/180;const x=110+Math.cos(a)*64-40;const y=110+Math.sin(a)*64-40;
         return(<div key={c} onClick={()=>{sfx.p("sparkle");onPick(c);}}
@@ -1623,9 +1626,9 @@ export default function UnoGame(){
             else if(card.value==="wild4"){nds=settings.stacking?ds+4:4;ndt="wild4";m+=" +4! > "+nCol.toUpperCase();
               pc={player:cp,target:np(cp,dir),hadMatchingColor:hand.some(c=>c.color===curColor&&c.id!==card.id)};}
             else if(card.value==="shadow"){m+=" Shadow! Deflects "+ds+" to next!";}
-            if(remain.length===1&&(intel>=1||Math.random()>0.3))cu[cp]=true;
+            if(remain.length===1&&(intel>=1||Math.random()>0.1))cu[cp]=true;
             if(remain.length===1&&!cu[cp]){m+=" | Forgot UNO! +2 penalty!";remain=[...remain,...ensure(2)];}
-            cu[cp]=false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
+            cu[cp]=remain.length===1?cu[cp]:false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
             await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,
               currentPlayer:w?cp:np(cp,dir,false),winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
               pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
@@ -1662,8 +1665,7 @@ export default function UnoGame(){
 
         if(cardToPlay.value==="discardAll"){const mc=cardToPlay.color;
           const disc=remain.filter(c=>c.color===mc);remain=remain.filter(c=>c.color!==mc);
-          nd.push(...disc,cardToPlay);m+=" Discard all "+mc+"! (-"+(disc.length+1)+" cards)";
-          const dr=ensure(1);remain=[...remain,...dr];m+=" Drew 1.";}
+          nd.push(...disc,cardToPlay);m+=" Discard all "+mc+"! (-"+(disc.length+1)+" cards)";}
         else nd.push(cardToPlay);
 
         if(cardToPlay.value==="reverse"){if(is2P){skip2=true;m+=" Reverse! (Skip)";}else{dir=-dir;m+=" Reverse!";}}
@@ -1681,7 +1683,7 @@ export default function UnoGame(){
 
         if(remain.length===1&&(intel>=1||Math.random()>0.3))cu[cp]=true;
         if(remain.length===1&&!cu[cp]){m+=" | Forgot UNO! +2 penalty!";remain=[...remain,...ensure(2)];}
-        cu[cp]=false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
+        cu[cp]=remain.length===1?cu[cp]:false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
         let nxP=w?cp:np(cp,dir,skip2);
         if((cardToPlay.value==="draw2"||cardToPlay.value==="wild4")&&!w)nxP=np(cp,dir,false);
         await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,
@@ -1752,6 +1754,12 @@ export default function UnoGame(){
     let deck=sh(mkD());
     if(!settings.specialCards)deck=deck.filter(c=>c.value!=="shadow"&&c.value!=="snatch"&&c.value!=="discardAll");
     const hands={};for(const[p]of pls)hands[p]=deck.splice(0,settings.startCards);
+    /* High chance each player starts with a Discard-All card */
+    if(settings.specialCards)for(const[p]of pls){
+      if(Math.random()<0.8&&!hands[p].some(c=>c.value==="discardAll")){
+        const di=deck.findIndex(c=>c.value==="discardAll");
+        if(di>=0){const dc=deck.splice(di,1)[0];const ri=Math.floor(Math.random()*hands[p].length);
+          deck.push(hands[p][ri]);hands[p][ri]=dc;}}}
     const badFirst=v=>v==="wild4"||v==="discardAll"||v==="shadow"||v==="snatch"||v==="draw2";
     let fc;while(true){let fi=deck.findIndex(c=>!badFirst(c.value));
       if(fi===-1){deck=sh(deck);fi=0;}fc=deck.splice(fi,1)[0];if(!badFirst(fc.value))break;deck.push(fc);deck=sh(deck);}
@@ -1771,7 +1779,7 @@ export default function UnoGame(){
   useEffect(()=>{if(rd?.status==="waiting"&&scr==="game"){setScr("lobby");setSel(-1);setDrawnCard(null);setHasDrawn(false);setChallenge(null);setActFx(null);setWild4Fx(null);setChibiAttackFx(null);setDraw2Fx(null);setReverseFx(null);setSkipFx(null);setUnoCallFx(null);setUnoPenaltyFx(null);}},[rd?.status,scr]);
 
   const playC=useCallback(async(ci,cc)=>{if(!g||!myTurn)return;
-    const card=myH[ci];ps("card");trigA();setSel(-1);setDrawnCard(null);
+    const card=myH[ci];ps("card");trigA();setSel(-1);setDrawnCard(null);setHasDrawn(false);
     const cCol=card.color==="wild"?(cc||"yellow"):card.color;
     trigBurst(cCol);trigImpact(cCol);
     const nh={...g.hands};let remainHand=myH.filter((_,i)=>i!==ci);
@@ -1788,9 +1796,6 @@ export default function UnoGame(){
       nd.push(...discarded,card);
       const dCount=discarded.length;
       m+=" Discard all "+matchColor+"! (-"+(dCount+1)+" cards)";
-      if(ndp2.length<1){const reshuf=sh(nd.slice(0,-1));ndp2=[...ndp2,...reshuf];}
-      const drawnCard2=ndp2.splice(0,1);remainHand=[...remainHand,...drawnCard2];
-      m+=" Drew 1.";
     } else {
       nd.push(card);
     }
@@ -1891,6 +1896,27 @@ export default function UnoGame(){
       }
     }
   },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay,applyStackDraw]);
+
+  /* Deck tap: draw when allowed; out-of-turn spam-tapping earns a +2 penalty */
+  const deckSpamRef=useRef(0);const deckSpamT=useRef(null);
+  const handleDeckTap=useCallback(async()=>{
+    if(pickDr&&isAdm){doDraw();return;}
+    if(myTurn&&!g?.winner&&!drawnCard&&!challenge){doDraw();return;}
+    if(!g||g.winner)return;
+    deckSpamRef.current++;
+    if(deckSpamT.current)clearTimeout(deckSpamT.current);
+    deckSpamT.current=setTimeout(()=>{deckSpamRef.current=0;},2500);
+    if(deckSpamRef.current>=3){deckSpamRef.current=0;ps("penalty");trigShake();
+      try{const snap=await get(ref(db,"rooms/"+rc+"/game"));const fg=snap.val();if(!fg||fg.winner)return;
+        let ndp=[...(fg.drawPile||[])];const nd=[...(fg.discardPile||[])];
+        if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];nd.splice(0,nd.length-1);}
+        const drawn=ndp.splice(0,2);const nh=[...(fg.hands?.[pid]||[]),...drawn];
+        await update(ref(db,"rooms/"+rc+"/game"),{["hands/"+pid]:nh,drawPile:ndp,discardPile:nd,
+          message:(rd.players[pid]?.name)+" tapped out of turn — +2 penalty!"});
+      }catch(e){}
+      setLMsg("Wait your turn! +2 penalty");setTimeout(()=>setLMsg(""),1800);
+    }else{ps("error");setLMsg("Not your turn!");setTimeout(()=>setLMsg(""),900);}
+  },[pickDr,isAdm,myTurn,g,drawnCard,challenge,rc,pid,rd,doDraw,ps,trigShake]);
 
   const passTurn=async()=>{if(!myTurn||g?.winner)return;setDrawnCard(null);setHasDrawn(false);
     await wgs({currentPlayer:np(pid,g.direction),message:(rd.players[pid]?.name)+" passed",turnTimestamp:Date.now()});};
@@ -2218,8 +2244,8 @@ export default function UnoGame(){
   /* ═══ LOBBY ═══ */
   if(scr==="lobby")return(
     <div style={{height:"100%",background:"radial-gradient(ellipse at 50% 25%,#1a2f2a 0%,#0f1f1c 35%,#0a1614 65%,#060e0c 100%)",
-      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:14,
-      fontFamily:"'Segoe UI',system-ui,sans-serif",position:"relative",overflow:"hidden"}}>
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"safe center",padding:14,
+      fontFamily:"'Segoe UI',system-ui,sans-serif",position:"relative",overflowY:"auto",overflowX:"hidden"}}>
       <CanvasBG screen="lobby"/>
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",width:"100%"}}>
         <div style={{color:"rgba(255,215,0,0.4)",fontSize:10,letterSpacing:5,marginBottom:5}}>ROOM CODE</div>
@@ -2500,12 +2526,12 @@ export default function UnoGame(){
               </div>
               <div style={{color:"#FFD700",fontWeight:900,fontSize:13,fontFamily:"monospace",flexShrink:0}}>{score}</div>
             </div>);})}
-          <div style={{textAlign:"center",marginTop:12,color:"#889",fontSize:9,letterSpacing:2}}>FIRST TO 500 WINS</div>
         </div>
       </div>)}
 
       {/* Top bar */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"3px 12px",flexShrink:0,
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"max(4px,env(safe-area-inset-top,4px)) max(12px,env(safe-area-inset-right,12px)) 3px max(12px,env(safe-area-inset-left,12px))",flexShrink:0,
         background:"linear-gradient(180deg,rgba(0,0,0,0.5),transparent)",zIndex:20}}>
         <button onClick={leave} style={{background:"none",border:"none",color:"#889",fontSize:16,cursor:"pointer",transition:"color 0.2s",padding:"2px 6px"}}
           onPointerEnter={e=>e.currentTarget.style.color="#fff"} onPointerLeave={e=>e.currentTarget.style.color="#889"}>{"←"}</button>
@@ -2573,7 +2599,7 @@ export default function UnoGame(){
               </div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
-              <div onClick={(pickDr&&isAdm)||(myTurn&&!g.winner&&!drawnCard&&!challenge)?doDraw:undefined}
+              <div onClick={handleDeckTap}
                 style={{cursor:(pickDr&&isAdm)||(myTurn&&!drawnCard&&!challenge)?"pointer":"default",transition:"transform 0.3s",position:"relative",
                   animation:drawStack>0&&myTurn?"dangerPulse 0.8s infinite":(myTurn&&!drawnCard&&!challenge?"deckIdle 3s ease-in-out infinite":"none"),
                   border:drawStack>0&&myTurn?"2px solid #FF5252":"2px solid transparent",borderRadius:12,
@@ -2738,6 +2764,7 @@ const globalCSS=`
   @keyframes chargePulse{0%{opacity:0;transform:scale(0.3)}40%{opacity:1}100%{opacity:0.85;transform:scale(1.05)}}
   @keyframes convergeIn{0%{opacity:0;transform:translate(var(--sx),var(--sy)) scale(0.4)}35%{opacity:1}100%{opacity:0.9;transform:translate(0,0) scale(1)}}
   @keyframes boltFlash{0%{opacity:0}9%{opacity:1}22%{opacity:0}40%{opacity:0.95}54%{opacity:0}72%{opacity:0.8}84%{opacity:0}100%{opacity:0}}
+  @keyframes boltStrike{0%{opacity:0}6%{opacity:1}17%{opacity:0}31%{opacity:1}43%{opacity:0}61%{opacity:1}73%{opacity:0}100%{opacity:0}}
   @keyframes penaltyDrop{0%{opacity:0;transform:translateY(-60px) scale(0.8) rotate(-8deg)}25%{opacity:1}100%{opacity:0;transform:translateY(170px) scale(0.9) rotate(10deg)}}
   @keyframes bubbleRise{0%{opacity:0;transform:translate(0,0) scale(0.7)}20%{opacity:0.95}100%{opacity:0;transform:translate(var(--bx),-330px) scale(1.15)}}
   @keyframes leafSpiral{0%{opacity:0;transform:rotate(var(--la)) translateX(12px) scale(0.4)}20%{opacity:1}100%{opacity:0;transform:rotate(calc(var(--la) + 260deg)) translateX(var(--lr)) scale(1)}}
