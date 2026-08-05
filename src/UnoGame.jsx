@@ -268,7 +268,13 @@ async function claimName(name,pid){
   const norm=normName(name);if(!norm)return{ok:false,msg:"Enter a name"};
   try{
     const snap=await get(ref(db,"names/"+nameKey(norm)));
-    if(snap.exists()&&snap.val()!==pid)return{ok:false,msg:"Name already taken"};
+    if(snap.exists()&&snap.val()!==pid){
+      const holder=snap.val();
+      const[holderLb,myLb]=await Promise.all([get(ref(db,"leaderboard/"+holder)),get(ref(db,"leaderboard/"+pid))]);
+      const mineHasName=myLb.exists()&&normName((myLb.val()||{}).name)===norm; // my own account already carries this name
+      const holderGone=!holderLb.exists();                                     // reservation is orphaned (holder has no account)
+      if(!mineHasName&&!holderGone)return{ok:false,msg:"Name already taken"};
+    }
     await set(ref(db,"names/"+nameKey(norm)),pid);
     const prev=localStorage.getItem("uno_cname");
     if(prev&&prev!==norm){try{await remove(ref(db,"names/"+nameKey(prev)));}catch(e){}}
