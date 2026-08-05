@@ -261,6 +261,22 @@ function getAccounts(){try{const a=JSON.parse(localStorage.getItem("uno_accounts
 function saveAccounts(a){localStorage.setItem("uno_accounts",JSON.stringify(a.slice(0,3)));}
 function registerAccount(pid,name){const a=getAccounts();const ex=a.find(x=>x.pid===pid);if(ex){if(name)ex.name=name;}else if(a.length<3)a.push({pid,name:name||""});saveAccounts(a);}
 function switchToAccount(pid,name){localStorage.setItem("uno_pid",pid);if(name!=null)localStorage.setItem("uno_name",name);window.location.reload();}
+/* Unique player names — server-side reservation registry at names/{key} = pid */
+function normName(n){return(n||"").trim().toLowerCase().replace(/\s+/g," ");}
+function nameKey(n){return encodeURIComponent(normName(n)).replace(/\./g,"%2E");}
+async function claimName(name,pid){
+  const norm=normName(name);if(!norm)return{ok:false,msg:"Enter a name"};
+  try{
+    const snap=await get(ref(db,"names/"+nameKey(norm)));
+    if(snap.exists()&&snap.val()!==pid)return{ok:false,msg:"Name already taken"};
+    await set(ref(db,"names/"+nameKey(norm)),pid);
+    const prev=localStorage.getItem("uno_cname");
+    if(prev&&prev!==norm){try{await remove(ref(db,"names/"+nameKey(prev)));}catch(e){}}
+    localStorage.setItem("uno_cname",norm);
+    return{ok:true};
+  }catch(e){return{ok:true};}
+}
+async function releaseName(name){try{if(normName(name))await remove(ref(db,"names/"+nameKey(name)));}catch(e){}}
 function getTag(id){return"#"+id.slice(0,4).toUpperCase();}
 function goFS(){try{const d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen||d.msRequestFullscreen)?.call(d);}catch(e){}}
 function goLand(){try{screen.orientation?.lock?.("landscape").catch(()=>{});}catch(e){}}
@@ -629,7 +645,22 @@ const LightningFX=({color,onDone})=>{
   return <canvas ref={canvasRef} style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:97}}/>;
 };
 
-/* ═══ PLASMA BOLT — living, writhing electric arc (for +4 penalty) ═══ */
+/* jagged fractal lightning bolt (midpoint displacement + forks) */
+function makeBolt(x1,y1,x2,y2,disp,detail){
+  const branches=[];
+  const sub=(ax,ay,bx,by,d,out)=>{
+    if(d<detail){out.push({x1:ax,y1:ay,x2:bx,y2:by});return;}
+    let mx=(ax+bx)/2,my=(ay+by)/2;
+    const nx=-(by-ay),ny=(bx-ax),len=Math.hypot(nx,ny)||1,off=(Math.random()-0.5)*d;
+    mx+=nx/len*off;my+=ny/len*off;
+    sub(ax,ay,mx,my,d/2,out);sub(mx,my,bx,by,d/2,out);
+    if(Math.random()<0.3&&d>detail*3){
+      const ex=mx+(mx-ax)*(0.7+Math.random()*0.7),ey=my+(my-ay)*(0.7+Math.random()*0.7),b=[];
+      sub(mx,my,ex,ey,d/2,b);branches.push(b);}
+  };
+  const main=[];sub(x1,y1,x2,y2,disp,main);return{main,branches};
+}
+/* ═══ LIGHTNING STRIKE — jagged forking bolts + impact burst (for +4 penalty) ═══ */
 const PlasmaBolt=({color})=>{
   const ref=useRef(null);
   useEffect(()=>{
@@ -640,37 +671,48 @@ const PlasmaBolt=({color})=>{
     const rgb=CHR[color]||[255,210,26];
     const glow=`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
     const mid=`rgb(${Math.min(255,rgb[0]+40)},${Math.min(255,rgb[1]+40)},${Math.min(255,rgb[2]+40)})`;
-    const cx=W*0.5,top=-24*dpr,bottom=H*0.62,segs=15;
-    const nodes=Array.from({length:segs+1},(_,i)=>({t:i/segs,off:(Math.random()-0.5)*90*dpr,vel:(Math.random()-0.5)*30*dpr}));
-    const branchDefs=[{at:4,dir:1},{at:7,dir:-1},{at:9,dir:1},{at:11,dir:-1}];
-    let raf,f=0;const totalF=56;
-    const smooth=(pts,w,style,blur)=>{
+    const ga=o=>`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${o})`;
+    const ix=W*0.5,iy=H*0.6,top=-20*dpr;
+    let raf,f=0;const totalF=66,strikeF=[0,15,33];
+    let bolt=null,boltAge=99,flash=0,ring=0,ringOn=false;const sparks=[];
+    const segStroke=(segs,w,style,blur)=>{
       ctx.strokeStyle=style;ctx.lineWidth=w;ctx.lineCap="round";ctx.lineJoin="round";
-      ctx.shadowColor=glow;ctx.shadowBlur=blur;
-      ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);
-      for(let i=1;i<pts.length-1;i++){const xc=(pts[i].x+pts[i+1].x)/2,yc=(pts[i].y+pts[i+1].y)/2;ctx.quadraticCurveTo(pts[i].x,pts[i].y,xc,yc);}
-      ctx.lineTo(pts[pts.length-1].x,pts[pts.length-1].y);ctx.stroke();ctx.shadowBlur=0;
+      ctx.shadowColor=glow;ctx.shadowBlur=blur;ctx.beginPath();
+      segs.forEach(s=>{ctx.moveTo(s.x1,s.y1);ctx.lineTo(s.x2,s.y2);});ctx.stroke();ctx.shadowBlur=0;
+    };
+    const strike=()=>{
+      bolt=makeBolt(ix+(Math.random()-0.5)*46*dpr,top,ix+(Math.random()-0.5)*20*dpr,iy,130*dpr,4*dpr);
+      boltAge=0;flash=1;ringOn=true;ring=0;
+      for(let i=0;i<20;i++){const a=-Math.PI/2+(Math.random()-0.5)*Math.PI*1.5,sp=(4+Math.random()*9)*dpr;
+        sparks.push({x:ix,y:iy,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-3*dpr,life:1});}
     };
     const anim=()=>{
       ctx.clearRect(0,0,W,H);
-      const life=1-f/totalF;
-      nodes.forEach(n=>{n.vel+=(Math.random()-0.5)*12*dpr;n.vel*=0.85;n.off=(n.off+n.vel)*0.985;});
-      const main=nodes.map(n=>{const taper=Math.sin(n.t*Math.PI);return{x:cx+n.off*(0.35+taper*0.9),y:top+(bottom-top)*n.t};});
-      const flick=0.72+Math.random()*0.28,a=Math.min(1,life*2.2)*flick;
-      ctx.globalAlpha=a;
-      smooth(main,20*dpr,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.35)`,34*dpr);
-      smooth(main,8*dpr,mid,18*dpr);
-      smooth(main,3.4*dpr,"#ffffff",11*dpr);
-      smooth(main,1.4*dpr,"#ffffff",4*dpr);
-      branchDefs.forEach(bd=>{
-        const base=main[bd.at];if(!base)return;
-        const bpts=[{x:base.x,y:base.y}];let x=base.x,y=base.y;const bs=6;
-        for(let k=1;k<=bs;k++){x+=bd.dir*(7+Math.random()*9)*dpr*(1-k/(bs+3))+(Math.random()-0.5)*10*dpr;y+=(7+Math.random()*11)*dpr;bpts.push({x,y});}
-        ctx.globalAlpha=a*0.85;
-        smooth(bpts,9*dpr,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.4)`,18*dpr);
-        smooth(bpts,2*dpr,"#ffffff",7*dpr);
-      });
-      f++;if(f<totalF)raf=requestAnimationFrame(anim);
+      if(strikeF.includes(f))strike();
+      if(flash>0){ctx.globalAlpha=flash*0.5;ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;flash-=0.14;}
+      const ig=Math.max(0,1-boltAge*0.09);
+      if(ig>0){const g=ctx.createRadialGradient(ix,iy,0,ix,iy,120*dpr);
+        g.addColorStop(0,ga(0.5*ig));g.addColorStop(0.5,ga(0.18*ig));g.addColorStop(1,"transparent");
+        ctx.fillStyle=g;ctx.fillRect(ix-140*dpr,iy-140*dpr,280*dpr,280*dpr);}
+      if(bolt){const ba=Math.max(0,1-boltAge*0.16);
+        if(ba>0){ctx.globalAlpha=ba;
+          segStroke(bolt.main,19*dpr,ga(0.32),34*dpr);
+          segStroke(bolt.main,7*dpr,mid,18*dpr);
+          segStroke(bolt.main,3*dpr,"#fff",10*dpr);
+          segStroke(bolt.main,1.3*dpr,"#fff",3*dpr);
+          bolt.branches.forEach(b=>{segStroke(b,7*dpr,ga(0.3),15*dpr);segStroke(b,2*dpr,"#fff",6*dpr);});
+          ctx.globalAlpha=1;}
+        boltAge++;}
+      if(ringOn){ring+=10*dpr;const ra=Math.max(0,1-ring/(160*dpr))*0.8;
+        ctx.globalAlpha=ra;ctx.strokeStyle=glow;ctx.lineWidth=3*dpr;ctx.shadowColor=glow;ctx.shadowBlur=14*dpr;
+        ctx.beginPath();ctx.arc(ix,iy,ring,0,Math.PI*2);ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
+        if(ring>160*dpr)ringOn=false;}
+      for(let i=sparks.length-1;i>=0;i--){const s=sparks[i];s.x+=s.vx;s.y+=s.vy;s.vy+=0.55*dpr;s.vx*=0.96;s.life-=0.035;
+        if(s.life<=0){sparks.splice(i,1);continue;}
+        ctx.globalAlpha=s.life;ctx.fillStyle=s.life>0.5?"#fff":glow;ctx.shadowColor=glow;ctx.shadowBlur=8*dpr;
+        ctx.beginPath();ctx.arc(s.x,s.y,2.6*dpr*s.life,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+      ctx.globalAlpha=1;
+      f++;if(f<totalF||sparks.length)raf=requestAnimationFrame(anim);
     };
     anim();
     return()=>{if(raf)cancelAnimationFrame(raf);};
@@ -1155,21 +1197,28 @@ const OrnateFrame=({accent})=>(
 /* ═══ +2 PENALTY — cards fan in the air then fly to the penalized player ═══ */
 const CardFlyFX=({element,count,toSelf,onDone})=>{
   const doneRef=useRef(onDone);doneRef.current=onDone;
-  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),1050);return()=>clearTimeout(t);},[]);
-  const em=EM(element);const n=Math.min(count,10);
+  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2050);return()=>clearTimeout(t);},[]);
+  const em=EM(element);const n=Math.min(count,8);
   const cards=useMemo(()=>Array.from({length:n},(_,i)=>({id:i,
-    sx:n<=1?0:-100+i*(200/(n-1)),del:i*0.05,rot:-18+Math.random()*36})),[n]);
-  const fy=toSelf?280:-230;
-  return(<div style={{position:"fixed",inset:0,zIndex:96,pointerEvents:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
-    <div style={{position:"absolute",width:170,height:170,borderRadius:"50%",
-      background:`radial-gradient(circle,${em.glow}33,transparent 70%)`,animation:"bgPulse 0.6s ease-out"}}/>
+    sx:n<=1?0:-84+i*(168/(n-1)),del:i*0.16,rot:-18+Math.random()*36})),[n]);
+  const fy=toSelf?305:-250;
+  return(<div style={{position:"fixed",inset:0,zIndex:96,pointerEvents:"none",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    {/* count badge rising from center */}
+    <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",zIndex:2,
+      fontFamily:"Arial Black",fontWeight:900,fontSize:38,color:"#fff",WebkitTextStroke:`2px ${em.glow}`,
+      textShadow:`0 0 18px ${em.glow},0 3px 6px rgba(0,0,0,0.6)`,opacity:0,
+      animation:"apop 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>+{count}</div>
+    {/* landing flash where the cards enter the hand */}
+    <div style={{position:"absolute",left:"50%",top:toSelf?"87%":"15%",transform:"translate(-50%,-50%)",width:170,height:64,borderRadius:"50%",
+      background:`radial-gradient(ellipse,${em.glow}dd,transparent 70%)`,mixBlendMode:"screen",opacity:0,
+      filter:`blur(1px) drop-shadow(0 0 16px ${em.glow})`,animation:"landFlash 0.6s ease-out 1s both"}}/>
     {cards.map(c=><div key={c.id} style={{position:"absolute",
       "--fx":`${c.sx}px`,"--fy":`${fy}px`,"--fr":`${c.rot}deg`,
-      animation:`cardFly 0.95s cubic-bezier(.5,0,.72,1) ${c.del}s forwards`}}>
-      <div style={{width:40,height:58,borderRadius:6,background:CG[element]||em.grad,
-        border:"2px solid rgba(255,255,255,0.85)",boxShadow:`0 5px 16px rgba(0,0,0,0.5),0 0 16px ${em.glow}77`,
+      animation:`cardLand 1.4s cubic-bezier(.5,0,.32,1) ${c.del}s forwards`}}>
+      <div style={{width:42,height:60,borderRadius:7,background:"linear-gradient(150deg,#232838,#0b0f18)",
+        border:"1.5px solid rgba(255,215,0,0.5)",boxShadow:`0 6px 18px rgba(0,0,0,0.55),0 0 16px ${em.glow}66`,
         display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <span style={{fontSize:14,fontWeight:900,color:"#fff",textShadow:"0 1px 3px rgba(0,0,0,0.6)"}}>+2</span></div>
+        <div style={{width:20,height:20,transform:"rotate(45deg)",borderRadius:5,border:"1.5px solid #FFD700",boxShadow:"0 0 8px rgba(255,215,0,0.4)"}}/></div>
     </div>)}
   </div>);
 };
@@ -1255,20 +1304,21 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
       width:p.sz+7,height:(p.sz+7)*0.5,borderRadius:"0 50% 0 50%",background:`linear-gradient(120deg,#C5F5A8,${em.glow})`,opacity:0,
       transformOrigin:"0 0",filter:`drop-shadow(0 0 9px ${em.glow})`,"--la":`${p.a}deg`,"--lr":`${p.r}px`,zIndex:3,
       animation:`leafSpiral 1.05s ease-out ${p.d}s forwards`}}/>)}
-    {/* the penalty cards — caught in the element, then flung to the victim */}
-    {(()=>{const nC=Math.max(2,Math.min(count||4,8));
-      return(<div style={{position:"absolute",left:"50%",top:"45%",width:0,height:0,zIndex:4,
-        "--tx":"0px","--ty":toSelf?"330px":"-290px",
-        animation:`${element}CardGroup 1.5s cubic-bezier(.55,0,.55,1) 0.1s both`}}>
-        {Array.from({length:nC}).map((_,i)=>{const a=(i/nC)*360;
-          return(<div key={i} style={{position:"absolute",left:0,top:0,
-            transform:`translate(-50%,-50%) rotate(${a}deg) translateY(-70px)`}}>
-            <div style={{width:34,height:49,borderRadius:5,background:CG[element]||em.grad,
-              border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 3px 11px rgba(0,0,0,0.55),0 0 13px ${em.glow}99`,
-              display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+4</span></div>
-          </div>);})}
-      </div>);})()}
+    {/* the penalty cards — gather in the element, then fly one-by-one into the victim's hand */}
+    {(()=>{const nC=Math.max(2,Math.min(count||4,8));const fy=toSelf?"330px":"-290px";
+      return Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*Math.PI*2;
+        return(<div key={i} style={{position:"absolute",left:"50%",top:"45%",zIndex:4,
+          "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":fy,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
+          animation:`penaltyFling 1.55s cubic-bezier(.5,0,.32,1) ${(0.2+i*0.18).toFixed(2)}s both`}}>
+          <div style={{width:36,height:52,borderRadius:6,background:CG[element]||em.grad,
+            border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 4px 14px rgba(0,0,0,0.55),0 0 15px ${em.glow}aa`,
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+4</span></div>
+        </div>);});})()}
+    {/* landing flash where cards enter the hand */}
+    <div style={{position:"absolute",left:"50%",top:toSelf?"88%":"14%",transform:"translate(-50%,-50%)",width:180,height:66,borderRadius:"50%",
+      background:`radial-gradient(ellipse,${em.glow}dd,transparent 70%)`,mixBlendMode:"screen",opacity:0,zIndex:4,
+      filter:`blur(1px) drop-shadow(0 0 18px ${em.glow})`,animation:`landFlash 0.6s ease-out ${(0.2+(nC-1)*0.18+0.9).toFixed(2)}s both`}}/>
     {victimName&&<div style={{position:"absolute",bottom:"15%",zIndex:5,
       animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.28s both"}}>
       <span style={{fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",fontStyle:"italic",letterSpacing:1,
@@ -1633,7 +1683,7 @@ export default function UnoGame(){
   /* Resolve a draw-stack penalty. Play an animation first, then deliver the
      penalty cards when it lands: +4 (wild4) → sword-draw cinematic (~850ms),
      +2 (draw2) → cards fly to the penalized player (~650ms). */
-  const SLASH_DELAY=2150,DRAW2_DELAY=650;
+  const SLASH_DELAY=2150,DRAW2_DELAY=1500;
   const applyStackDraw=useCallback(async(victimId,victimHand,reasonBase,nextPlayer)=>{
     const cnt=g.drawStack||0;const type=g.drawStackType;const element=g.currentColor||"green";
     let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
@@ -1894,14 +1944,17 @@ export default function UnoGame(){
     if(accounts.length>=3){setRestoreMsg("Max 3 accounts reached. Remove one to add another.");return;}
     const nid=gid();registerAccount(nid,"");switchToAccount(nid,"");
   };
-  const removeAccount=(rid)=>{
+  const removeAccount=async(rid,rname)=>{
+    try{await remove(ref(db,"leaderboard/"+rid));}catch(e){}
+    await releaseName(rname);
     const left=getAccounts().filter(a=>a.pid!==rid);saveAccounts(left);setAccounts(left);
-    if(rid===pid){if(left[0])switchToAccount(left[0].pid,left[0].name);else{localStorage.removeItem("uno_pid");localStorage.removeItem("uno_name");window.location.reload();}}
+    if(rid===pid){localStorage.removeItem("uno_cname");if(left[0])switchToAccount(left[0].pid,left[0].name);else{localStorage.removeItem("uno_pid");localStorage.removeItem("uno_name");window.location.reload();}}
   };
   const copyPid=()=>{navigator.clipboard?.writeText(pid).then(()=>setRestoreMsg("Copied!")).catch(()=>{});
     setTimeout(()=>setRestoreMsg(""),1500);};
 
   const createRoom=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
+    const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:Date.now(),
       players:{[pid]:{name:pName.trim(),order:0}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
@@ -1909,6 +1962,7 @@ export default function UnoGame(){
 
   const joinRoom=async()=>{if(!pName.trim()){setErr("Enter name");return;}
     const code=jc.trim().toUpperCase();if(code.length!==4){setErr("4-letter code");return;}ua();
+    const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     try{const snap=await get(ref(db,"rooms/"+code));if(!snap.exists()){setErr("Not found");return;}
       const data=snap.val();if(data.status!=="waiting"){setErr("Already started");return;}
       const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=10){setErr("Full");return;}
@@ -1926,6 +1980,7 @@ export default function UnoGame(){
   const removeBot=async(botId)=>{if(!isHost||!isBot(botId))return;await remove(ref(db,"rooms/"+rc+"/players/"+botId));};
 
   const quickPlay1v1=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
+    const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();const now=Date.now();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
       players:{[pid]:{name:pName.trim(),order:0},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true}},
@@ -1933,6 +1988,7 @@ export default function UnoGame(){
     }catch(e){setErr("Check Firebase config.");}};
 
   const quickPlayFFA=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
+    const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0}};
     const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true};}
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
@@ -2118,6 +2174,7 @@ export default function UnoGame(){
       const nh={...fg.hands};let ndp=[...(fg.drawPile||[])];const nd=[...fg.discardPile];
       if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];}
       nh[targetId]=[...(nh[targetId]||[]),...ndp.splice(0,2)];
+      setCardFlyFx({element:fg.currentColor||"yellow",count:2,toSelf:targetId===pid});
       await wgs({hands:nh,drawPile:ndp,message:(rd.players[targetId]?.name)+" caught! UNO penalty +2!",
         calledUno:{...cu,[targetId]:true}});}
   },[g,ps,wgs,rd,trigShake,rc]);
@@ -2466,9 +2523,9 @@ export default function UnoGame(){
           display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.25s"}}
           onClick={()=>{setDelAcc(null);setDelText("");}}>
           <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:22,width:"88%",maxWidth:320}}>
-            <div style={{fontSize:14,fontWeight:900,color:"#EF5350",textAlign:"center",letterSpacing:2,marginBottom:10}}>⚠️ REMOVE ACCOUNT</div>
+            <div style={{fontSize:14,fontWeight:900,color:"#EF5350",textAlign:"center",letterSpacing:2,marginBottom:10}}>⚠️ DELETE ACCOUNT</div>
             <div style={{fontSize:11,color:"#bbc",textAlign:"center",lineHeight:1.5,marginBottom:14}}>
-              This removes <b style={{color:"#fff"}}>{delAcc.name||"(no name)"}</b> ({getTag(delAcc.pid)}) from this device only. Your stats stay safe — recover anytime with the Player ID.
+              This <b style={{color:"#EF5350"}}>permanently deletes</b> <b style={{color:"#fff"}}>{delAcc.name||"(no name)"}</b> ({getTag(delAcc.pid)}) — stats and ranking are erased from the server and <b style={{color:"#fff"}}>cannot be recovered</b>. The name becomes free for anyone to take.
             </div>
             <div style={{fontSize:9,color:"#889",letterSpacing:1,marginBottom:5,textAlign:"center"}}>TYPE <b style={{color:"#FFD700"}}>{word}</b> TO CONFIRM</div>
             <input value={delText} onChange={e=>setDelText(e.target.value)} placeholder={word} autoFocus
@@ -2477,9 +2534,9 @@ export default function UnoGame(){
             <div style={{display:"flex",gap:8}}>
               <button onClick={()=>{setDelAcc(null);setDelText("");}} style={{flex:1,padding:"10px",borderRadius:10,
                 border:"1px solid rgba(255,255,255,0.1)",background:"none",color:"#aab",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>CANCEL</button>
-              <button disabled={!ok} onClick={()=>{const p=delAcc.pid;setDelAcc(null);setDelText("");removeAccount(p);}}
+              <button disabled={!ok} onClick={()=>{const p=delAcc.pid,nm=delAcc.name;setDelAcc(null);setDelText("");removeAccount(p,nm);}}
                 style={{flex:1,padding:"10px",borderRadius:10,border:"none",opacity:ok?1:0.4,cursor:ok?"pointer":"not-allowed",
-                  background:"linear-gradient(135deg,#E53935,#B71C1C)",color:"#fff",fontSize:11,fontWeight:800,letterSpacing:1}}>REMOVE</button>
+                  background:"linear-gradient(135deg,#E53935,#B71C1C)",color:"#fff",fontSize:11,fontWeight:800,letterSpacing:1}}>DELETE</button>
             </div>
           </div>
         </div>);})()}
@@ -3026,6 +3083,9 @@ const globalCSS=`
   @keyframes cardFlipIn{0%{opacity:0;transform:perspective(700px) rotateY(-78deg) scale(0.82)}55%{opacity:1}100%{opacity:1;transform:perspective(700px) rotateY(0deg) scale(1)}}
   @keyframes cardTitleIn{0%{opacity:0;transform:translateY(10px) scale(0.8)}100%{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes cardFly{0%{opacity:0;transform:translate(var(--fx),-24px) rotate(var(--fr)) scale(0.55)}22%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1)}45%{opacity:1;transform:translate(calc(var(--fx)*0.5),0) rotate(calc(var(--fr)*0.5)) scale(1)}100%{opacity:0;transform:translate(0,var(--fy)) rotate(0) scale(0.5)}}
+  @keyframes cardLand{0%{opacity:0;transform:translate(var(--fx),-46px) rotate(var(--fr)) scale(0.5)}16%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1.06)}68%{opacity:1;transform:translate(calc(var(--fx)*0.35),calc(var(--fy)*0.7)) rotate(calc(var(--fr)*0.35)) scale(0.92)}90%{opacity:1;transform:translate(0,var(--fy)) rotate(0deg) scale(0.72)}100%{opacity:0;transform:translate(0,calc(var(--fy) + 8px)) rotate(0deg) scale(0.62)}}
+  @keyframes penaltyFling{0%{opacity:0;transform:translate(calc(-50% + var(--rx)),calc(-50% + var(--ry))) rotate(var(--fr)) scale(0.4)}13%{opacity:1;transform:translate(calc(-50% + var(--rx)),calc(-50% + var(--ry))) rotate(var(--fr)) scale(1)}40%{opacity:1;transform:translate(-50%,-50%) rotate(0deg) scale(1.14)}74%{opacity:1;transform:translate(-50%,calc(-50% + var(--fy) * 0.78)) rotate(0deg) scale(0.86)}92%{opacity:1;transform:translate(-50%,calc(-50% + var(--fy))) rotate(0deg) scale(0.6)}100%{opacity:0;transform:translate(-50%,calc(-50% + var(--fy) + 10px)) rotate(0deg) scale(0.52)}}
+  @keyframes landFlash{0%{opacity:0;transform:translate(-50%,-50%) scale(0.4)}40%{opacity:0.95;transform:translate(-50%,-50%) scale(1.1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.35)}}
   @keyframes charZoom{0%{transform:scale(1.14)}100%{transform:scale(1)}}
   @keyframes skillErupt{0%{opacity:0;transform:translateX(-50%) scaleY(0.35)}35%{opacity:1}100%{opacity:0.92;transform:translateX(-50%) scaleY(1)}}
   @keyframes emberRise{0%{opacity:0;transform:translate(0,0) scale(1)}15%{opacity:1}100%{opacity:0;transform:translate(var(--ex),-330px) scale(0.2)}}
