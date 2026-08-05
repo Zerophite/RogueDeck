@@ -250,7 +250,8 @@ function sh(a){const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(M
 function gs(v){return{skip:"⦸",reverse:"⇄",draw2:"+2",wild:"W",wild4:"+4",discardAll:"✕",shadow:"👤",snatch:"🫳"}[v]||v;}
 function gl(v){return{skip:"SKIP",reverse:"REVERSE",draw2:"DRAW TWO",wild:"WILD",wild4:"WILD DRAW FOUR",discardAll:"DISCARD ALL",shadow:"SHADOW",snatch:"SNATCH"}[v]||v;}
 function canPlay(c,top,curCol){if(c.type==="wild")return true;if(c.value==="shadow")return true;if(c.color===curCol)return true;if(c.value===top.value)return true;return false;}
-const BOT_NAMES=["Botchi","RoboK","AI-chan","Mecha","Droid","Cybot","NPC-san","Unit-7","Glitch"];
+const BOT_NAMES=["Marco","Jenny","Kyle23","Riza","Andrei","Sofia_M","Miguel","Hana","Leo","Grace","Tomas","Aria","Noah","Bea","Dexter","Luna","Rafael","Mika","Owen","Cielo","Jash","Nadia","Paolo","Yuki","Ivan","Trish","Cara","Enzo","Maya","Bryan"];
+const randBotName=(used=[])=>{const avail=BOT_NAMES.filter(n=>!used.includes(n));const pool=avail.length?avail:BOT_NAMES;return pool[Math.floor(Math.random()*pool.length)];};
 const isBot=id=>id?.startsWith("bot_");
 function botPickColor(hand){const cnt={red:0,blue:0,green:0,yellow:0};hand.forEach(c=>{if(c.color!=="wild"&&cnt[c.color]!==undefined)cnt[c.color]++;});const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);return best[0][1]>0?best[0][0]:COLORS[Math.floor(Math.random()*4)];}
 function botChooseCard(playable,hand,curColor,intel,nextOppHL){if(intel===0)return playable[Math.floor(Math.random()*playable.length)];const scored=playable.map(c=>{let s=0;if(c.type!=="wild")s+=3;if(c.value==="discardAll")s+=8;if(c.value==="draw2")s+=5;if(c.value==="skip"||c.value==="reverse")s+=4;if(c.value==="snatch")s+=2;if(c.color===curColor)s+=2;if(intel>=2&&nextOppHL<=2){if(c.value==="draw2"||c.value==="wild4")s+=10;if(c.value==="skip")s+=6;}if(c.value==="wild4")s-=2;return{card:c,s};});scored.sort((a,b)=>b.s-a.s);if(intel<=1&&scored.length>1&&Math.random()>0.6)return scored[Math.min(1,scored.length-1)].card;return scored[0].card;}
@@ -286,6 +287,115 @@ function calcElo(winnerTier,loserTier,baseScore){
   const winMult=Math.max(0.5,Math.min(2.5,1+diff*0.3));
   const losePct=Math.max(0.08,Math.min(0.5,0.2+diff*0.08));
   return{winPts:Math.round(baseScore*winMult),losePts:Math.max(5,Math.round(baseScore*losePct))};}
+
+/* ═══ ACHIEVEMENTS ═══ */
+const ACHIEVEMENTS=[
+  {id:"first_win",icon:"🎉",name:"First Win",desc:"Win your first game"},
+  {id:"wins_10",icon:"🔥",name:"On Fire",desc:"Win 10 games"},
+  {id:"wins_50",icon:"⭐",name:"Star Player",desc:"Win 50 games"},
+  {id:"wins_100",icon:"👑",name:"Centurion",desc:"Win 100 games"},
+  {id:"games_10",icon:"🎮",name:"Rookie",desc:"Play 10 games"},
+  {id:"games_100",icon:"🏅",name:"Veteran",desc:"Play 100 games"},
+  {id:"silver",icon:"🥈",name:"Silver",desc:"Reach Silver tier"},
+  {id:"gold",icon:"🥇",name:"Gold",desc:"Reach Gold tier"},
+  {id:"diamond",icon:"💠",name:"Diamond",desc:"Reach Diamond tier"},
+  {id:"gm",icon:"🌟",name:"Grand Master",desc:"Reach Grand Master"},
+  {id:"sharp",icon:"📈",name:"Sharpshooter",desc:"60%+ win rate (20+ games)"},
+];
+function earnedAch(s){const g=s.gamesPlayed||0,w=s.wins||0,ri=getRank(s.totalPoints||0,g).idx,wr=g?w/g:0;
+  return{first_win:w>=1,wins_10:w>=10,wins_50:w>=50,wins_100:w>=100,games_10:g>=10,games_100:g>=100,
+    silver:ri>=1,gold:ri>=2,diamond:ri>=4,gm:ri>=5,sharp:g>=20&&wr>=0.6};}
+function fmtSince(ts){if(!ts)return"—";return new Date(ts).toLocaleString("en-US",{month:"short",year:"numeric"});}
+function fmtLast(ts){if(!ts)return"—";const s=Math.floor((Date.now()-ts)/1000);
+  if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";
+  const d=Math.floor(s/86400);if(d<30)return d+"d ago";const mo=Math.floor(d/30);if(mo<12)return mo+"mo ago";return Math.floor(mo/12)+"y ago";}
+
+/* ═══ STORE (scaffold — items coming soon) ═══ */
+const STORE_CATS=[
+  {id:"character",name:"Character",icon:"🧑",subs:["Head","Eyes","Nose","Eyebrows","Mouth","Ears","Hair"]},
+  {id:"accessories",name:"Accessories",icon:"🎀",subs:["Head","Eyes","Nose","Eyebrows","Mouth","Ears","Hair"]},
+  {id:"frame",name:"Frame",icon:"🖼️",subs:null},
+  {id:"banner",name:"Banner",icon:"🚩",subs:null},
+];
+const StoreModal=({onClose})=>{
+  const[catId,setCatId]=useState("character");const cat=STORE_CATS.find(c=>c.id===catId);
+  const[sub,setSub]=useState(0);
+  const tabS=on=>({flex:1,padding:"8px 4px",borderRadius:10,border:"none",cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:1,
+    background:on?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.05)",color:on?"#1a1200":"#99a",transition:"all 0.2s"});
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,
+    display:"flex",alignItems:"center",justifyContent:"center",padding:14,backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out"}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:400,height:"88vh",display:"flex",flexDirection:"column",
+      background:"linear-gradient(160deg,#1a2338,#0b1120)",borderRadius:18,padding:16,position:"relative",
+      border:"1px solid rgba(255,215,0,0.2)",boxShadow:"0 20px 60px rgba(0,0,0,0.7)"}}>
+      <button onClick={onClose} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"#889",fontSize:22,cursor:"pointer"}}>×</button>
+      <div style={{fontSize:18,fontWeight:900,color:"#FFD700",letterSpacing:4,marginBottom:12}}>🛒 STORE</div>
+      <div style={{display:"flex",gap:5,marginBottom:10}}>
+        {STORE_CATS.map(c=><button key={c.id} onClick={()=>{setCatId(c.id);setSub(0);}} style={tabS(c.id===catId)}>{c.icon}<br/>{c.name}</button>)}
+      </div>
+      {cat.subs&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+        {cat.subs.map((s,i)=><button key={s} onClick={()=>setSub(i)} style={{padding:"5px 10px",borderRadius:8,border:"none",cursor:"pointer",fontSize:9,fontWeight:700,
+          background:i===sub?"rgba(255,215,0,0.25)":"rgba(255,255,255,0.05)",color:i===sub?"#FFD700":"#889"}}>{s}</button>)}
+      </div>}
+      <div style={{fontSize:10,color:"#778",letterSpacing:1,marginBottom:8}}>{cat.name}{cat.subs?" • "+cat.subs[sub]:""}</div>
+      <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,alignContent:"start"}}>
+        {Array.from({length:9}).map((_,i)=>(
+          <div key={i} style={{aspectRatio:"1",borderRadius:12,background:"rgba(255,255,255,0.03)",border:"1px dashed rgba(255,255,255,0.1)",
+            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,color:"#556"}}>
+            <span style={{fontSize:22,opacity:0.5}}>🔒</span>
+            <span style={{fontSize:7,letterSpacing:1,fontWeight:700}}>SOON</span></div>))}
+      </div>
+      <div style={{textAlign:"center",color:"#667",fontSize:9,letterSpacing:2,marginTop:10}}>✨ Customization items coming soon!</div>
+    </div>
+  </div>);
+};
+
+/* ═══ PLAYER STATS MODAL (click a leaderboard row) ═══ */
+const PlayerStatsModal=({stats,isOwner,onClose})=>{
+  const r=getRank(stats.totalPoints||0,stats.gamesPlayed||0);
+  const ach=earnedAch(stats);const g=stats.gamesPlayed||0,w=stats.wins||0,wr=g?Math.round(w/g*100):0;
+  const cellS={background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"8px 6px",textAlign:"center",border:"1px solid rgba(255,255,255,0.06)"};
+  const lblS={fontSize:8,color:"#889",letterSpacing:1,fontWeight:700,marginBottom:3};
+  const valS={fontSize:16,fontWeight:900,color:"#fff",fontFamily:"monospace"};
+  const initial=(stats.name||"?")[0]?.toUpperCase();
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
+    display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out"}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,maxHeight:"90vh",overflowY:"auto",
+      background:"linear-gradient(160deg,#182235,#0c1320)",borderRadius:18,padding:18,position:"relative",
+      border:`1px solid ${r.color}44`,boxShadow:`0 20px 60px rgba(0,0,0,0.7),0 0 40px ${r.color}22`}}>
+      <button onClick={onClose} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"#889",fontSize:20,cursor:"pointer"}}>×</button>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
+        <div style={{width:56,height:56,borderRadius:14,background:"linear-gradient(145deg,#2a3550,#151d2e)",
+          display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,color:"#fff",
+          border:`2px solid ${r.color}`,flexShrink:0}}>{initial}</div>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:18,fontWeight:900,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stats.name||"Player"}</div>
+          <div style={{fontSize:11,fontWeight:800,color:r.color,letterSpacing:1}}>{r.icon} {r.name}{r.idx>=0?" • "+(stats.totalPoints||0)+" pts":""}</div>
+        </div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8}}>
+        <div style={cellS}><div style={lblS}>PLAYED</div><div style={valS}>{g}</div></div>
+        <div style={cellS}><div style={lblS}>WINS</div><div style={{...valS,color:"#4CAF50"}}>{w}</div></div>
+        <div style={cellS}><div style={lblS}>WIN RATE</div><div style={valS}>{wr}%</div></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:isOwner?"1fr 1fr 1fr":"1fr 1fr",gap:6,marginBottom:14}}>
+        {isOwner&&<div style={cellS}><div style={lblS}>LOSSES</div><div style={{...valS,color:"#FF5252"}}>{stats.losses||0}</div></div>}
+        <div style={cellS}><div style={lblS}>SINCE</div><div style={{...valS,fontSize:12}}>{fmtSince(stats.since)}</div></div>
+        <div style={cellS}><div style={lblS}>LAST ONLINE</div><div style={{...valS,fontSize:12}}>{fmtLast(stats.lastPlayed)}</div></div>
+      </div>
+      <div style={{fontSize:10,fontWeight:800,color:"#FFD700",letterSpacing:2,marginBottom:8}}>🏆 ACHIEVEMENTS ({Object.values(ach).filter(Boolean).length}/{ACHIEVEMENTS.length})</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+        {ACHIEVEMENTS.map(a=>{const got=ach[a.id];return(
+          <div key={a.id} style={{display:"flex",alignItems:"center",gap:7,padding:"6px 8px",borderRadius:9,
+            background:got?"rgba(255,215,0,0.08)":"rgba(255,255,255,0.03)",
+            border:got?"1px solid rgba(255,215,0,0.3)":"1px solid rgba(255,255,255,0.05)",opacity:got?1:0.4}}>
+            <span style={{fontSize:18,filter:got?"none":"grayscale(1)"}}>{got?a.icon:"🔒"}</span>
+            <div style={{minWidth:0}}><div style={{fontSize:10,fontWeight:800,color:got?"#fff":"#778"}}>{a.name}</div>
+              <div style={{fontSize:7.5,color:"#667",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.desc}</div></div>
+          </div>);})}
+      </div>
+    </div>
+  </div>);
+};
 
 /* ═══ ANIMATED BACKGROUND ═══ */
 const CanvasBG=({screen:scr,currentColor})=>{
@@ -1358,6 +1468,8 @@ export default function UnoGame(){
   const[globalLB,setGlobalLB]=useState([]);
   const[myStats,setMyStats]=useState(null);
   const[showGlobalLB,setShowGlobalLB]=useState(false);
+  const[statsView,setStatsView]=useState(null);
+  const[storeOpen,setStoreOpen]=useState(false);
   const[snatchModal,setSnatchModal]=useState(null);
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
@@ -1539,9 +1651,9 @@ export default function UnoGame(){
           const award=calcElo(wRank.idx,oRank.idx,baseScore).winPts;totalWin+=award;
           if(!oppBot){const newPts=Math.max(0,(op.totalPoints||0)-award);
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
-              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now()});}}
+              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now(),since:op.since||Date.now()});}}
         await update(ref(db,"leaderboard/"+winnerId),{name:rd.players[winnerId]?.name||"Player",
-          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:Date.now()});
+          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:Date.now(),since:prev.since||Date.now()});
       }else{totalWin=baseScore;}
       const curScores=(await get(ref(db,"rooms/"+rc+"/scores"))).val()||{};
       curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
@@ -1733,19 +1845,20 @@ export default function UnoGame(){
 
   const addBot=async()=>{if(!isHost||pls.length>=(settings.maxPlayers||10))return;
     const bc=pls.filter(([id])=>isBot(id)).length;const botId="bot_"+(bc+1)+"_"+Date.now();
-    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:BOT_NAMES[bc%BOT_NAMES.length],order:pls.length,isBot:true});};
+    const used=pls.map(([id])=>rd.players[id]?.name).filter(Boolean);
+    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:randBotName(used),order:pls.length,isBot:true});};
   const removeBot=async(botId)=>{if(!isHost||!isBot(botId))return;await remove(ref(db,"rooms/"+rc+"/players/"+botId));};
 
   const quickPlay1v1=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
     const code=grc();const now=Date.now();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
-      players:{[pid]:{name:pName.trim(),order:0},["bot_1_"+now]:{name:BOT_NAMES[0],order:1,isBot:true}},
+      players:{[pid]:{name:pName.trim(),order:0},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true}},
       scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
 
   const quickPlayFFA=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
     const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0}};
-    for(let i=0;i<3;i++)players["bot_"+(i+1)+"_"+now]={name:BOT_NAMES[i],order:i+1,isBot:true};
+    const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true};}
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
       players,scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
@@ -1897,26 +2010,15 @@ export default function UnoGame(){
     }
   },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay,applyStackDraw]);
 
-  /* Deck tap: draw when allowed; out-of-turn spam-tapping earns a +2 penalty */
-  const deckSpamRef=useRef(0);const deckSpamT=useRef(null);
-  const handleDeckTap=useCallback(async()=>{
+  /* Deck tap: draw exactly one card on your turn. Out of turn does nothing.
+     A synchronous guard prevents rapid taps from drawing multiple cards. */
+  const drawingRef=useRef(false);
+  const handleDeckTap=useCallback(()=>{
     if(pickDr&&isAdm){doDraw();return;}
-    if(myTurn&&!g?.winner&&!drawnCard&&!challenge){doDraw();return;}
-    if(!g||g.winner)return;
-    deckSpamRef.current++;
-    if(deckSpamT.current)clearTimeout(deckSpamT.current);
-    deckSpamT.current=setTimeout(()=>{deckSpamRef.current=0;},2500);
-    if(deckSpamRef.current>=3){deckSpamRef.current=0;ps("penalty");trigShake();
-      try{const snap=await get(ref(db,"rooms/"+rc+"/game"));const fg=snap.val();if(!fg||fg.winner)return;
-        let ndp=[...(fg.drawPile||[])];const nd=[...(fg.discardPile||[])];
-        if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];nd.splice(0,nd.length-1);}
-        const drawn=ndp.splice(0,2);const nh=[...(fg.hands?.[pid]||[]),...drawn];
-        await update(ref(db,"rooms/"+rc+"/game"),{["hands/"+pid]:nh,drawPile:ndp,discardPile:nd,
-          message:(rd.players[pid]?.name)+" tapped out of turn — +2 penalty!"});
-      }catch(e){}
-      setLMsg("Wait your turn! +2 penalty");setTimeout(()=>setLMsg(""),1800);
-    }else{ps("error");setLMsg("Not your turn!");setTimeout(()=>setLMsg(""),900);}
-  },[pickDr,isAdm,myTurn,g,drawnCard,challenge,rc,pid,rd,doDraw,ps,trigShake]);
+    if(!myTurn||g?.winner||drawnCard||hasDrawn||challenge||drawingRef.current)return;
+    drawingRef.current=true;
+    Promise.resolve(doDraw()).finally(()=>{drawingRef.current=false;});
+  },[pickDr,isAdm,myTurn,g,drawnCard,hasDrawn,challenge,doDraw]);
 
   const passTurn=async()=>{if(!myTurn||g?.winner)return;setDrawnCard(null);setHasDrawn(false);
     await wgs({currentPlayer:np(pid,g.direction),message:(rd.players[pid]?.name)+" passed",turnTimestamp:Date.now()});};
@@ -2061,6 +2163,13 @@ export default function UnoGame(){
 
         {/* Main card */}
         <div style={{...GLASS,padding:"20px 20px 16px",width:"100%",marginBottom:8}}>
+          <div onClick={()=>setStoreOpen(true)} title="Customize (Store)" style={{width:64,height:64,borderRadius:"50%",margin:"0 auto 12px",cursor:"pointer",
+            background:"radial-gradient(circle at 50% 32%,#2a3550,#141d2e)",border:"2px solid rgba(255,215,0,0.25)",
+            display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,color:"#5a6785",position:"relative"}}>
+            👤
+            <div style={{position:"absolute",bottom:-2,right:-2,width:22,height:22,borderRadius:"50%",background:"#E040FB",
+              display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",border:"2px solid #0b1120"}}>+</div>
+          </div>
           <label style={{...ls,marginBottom:4}}>PLAYER NAME</label>
           <input value={pName} onChange={e=>setPName(e.target.value)} placeholder="Enter your name" maxLength={12}
             style={{...ist,marginBottom:8,fontSize:15,padding:"10px 14px",letterSpacing:1}}
@@ -2108,6 +2217,13 @@ export default function UnoGame(){
             onPointerEnter={e=>{e.currentTarget.style.background="rgba(255,215,0,0.12)";e.currentTarget.style.transform="translateY(-1px)";}}
             onPointerLeave={e=>{e.currentTarget.style.background="rgba(255,215,0,0.06)";e.currentTarget.style.transform="translateY(0)";}}>
             🏆 RANKINGS</button>
+          <button onClick={()=>setStoreOpen(true)} style={{background:"rgba(156,39,176,0.1)",
+            border:"1px solid rgba(224,64,251,0.25)",padding:"7px 18px",borderRadius:12,
+            color:"#E040FB",fontSize:11,fontWeight:800,cursor:"pointer",transition:"all 0.2s",
+            display:"flex",alignItems:"center",gap:5,letterSpacing:2}}
+            onPointerEnter={e=>{e.currentTarget.style.background="rgba(156,39,176,0.2)";e.currentTarget.style.transform="translateY(-1px)";}}
+            onPointerLeave={e=>{e.currentTarget.style.background="rgba(156,39,176,0.1)";e.currentTarget.style.transform="translateY(0)";}}>
+            🛒 STORE</button>
           <button onClick={()=>setShowAccount(true)} style={{background:"rgba(255,255,255,0.04)",
             border:"1px solid rgba(255,255,255,0.1)",padding:"7px 14px",borderRadius:12,
             color:"#aaa",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all 0.2s",
@@ -2148,8 +2264,8 @@ export default function UnoGame(){
             {globalLB.length===0?<div style={{textAlign:"center",color:"#556",padding:30,fontSize:12}}>No players yet. Be the first!</div>
             :globalLB.slice(0,50).map((p,i)=>{
               const r=getRank(p.totalPoints,p.gamesPlayed);const isMe=p.id===pid;
-              return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 8px",
-                borderRadius:12,marginBottom:3,
+              return(<div key={p.id} onClick={()=>{sfx.p("click");setStatsView(p);}} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 8px",
+                borderRadius:12,marginBottom:3,cursor:"pointer",
                 background:isMe?"rgba(255,215,0,0.06)":i<3?"rgba(255,255,255,0.02)":"transparent",
                 border:isMe?"1px solid rgba(255,215,0,0.12)":i===0?"1px solid rgba(255,215,0,0.08)":"1px solid transparent",
                 animation:`slideIn 0.3s ease-out ${Math.min(i*0.04,0.8)}s both`}}>
@@ -2184,6 +2300,9 @@ export default function UnoGame(){
           </div>
         </div>
       </div>)}
+
+      {statsView&&<PlayerStatsModal stats={statsView} isOwner={statsView.id===pid} onClose={()=>setStatsView(null)}/>}
+      {storeOpen&&<StoreModal onClose={()=>setStoreOpen(false)}/>}
 
       {/* Account Modal */}
       {showAccount&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
@@ -2571,7 +2690,8 @@ export default function UnoGame(){
 
 
       {/* Main game area — 3-column layout: left opp | center (top opps + table + hand) | right opp */}
-      <div style={{flex:1,display:"flex",minHeight:0,zIndex:10,position:"relative"}}>
+      <div style={{flex:1,display:"flex",minHeight:0,zIndex:10,position:"relative",
+        paddingLeft:"env(safe-area-inset-left,0px)",paddingRight:"env(safe-area-inset-right,0px)"}}>
 
         {/* Left opponent */}
         {leftOpp&&<div style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",flexShrink:0,zIndex:10}}>
