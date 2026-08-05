@@ -256,6 +256,11 @@ const isBot=id=>id?.startsWith("bot_");
 function botPickColor(hand){const cnt={red:0,blue:0,green:0,yellow:0};hand.forEach(c=>{if(c.color!=="wild"&&cnt[c.color]!==undefined)cnt[c.color]++;});const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);return best[0][1]>0?best[0][0]:COLORS[Math.floor(Math.random()*4)];}
 function botChooseCard(playable,hand,curColor,intel,nextOppHL){if(intel===0)return playable[Math.floor(Math.random()*playable.length)];const scored=playable.map(c=>{let s=0;if(c.type!=="wild")s+=3;if(c.value==="discardAll")s+=8;if(c.value==="draw2")s+=5;if(c.value==="skip"||c.value==="reverse")s+=4;if(c.value==="snatch")s+=2;if(c.color===curColor)s+=2;if(intel>=2&&nextOppHL<=2){if(c.value==="draw2"||c.value==="wild4")s+=10;if(c.value==="skip")s+=6;}if(c.value==="wild4")s-=2;return{card:c,s};});scored.sort((a,b)=>b.s-a.s);if(intel<=1&&scored.length>1&&Math.random()>0.6)return scored[Math.min(1,scored.length-1)].card;return scored[0].card;}
 function gpid(){let i=localStorage.getItem("uno_pid");if(!i){i=gid();localStorage.setItem("uno_pid",i);}return i;}
+/* Multi-account (up to 3 per device) */
+function getAccounts(){try{const a=JSON.parse(localStorage.getItem("uno_accounts")||"[]");return Array.isArray(a)?a:[];}catch(e){return[];}}
+function saveAccounts(a){localStorage.setItem("uno_accounts",JSON.stringify(a.slice(0,3)));}
+function registerAccount(pid,name){const a=getAccounts();const ex=a.find(x=>x.pid===pid);if(ex){if(name)ex.name=name;}else if(a.length<3)a.push({pid,name:name||""});saveAccounts(a);}
+function switchToAccount(pid,name){localStorage.setItem("uno_pid",pid);if(name!=null)localStorage.setItem("uno_name",name);window.location.reload();}
 function getTag(id){return"#"+id.slice(0,4).toUpperCase();}
 function goFS(){try{const d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen||d.msRequestFullscreen)?.call(d);}catch(e){}}
 function goLand(){try{screen.orientation?.lock?.("landscape").catch(()=>{});}catch(e){}}
@@ -314,6 +319,7 @@ function fmtLast(ts){if(!ts)return"—";const s=Math.floor((Date.now()-ts)/1000)
 const STORE_CATS=[
   {id:"character",name:"Character",icon:"🧑",subs:["Head","Eyes","Nose","Eyebrows","Mouth","Ears","Hair"]},
   {id:"accessories",name:"Accessories",icon:"🎀",subs:["Head","Eyes","Nose","Eyebrows","Mouth","Ears","Hair"]},
+  {id:"emoji",name:"Emoji",icon:"😀",subs:null},
   {id:"frame",name:"Frame",icon:"🖼️",subs:null},
   {id:"banner",name:"Banner",icon:"🚩",subs:null},
 ];
@@ -1484,13 +1490,14 @@ export default function UnoGame(){
   const[showAccount,setShowAccount]=useState(false);
   const[restoreId,setRestoreId]=useState("");
   const[restoreMsg,setRestoreMsg]=useState("");
+  const[accounts,setAccounts]=useState(getAccounts());
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
   const[roundTimer,setRoundTimer]=useState(ROUND_TIME);
   const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);
 
-  useEffect(()=>{if(pName)localStorage.setItem("uno_name",pName);},[pName]);
+  useEffect(()=>{if(pName)localStorage.setItem("uno_name",pName);registerAccount(pid,pName);setAccounts(getAccounts());},[pName,pid]);
 
   useEffect(()=>{
     const lbRef=ref(db,"leaderboard");
@@ -1644,16 +1651,24 @@ export default function UnoGame(){
       if(!isBot(winnerId)){
         const prev=(await get(ref(db,"leaderboard/"+winnerId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
         const wRank=getRank(prev.totalPoints,prev.gamesPlayed);
+        const beat={...(prev.beat||{})};const now=Date.now();const H2H_WIN=24*3600*1000;
         for(const[oppId]of pls){if(oppId===winnerId)continue;
           const oppBot=isBot(oppId);
           const op=oppBot?{totalPoints:0,gamesPlayed:0,wins:0}:(await get(ref(db,"leaderboard/"+oppId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
           const oRank=getRank(op.totalPoints,op.gamesPlayed);
-          const award=calcElo(wRank.idx,oRank.idx,baseScore).winPts;totalWin+=award;
-          if(!oppBot){const newPts=Math.max(0,(op.totalPoints||0)-award);
+          let award=calcElo(wRank.idx,oRank.idx,baseScore).winPts;
+          if(!oppBot){
+            /* anti-farm: diminishing points for repeatedly beating the same opponent within 24h */
+            const b=(beat[oppId]&&(now-beat[oppId].t)<H2H_WIN)?beat[oppId].c:0;
+            const mult=b<2?1:b===2?0.6:b===3?0.35:b===4?0.2:0.08;
+            award=Math.max(1,Math.round(award*mult));
+            beat[oppId]={c:b+1,t:now};
+            const newPts=Math.max(0,(op.totalPoints||0)-award);
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
-              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:Date.now(),since:op.since||Date.now()});}}
+              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now});}
+          totalWin+=award;}
         await update(ref(db,"leaderboard/"+winnerId),{name:rd.players[winnerId]?.name||"Player",
-          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:Date.now(),since:prev.since||Date.now()});
+          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:now,since:prev.since||now,beat});
       }else{totalWin=baseScore;}
       const curScores=(await get(ref(db,"rooms/"+rc+"/scores"))).val()||{};
       curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
@@ -1816,11 +1831,19 @@ export default function UnoGame(){
     if(id===pid){setRestoreMsg("That's already your current ID");return;}
     const snap=await get(ref(db,"leaderboard/"+id));
     if(!snap.exists()){setRestoreMsg("No account found with that ID");return;}
+    if(accounts.length>=3&&!accounts.some(a=>a.pid===id)){setRestoreMsg("Max 3 accounts on this device. Remove one first.");return;}
     const data=snap.val();
-    localStorage.setItem("uno_pid",id);
-    if(data.name)setPName(data.name);
-    setRestoreMsg("Account restored! Reloading...");
-    setTimeout(()=>window.location.reload(),1200);
+    registerAccount(id,data.name||"");
+    setRestoreMsg("Account restored! Switching...");
+    setTimeout(()=>switchToAccount(id,data.name||""),900);
+  };
+  const newAccount=()=>{
+    if(accounts.length>=3){setRestoreMsg("Max 3 accounts reached. Remove one to add another.");return;}
+    const nid=gid();registerAccount(nid,"");switchToAccount(nid,"");
+  };
+  const removeAccount=(rid)=>{
+    const left=getAccounts().filter(a=>a.pid!==rid);saveAccounts(left);setAccounts(left);
+    if(rid===pid){if(left[0])switchToAccount(left[0].pid,left[0].name);else{localStorage.removeItem("uno_pid");localStorage.removeItem("uno_name");window.location.reload();}}
   };
   const copyPid=()=>{navigator.clipboard?.writeText(pid).then(()=>setRestoreMsg("Copied!")).catch(()=>{});
     setTimeout(()=>setRestoreMsg(""),1500);};
@@ -2325,8 +2348,38 @@ export default function UnoGame(){
           <div style={{fontSize:8,color:"#667",marginBottom:16,lineHeight:1.5,padding:"0 2px"}}>
             Save this ID to recover your account on another device or browser. Your ranking, stats, and progress are tied to this ID.</div>
 
+          <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14,marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div style={{fontSize:9,color:"#889",letterSpacing:2}}>ACCOUNTS ON THIS DEVICE</div>
+              <div style={{fontSize:9,color:"#667",fontWeight:800}}>{accounts.length}/3</div>
+            </div>
+            {accounts.map(a=>{const cur=a.pid===pid;return(
+              <div key={a.pid} onClick={()=>{if(!cur){sfx.p("click");switchToAccount(a.pid,a.name);}}}
+                style={{display:"flex",alignItems:"center",gap:8,padding:"9px 11px",borderRadius:10,marginBottom:6,
+                  background:cur?"rgba(76,175,80,0.12)":"rgba(255,255,255,0.04)",
+                  border:`1px solid ${cur?"rgba(76,175,80,0.35)":"rgba(255,255,255,0.06)"}`,
+                  cursor:cur?"default":"pointer"}}>
+                <div style={{width:30,height:30,borderRadius:"50%",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",
+                  background:cur?"linear-gradient(135deg,#4CAF50,#2E7D32)":"rgba(255,255,255,0.08)",
+                  fontSize:13,fontWeight:900,color:"#fff"}}>{(a.name||"?").charAt(0).toUpperCase()}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:800,color:cur?"#7CE38B":"#DDD",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.name||"(no name)"}</div>
+                  <div style={{fontSize:9,color:"#778",fontFamily:"monospace",letterSpacing:1}}>{getTag(a.pid)}</div>
+                </div>
+                {cur?<div style={{fontSize:8,fontWeight:800,color:"#4CAF50",letterSpacing:1}}>ACTIVE</div>
+                  :<div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <div style={{fontSize:8,fontWeight:800,color:"#5C9",letterSpacing:1}}>TAP TO USE</div>
+                    <button onClick={e=>{e.stopPropagation();removeAccount(a.pid);}} style={{padding:"3px 7px",borderRadius:7,
+                      border:"1px solid rgba(244,67,54,0.25)",background:"rgba(244,67,54,0.08)",color:"#EF5350",fontSize:9,fontWeight:800,cursor:"pointer"}}>✕</button>
+                  </div>}
+              </div>);})}
+            {accounts.length<3&&<button onClick={newAccount} style={{width:"100%",padding:"9px",borderRadius:10,
+              border:"1px dashed rgba(255,215,0,0.3)",background:"rgba(255,215,0,0.05)",color:"#FFD700",fontSize:10,fontWeight:800,
+              cursor:"pointer",letterSpacing:1}}>+ ADD NEW ACCOUNT</button>}
+          </div>
+
           <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14}}>
-            <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:4}}>RESTORE ACCOUNT</div>
+            <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:4}}>RESTORE / ADD BY PLAYER ID</div>
             <div style={{display:"flex",gap:6,marginBottom:6}}>
               <input value={restoreId} onChange={e=>setRestoreId(e.target.value)} placeholder="Enter Player ID"
                 style={{...ist,flex:1,marginBottom:0,fontSize:12,fontFamily:"monospace",letterSpacing:2}}
@@ -2344,9 +2397,9 @@ export default function UnoGame(){
 
           {restoreMsg&&<div style={{textAlign:"center",fontSize:10,fontWeight:700,marginTop:10,padding:"6px 12px",
             borderRadius:8,animation:"fadeIn 0.3s",
-            color:restoreMsg.includes("Restored")||restoreMsg.includes("Copied")?"#4CAF50":"#FF9800",
-            background:restoreMsg.includes("Restored")||restoreMsg.includes("Copied")?"rgba(76,175,80,0.1)":"rgba(255,152,0,0.1)",
-            border:`1px solid ${restoreMsg.includes("Restored")||restoreMsg.includes("Copied")?"rgba(76,175,80,0.2)":"rgba(255,152,0,0.2)"}`
+            color:/switching|copied/i.test(restoreMsg)?"#4CAF50":"#FF9800",
+            background:/switching|copied/i.test(restoreMsg)?"rgba(76,175,80,0.1)":"rgba(255,152,0,0.1)",
+            border:`1px solid ${/switching|copied/i.test(restoreMsg)?"rgba(76,175,80,0.2)":"rgba(255,152,0,0.2)"}`
           }}>{restoreMsg}</div>}
 
           <button onClick={()=>{setShowAccount(false);setRestoreMsg("");}} style={{width:"100%",marginTop:14,padding:"10px",
