@@ -698,11 +698,11 @@ const BurstFX=({color,onDone})=>{
         p.trail.push({x:p.x,y:p.y,l:p.life});if(p.trail.length>6)p.trail.shift();
         p.x+=p.vx;p.y+=p.vy;p.vy+=0.13;p.vx*=0.99;p.life-=p.dc;
         const col=`rgb(${Math.floor(p.r)},${Math.floor(p.g)},${Math.floor(p.b)})`;
-        p.trail.forEach((tr,ti)=>{ctx.globalAlpha=tr.l*0.12*(ti/p.trail.length);
-          ctx.fillStyle=col;ctx.beginPath();ctx.arc(tr.x,tr.y,p.sz*tr.l*0.5,0,Math.PI*2);ctx.fill();});
-        ctx.globalAlpha=p.life*0.35;ctx.fillStyle=col;
-        ctx.beginPath();ctx.arc(p.x,p.y,p.sz*p.life*2.2,0,Math.PI*2);ctx.fill();
-        ctx.globalAlpha=p.life;ctx.beginPath();ctx.arc(p.x,p.y,p.sz*p.life,0,Math.PI*2);ctx.fill();
+        p.trail.forEach((tr,ti)=>{ctx.globalAlpha=Math.max(0,tr.l)*0.12*(ti/p.trail.length);
+          ctx.fillStyle=col;ctx.beginPath();ctx.arc(tr.x,tr.y,Math.max(0,p.sz*tr.l*0.5),0,Math.PI*2);ctx.fill();});
+        ctx.globalAlpha=Math.max(0,p.life)*0.35;ctx.fillStyle=col;
+        ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,p.sz*p.life*2.2),0,Math.PI*2);ctx.fill();
+        ctx.globalAlpha=Math.max(0,p.life);ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,p.sz*p.life),0,Math.PI*2);ctx.fill();
         ctx.globalAlpha=1;});
       frame++;if(alive&&frame<120)requestAnimationFrame(anim);else onDone();};
     anim();
@@ -1480,6 +1480,7 @@ export default function UnoGame(){
   const logoTap=()=>{const now=Date.now();const s=admTap.current;s.n=(now-s.t<1500)?s.n+1:1;s.t=now;if(s.n>=5){s.n=0;setShowAdm(true);}};
   const[peek,setPeek]=useState(false);const[pickDr,setPickDr]=useState(false);
   const[swap,setSwap]=useState(false);const[swpC,setSwpC]=useState(null);const[showDk,setShowDk]=useState(false);
+  const isLandscape=useLandscape();
   const[rd,setRd]=useState(null);const[pickCol,setPickCol]=useState(false);const[pendW,setPendW]=useState(null);
   const[lMsg,setLMsg]=useState("");const[snd,setSnd]=useState(true);const[mus,setMus]=useState(false);
   const[sel,setSel]=useState(-1);const[cAn,setCAn]=useState(null);const[actFx,setActFx]=useState(null);
@@ -2580,7 +2581,6 @@ export default function UnoGame(){
   /* ═══ GAME ═══ */
   if(!g)return<div style={{height:"100%",background:"#060e0c",display:"flex",alignItems:"center",justifyContent:"center",color:"#889"}}><style>{globalCSS}</style>Loading...</div>;
   const opps=po.filter(id=>id!==pid);
-  const isLandscape=useLandscape();
   const n=myH.length;const spread=Math.min(n*3,32);const st2=-spread/2;
   const cardSpacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));
   const clusterHalf=((n-1)/2)*cardSpacing+(isLandscape?35:44);
