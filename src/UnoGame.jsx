@@ -346,12 +346,13 @@ const StoreModal=({onClose})=>{
   const tabS=on=>({flex:1,padding:"8px 4px",borderRadius:10,border:"none",cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:1,
     background:on?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.05)",color:on?"#1a1200":"#99a",transition:"all 0.2s"});
   return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,
-    display:"flex",alignItems:"center",justifyContent:"center",padding:14,backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out"}}>
-    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:landscape?"96vw":400,height:landscape?"94vh":"88vh",display:"flex",flexDirection:"column",
+    display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out",
+    padding:"calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))"}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:landscape?"96vw":400,height:landscape?"94vh":"88vh",maxHeight:"100%",display:"flex",flexDirection:"column",
       background:"linear-gradient(160deg,#1a2338,#0b1120)",borderRadius:18,padding:16,position:"relative",
       border:"1px solid rgba(255,215,0,0.2)",boxShadow:"0 20px 60px rgba(0,0,0,0.7)"}}>
-      <button onClick={onClose} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"#889",fontSize:22,cursor:"pointer"}}>×</button>
-      <div style={{fontSize:18,fontWeight:900,color:"#FFD700",letterSpacing:4,marginBottom:12}}>🛒 STORE</div>
+      <button onClick={onClose} style={{position:"absolute",top:6,right:6,width:40,height:40,zIndex:5,background:"none",border:"none",color:"#889",fontSize:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
+      <div style={{fontSize:18,fontWeight:900,color:"#FFD700",letterSpacing:4,marginBottom:12,paddingRight:36}}>🛒 STORE</div>
       <div style={{display:"flex",gap:5,marginBottom:10}}>
         {STORE_CATS.map(c=><button key={c.id} onClick={()=>{setCatId(c.id);setSub(0);}} style={tabS(c.id===catId)}>{c.icon}<br/>{c.name}</button>)}
       </div>
@@ -381,11 +382,12 @@ const PlayerStatsModal=({stats,isOwner,onClose})=>{
   const valS={fontSize:16,fontWeight:900,color:"#fff",fontFamily:"monospace"};
   const initial=(stats.name||"?")[0]?.toUpperCase();
   return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
-    display:"flex",alignItems:"center",justifyContent:"center",padding:16,backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out"}}>
-    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,maxHeight:"90vh",overflowY:"auto",
+    display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out",
+    padding:"calc(14px + env(safe-area-inset-top,0px)) 14px calc(14px + env(safe-area-inset-bottom,0px))"}}>
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:360,maxHeight:"100%",overflowY:"auto",
       background:"linear-gradient(160deg,#182235,#0c1320)",borderRadius:18,padding:18,position:"relative",
       border:`1px solid ${r.color}44`,boxShadow:`0 20px 60px rgba(0,0,0,0.7),0 0 40px ${r.color}22`}}>
-      <button onClick={onClose} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"#889",fontSize:20,cursor:"pointer"}}>×</button>
+      <button onClick={onClose} style={{position:"absolute",top:6,right:6,width:40,height:40,zIndex:5,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
         <div style={{width:56,height:56,borderRadius:14,background:"linear-gradient(145deg,#2a3550,#151d2e)",
           display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,color:"#fff",
@@ -1510,6 +1512,7 @@ export default function UnoGame(){
   const[restoreId,setRestoreId]=useState("");
   const[restoreMsg,setRestoreMsg]=useState("");
   const[accounts,setAccounts]=useState(getAccounts());
+  const[delAcc,setDelAcc]=useState(null);const[delText,setDelText]=useState("");
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
@@ -2387,7 +2390,7 @@ export default function UnoGame(){
                 {cur?<div style={{fontSize:8,fontWeight:800,color:"#4CAF50",letterSpacing:1}}>ACTIVE</div>
                   :<div style={{display:"flex",gap:6,alignItems:"center"}}>
                     <div style={{fontSize:8,fontWeight:800,color:"#5C9",letterSpacing:1}}>TAP TO USE</div>
-                    <button onClick={e=>{e.stopPropagation();removeAccount(a.pid);}} style={{padding:"3px 7px",borderRadius:7,
+                    <button onClick={e=>{e.stopPropagation();setDelText("");setDelAcc(a);}} style={{padding:"3px 7px",borderRadius:7,
                       border:"1px solid rgba(244,67,54,0.25)",background:"rgba(244,67,54,0.08)",color:"#EF5350",fontSize:9,fontWeight:800,cursor:"pointer"}}>✕</button>
                   </div>}
               </div>);})}
@@ -2427,6 +2430,30 @@ export default function UnoGame(){
             onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.08)"}>CLOSE</button>
         </div>
       </div>)}
+
+      {/* Delete-account confirmation (retype name) */}
+      {delAcc&&(()=>{const word=(delAcc.name||"").trim()||"DELETE";const ok=delText.trim()===word;return(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:400,
+          display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.25s"}}
+          onClick={()=>{setDelAcc(null);setDelText("");}}>
+          <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:22,width:"88%",maxWidth:320}}>
+            <div style={{fontSize:14,fontWeight:900,color:"#EF5350",textAlign:"center",letterSpacing:2,marginBottom:10}}>⚠️ REMOVE ACCOUNT</div>
+            <div style={{fontSize:11,color:"#bbc",textAlign:"center",lineHeight:1.5,marginBottom:14}}>
+              This removes <b style={{color:"#fff"}}>{delAcc.name||"(no name)"}</b> ({getTag(delAcc.pid)}) from this device only. Your stats stay safe — recover anytime with the Player ID.
+            </div>
+            <div style={{fontSize:9,color:"#889",letterSpacing:1,marginBottom:5,textAlign:"center"}}>TYPE <b style={{color:"#FFD700"}}>{word}</b> TO CONFIRM</div>
+            <input value={delText} onChange={e=>setDelText(e.target.value)} placeholder={word} autoFocus
+              style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid rgba(255,255,255,0.12)",
+                background:"rgba(0,0,0,0.4)",color:"#fff",fontSize:13,outline:"none",marginBottom:12,textAlign:"center"}}/>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setDelAcc(null);setDelText("");}} style={{flex:1,padding:"10px",borderRadius:10,
+                border:"1px solid rgba(255,255,255,0.1)",background:"none",color:"#aab",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>CANCEL</button>
+              <button disabled={!ok} onClick={()=>{const p=delAcc.pid;setDelAcc(null);setDelText("");removeAccount(p);}}
+                style={{flex:1,padding:"10px",borderRadius:10,border:"none",opacity:ok?1:0.4,cursor:ok?"pointer":"not-allowed",
+                  background:"linear-gradient(135deg,#E53935,#B71C1C)",color:"#fff",fontSize:11,fontWeight:800,letterSpacing:1}}>REMOVE</button>
+            </div>
+          </div>
+        </div>);})()}
 
       {/* Admin Login (logo 5x tap, or ••• dot) */}
       {showAdm&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:400,
