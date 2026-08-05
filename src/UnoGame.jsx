@@ -216,11 +216,11 @@ class AnimeSFX{
       case "error":this._bend(400,150,"sawtooth",n,0.2,0.18);this._bend(300,100,"square",n+0.1,0.2,0.12);break;
       case "join":this._chime([440,554,659,880],n,0.07,0.16);this._shimmer(800,n+0.15,0.3,0.06);break;
       case "challenge":this._bend(600,1400,"triangle",n,0.15,0.2);this._bend(1400,600,"triangle",n+0.15,0.15,0.2);this._bend(600,1800,"sawtooth",n+0.3,0.2,0.12);break;
-      case "penalty":this._bend(800,200,"sawtooth",n,0.3,0.18);this._bend(600,150,"square",n+0.1,0.25,0.12);this._osc(100,"sine",n+0.2,0.2,0.15);break;
+      case "penalty":this._bend(520,300,"sine",n,0.22,0.09);[0,0.12,0.24,0.36].forEach((d,i)=>{this._fNoise(n+0.06+d,0.032,3000,1.3,"bandpass",0.3-i*0.02);this._fNoise(n+0.06+d,0.05,640,1.4,"lowpass",0.2);this._osc(160,"sine",n+0.06+d,0.04,0.11);});this._osc(88,"sine",n+0.44,0.24,0.09);break;
       case "skip":this._bend(1000,400,"sine",n,0.12,0.2);this._bend(800,300,"triangle",n+0.06,0.1,0.15);break;
       case "reverse":this._bend(400,1200,"sine",n,0.12,0.18);this._bend(1200,400,"sine",n+0.12,0.12,0.18);this._shimmer(800,n+0.1,0.2,0.06);break;
-      case "draw2":this._thunder(n);this._bend(500,1000,"triangle",n,0.1,0.2);this._bend(500,1000,"triangle",n+0.12,0.1,0.18);break;
-      case "draw4":this._thunder(n);this._thunder(n+0.15);[0,0.08,0.16,0.24].forEach((d,i)=>{this._bend(400+i*150,900+i*200,"triangle",n+d,0.12,0.18-i*0.03);});this._shimmer(600,n+0.15,0.4,0.06);break;
+      case "draw2":this._bend(320,880,"sine",n,0.12,0.13);this._fNoise(n+0.1,0.06,2600,2,"bandpass",0.32);this._osc(140,"sine",n+0.1,0.14,0.26);this._fNoise(n+0.22,0.055,2400,2,"bandpass",0.28);this._osc(120,"sine",n+0.22,0.13,0.22);this._shimmer(1400,n+0.32,0.22,0.05);break;
+      case "draw4":this._bend(180,660,"sawtooth",n,0.2,0.11);this._shimmer(900,n+0.05,0.3,0.06);[0,0.11,0.22,0.33].forEach((d,i)=>{this._fNoise(n+0.14+d,0.05,2200+i*380,2.5,"bandpass",0.32-i*0.03);this._osc(150-i*10,"sine",n+0.14+d,0.13,0.24-i*0.03);});this._osc(58,"sine",n+0.14,0.5,0.18);this._chime([784,1047,1319],n+0.54,0.05,0.08);break;
       case "wild":this._bend(300,1800,"sine",n,0.3,0.15);this._shimmer(1200,n+0.1,0.4,0.07);this._chime([523,659,784,1047],n+0.05,0.06,0.12);break;
       case "playable":this._chime([659,880,1047],n,0.06,0.14);break;
       case "notPlayable":this._bend(500,250,"sine",n,0.2,0.15);break;
@@ -228,7 +228,7 @@ class AnimeSFX{
       case "catchUno":this._bend(800,1600,"square",n,0.1,0.18);this._bend(1200,2000,"sine",n+0.05,0.1,0.15);this._noise(n+0.08,0.06,0.2);break;
       case "sparkle":[2000,2400,2800,3200,3600].forEach((f,i)=>{this._osc(f,"sine",n+i*0.03,0.15,0.07);});break;
       case "cardSlide":this._noise(n,0.1,0.3);this._bend(200,400,"sine",n,0.08,0.08);break;
-      case "stack":this._thunder(n);this._bend(300,900,"triangle",n,0.12,0.22);this._bend(500,1200,"sine",n+0.06,0.1,0.18);this._noise(n+0.08,0.05,0.2);break;
+      case "stack":this._bend(240,780,"sawtooth",n,0.16,0.12);[0,0.1,0.2].forEach((d,i)=>{this._fNoise(n+0.12+d,0.05,2600+i*300,2.5,"bandpass",0.3-i*0.03);this._osc(150-i*12,"sine",n+0.12+d,0.12,0.22);});this._osc(60,"sine",n+0.12,0.4,0.16);this._shimmer(1200,n+0.32,0.25,0.06);break;
       case "discardAll":this._chime([523,659,784,1047,1319,1568],n,0.05,0.16);this._shimmer(1500,n+0.2,0.5,0.08);this._bend(400,2000,"sine",n,0.4,0.1);this._noise(n+0.1,0.08,0.2);break;
       case "tick":this._osc(1200,"sine",n,0.03,0.1);break;
       case "timeout":this._bend(600,200,"sawtooth",n,0.25,0.2);this._bend(400,120,"square",n+0.12,0.2,0.15);break;
