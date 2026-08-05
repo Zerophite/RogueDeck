@@ -1306,19 +1306,21 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
       animation:`leafSpiral 1.05s ease-out ${p.d}s forwards`}}/>)}
     {/* the penalty cards — gather in the element, then fly one-by-one into the victim's hand */}
     {(()=>{const nC=Math.max(2,Math.min(count||4,8));const fy=toSelf?"330px":"-290px";
-      return Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*Math.PI*2;
-        return(<div key={i} style={{position:"absolute",left:"50%",top:"45%",zIndex:4,
-          "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":fy,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
-          animation:`penaltyFling 1.55s cubic-bezier(.5,0,.32,1) ${(0.2+i*0.18).toFixed(2)}s both`}}>
-          <div style={{width:36,height:52,borderRadius:6,background:CG[element]||em.grad,
-            border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 4px 14px rgba(0,0,0,0.55),0 0 15px ${em.glow}aa`,
-            display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+4</span></div>
-        </div>);});})()}
-    {/* landing flash where cards enter the hand */}
-    <div style={{position:"absolute",left:"50%",top:toSelf?"88%":"14%",transform:"translate(-50%,-50%)",width:180,height:66,borderRadius:"50%",
-      background:`radial-gradient(ellipse,${em.glow}dd,transparent 70%)`,mixBlendMode:"screen",opacity:0,zIndex:4,
-      filter:`blur(1px) drop-shadow(0 0 18px ${em.glow})`,animation:`landFlash 0.6s ease-out ${(0.2+(nC-1)*0.18+0.9).toFixed(2)}s both`}}/>
+      const flashDel=(0.2+(nC-1)*0.18+0.9).toFixed(2);
+      return(<>
+        {Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*Math.PI*2;
+          return(<div key={i} style={{position:"absolute",left:"50%",top:"45%",zIndex:4,
+            "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":fy,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
+            animation:`penaltyFling 1.55s cubic-bezier(.5,0,.32,1) ${(0.2+i*0.18).toFixed(2)}s both`}}>
+            <div style={{width:36,height:52,borderRadius:6,background:CG[element]||em.grad,
+              border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 4px 14px rgba(0,0,0,0.55),0 0 15px ${em.glow}aa`,
+              display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+4</span></div>
+          </div>);})}
+        <div style={{position:"absolute",left:"50%",top:toSelf?"88%":"14%",transform:"translate(-50%,-50%)",width:180,height:66,borderRadius:"50%",
+          background:`radial-gradient(ellipse,${em.glow}dd,transparent 70%)`,mixBlendMode:"screen",opacity:0,zIndex:4,
+          filter:`blur(1px) drop-shadow(0 0 18px ${em.glow})`,animation:`landFlash 0.6s ease-out ${flashDel}s both`}}/>
+      </>);})()}
     {victimName&&<div style={{position:"absolute",bottom:"15%",zIndex:5,
       animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1) 0.28s both"}}>
       <span style={{fontSize:"min(30px,7vw)",fontWeight:900,color:"#fff",fontFamily:"Arial Black",fontStyle:"italic",letterSpacing:1,
