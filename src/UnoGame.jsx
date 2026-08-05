@@ -264,6 +264,21 @@ function switchToAccount(pid,name){localStorage.setItem("uno_pid",pid);if(name!=
 function getTag(id){return"#"+id.slice(0,4).toUpperCase();}
 function goFS(){try{const d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen||d.msRequestFullscreen)?.call(d);}catch(e){}}
 function goLand(){try{screen.orientation?.lock?.("landscape").catch(()=>{});}catch(e){}}
+/* Reactive orientation. Suppresses position transitions during a rotation so cards
+   don't slide/stutter to their new layout when width/height swap. */
+function useLandscape(){
+  const[l,setL]=useState(()=>typeof window!=="undefined"&&window.innerWidth>window.innerHeight);
+  useEffect(()=>{
+    let t;const f=()=>{
+      setL(window.innerWidth>window.innerHeight);
+      const el=document.documentElement;el.classList.add("uno-rotating");
+      clearTimeout(t);t=setTimeout(()=>el.classList.remove("uno-rotating"),450);
+    };
+    window.addEventListener("resize",f);window.addEventListener("orientationchange",f);
+    return()=>{window.removeEventListener("resize",f);window.removeEventListener("orientationchange",f);clearTimeout(t);};
+  },[]);
+  return l;
+}
 
 const RANK_TIERS=[
   {name:"Bronze",min:0,starGap:100,color:"#CD7F32",bg:"linear-gradient(135deg,#CD7F32,#8B5A2B)",icon:"🥉",idx:0},
@@ -326,11 +341,13 @@ const STORE_CATS=[
 const StoreModal=({onClose})=>{
   const[catId,setCatId]=useState("character");const cat=STORE_CATS.find(c=>c.id===catId);
   const[sub,setSub]=useState(0);
+  const landscape=useLandscape();
+  const cols=landscape?6:3;
   const tabS=on=>({flex:1,padding:"8px 4px",borderRadius:10,border:"none",cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:1,
     background:on?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.05)",color:on?"#1a1200":"#99a",transition:"all 0.2s"});
   return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,
     display:"flex",alignItems:"center",justifyContent:"center",padding:14,backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out"}}>
-    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:400,height:"88vh",display:"flex",flexDirection:"column",
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:landscape?"96vw":400,height:landscape?"94vh":"88vh",display:"flex",flexDirection:"column",
       background:"linear-gradient(160deg,#1a2338,#0b1120)",borderRadius:18,padding:16,position:"relative",
       border:"1px solid rgba(255,215,0,0.2)",boxShadow:"0 20px 60px rgba(0,0,0,0.7)"}}>
       <button onClick={onClose} style={{position:"absolute",top:10,right:12,background:"none",border:"none",color:"#889",fontSize:22,cursor:"pointer"}}>×</button>
@@ -343,8 +360,8 @@ const StoreModal=({onClose})=>{
           background:i===sub?"rgba(255,215,0,0.25)":"rgba(255,255,255,0.05)",color:i===sub?"#FFD700":"#889"}}>{s}</button>)}
       </div>}
       <div style={{fontSize:10,color:"#778",letterSpacing:1,marginBottom:8}}>{cat.name}{cat.subs?" • "+cat.subs[sub]:""}</div>
-      <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,alignContent:"start"}}>
-        {Array.from({length:9}).map((_,i)=>(
+      <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:8,alignContent:"start"}}>
+        {Array.from({length:landscape?12:9}).map((_,i)=>(
           <div key={i} style={{aspectRatio:"1",borderRadius:12,background:"rgba(255,255,255,0.03)",border:"1px dashed rgba(255,255,255,0.1)",
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,color:"#556"}}>
             <span style={{fontSize:22,opacity:0.5}}>🔒</span>
@@ -1457,6 +1474,8 @@ export default function UnoGame(){
   const[pName,setPName]=useState(localStorage.getItem("uno_name")||"");
   const[rc,setRc]=useState("");const[jc,setJc]=useState("");const[err,setErr]=useState("");
   const[isAdm,setIsAdm]=useState(false);const[admP,setAdmP]=useState("");const[showAdm,setShowAdm]=useState(false);
+  const admTap=useRef({n:0,t:0});
+  const logoTap=()=>{const now=Date.now();const s=admTap.current;s.n=(now-s.t<1500)?s.n+1:1;s.t=now;if(s.n>=5){s.n=0;setShowAdm(true);}};
   const[peek,setPeek]=useState(false);const[pickDr,setPickDr]=useState(false);
   const[swap,setSwap]=useState(false);const[swpC,setSwpC]=useState(null);const[showDk,setShowDk]=useState(false);
   const[rd,setRd]=useState(null);const[pickCol,setPickCol]=useState(false);const[pendW,setPendW]=useState(null);
@@ -1497,7 +1516,14 @@ export default function UnoGame(){
   const[roundTimer,setRoundTimer]=useState(ROUND_TIME);
   const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);
 
-  useEffect(()=>{if(pName)localStorage.setItem("uno_name",pName);registerAccount(pid,pName);setAccounts(getAccounts());},[pName,pid]);
+  useEffect(()=>{
+    if(pName)localStorage.setItem("uno_name",pName);
+    registerAccount(pid,pName);setAccounts(getAccounts());
+    const nm=pName.trim();if(!nm)return;
+    // Keep the rankings/stats display name in sync after a rename (debounced).
+    const t=setTimeout(()=>{get(ref(db,"leaderboard/"+pid)).then(s=>{if(s.exists())update(ref(db,"leaderboard/"+pid),{name:nm});}).catch(()=>{});},800);
+    return()=>clearTimeout(t);
+  },[pName,pid]);
 
   useEffect(()=>{
     const lbRef=ref(db,"leaderboard");
@@ -2144,8 +2170,8 @@ export default function UnoGame(){
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",
         width:"100%",maxWidth:400,padding:"0 16px",flex:1,justifyContent:"center",gap:0,overflow:"auto"}}>
 
-        {/* Logo */}
-        <div style={{position:"relative",marginBottom:6}}>
+        {/* Logo (tap 5x to reveal admin login) */}
+        <div style={{position:"relative",marginBottom:6}} onClick={logoTap}>
           <div style={{width:200,height:105,borderRadius:"50%",
             background:"linear-gradient(145deg,#E53935,#C62828,#B71C1C)",
             display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",
@@ -2261,15 +2287,7 @@ export default function UnoGame(){
             onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.25)"}
             onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.1)"}>
             🎵 {mus?"ON":"OFF"}</button>
-          {!showAdm?<button onClick={()=>setShowAdm(true)} style={{background:"none",border:"none",color:"#222",fontSize:8,cursor:"pointer",padding:4}}>{"•••"}</button>
-          :<div style={{display:"flex",gap:4,alignItems:"center",animation:"fadeIn 0.3s"}}>
-            <input value={admP} onChange={e=>setAdmP(e.target.value)} type="password" placeholder="Pass"
-              style={{padding:"5px 8px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.04)",color:"#fff",fontSize:9,outline:"none",width:70}}/>
-            <button onClick={()=>{if(admP===ADMIN_PASS){setIsAdm(true);setErr("");ps("join");}else setErr("Wrong");}}
-              style={{padding:"5px 10px",borderRadius:8,border:"none",background:isAdm?"#2E7D32":"#444",color:"#fff",fontSize:8,cursor:"pointer",fontWeight:700}}>
-              {isAdm?"✓":"→"}</button>
-            {isAdm&&<span style={{color:"#FFD700",fontSize:7,letterSpacing:1}}>ADMIN</span>}
-          </div>}
+          <button onClick={()=>setShowAdm(true)} style={{background:"none",border:"none",color:isAdm?"#FFD700":"#222",fontSize:8,cursor:"pointer",padding:4,fontWeight:700,letterSpacing:1}}>{isAdm?"ADMIN":"•••"}</button>
         </div>
       </div>
 
@@ -2410,6 +2428,29 @@ export default function UnoGame(){
         </div>
       </div>)}
 
+      {/* Admin Login (logo 5x tap, or ••• dot) */}
+      {showAdm&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:400,
+        display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.25s"}}
+        onClick={()=>{setShowAdm(false);setAdmP("");}}>
+        <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:22,width:"88%",maxWidth:300}}>
+          <div style={{fontSize:14,fontWeight:900,color:"#FFD700",textAlign:"center",letterSpacing:3,marginBottom:16}}>🔒 ADMIN</div>
+          {err==="Wrong password"&&<div style={{textAlign:"center",color:"#EF5350",fontSize:10,fontWeight:700,marginBottom:10}}>{err}</div>}
+          <input value={admP} onChange={e=>{setAdmP(e.target.value);if(err)setErr("");}} type="password" placeholder="Password" autoFocus
+            onKeyDown={e=>{if(e.key==="Enter"){if(admP===ADMIN_PASS){setIsAdm(true);setShowAdm(false);setAdmP("");}else setErr("Wrong password");}}}
+            style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1px solid rgba(255,215,0,0.2)",
+              background:"rgba(0,0,0,0.4)",color:"#fff",fontSize:14,outline:"none",marginBottom:12,textAlign:"center",letterSpacing:2}}/>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{setShowAdm(false);setAdmP("");}} style={{flex:1,padding:"10px",borderRadius:10,
+              border:"1px solid rgba(255,255,255,0.1)",background:"none",color:"#889",fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:1}}>CANCEL</button>
+            <button onClick={()=>{if(admP===ADMIN_PASS){setIsAdm(true);setShowAdm(false);setAdmP("");}else setErr("Wrong password");}}
+              style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:isAdm?"#2E7D32":"linear-gradient(135deg,#FFD700,#DAA520)",
+                color:isAdm?"#fff":"#1a1200",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:1}}>{isAdm?"✓ ACTIVE":"UNLOCK"}</button>
+          </div>
+          {isAdm&&<button onClick={()=>{setIsAdm(false);setShowAdm(false);}} style={{width:"100%",marginTop:8,padding:"8px",borderRadius:10,
+            border:"1px solid rgba(244,67,54,0.25)",background:"rgba(244,67,54,0.08)",color:"#EF5350",fontSize:10,fontWeight:700,cursor:"pointer"}}>LOG OUT ADMIN</button>}
+        </div>
+      </div>)}
+
       <style>{globalCSS}</style>
     </div>);
 
@@ -2512,7 +2553,7 @@ export default function UnoGame(){
   /* ═══ GAME ═══ */
   if(!g)return<div style={{height:"100%",background:"#060e0c",display:"flex",alignItems:"center",justifyContent:"center",color:"#889"}}><style>{globalCSS}</style>Loading...</div>;
   const opps=po.filter(id=>id!==pid);
-  const isLandscape=typeof window!=="undefined"&&window.innerWidth>window.innerHeight;
+  const isLandscape=useLandscape();
   const n=myH.length;const spread=Math.min(n*3,32);const st2=-spread/2;
   const cardSpacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));
   const clusterHalf=((n-1)/2)*cardSpacing+(isLandscape?35:44);
@@ -2884,6 +2925,7 @@ export default function UnoGame(){
 }
 
 const globalCSS=`
+  .uno-rotating *{transition:none !important;animation:none !important;}
   @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
   @keyframes uP{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
   @keyframes cFly{0%{transform:scale(0.3) translateY(80px) rotate(-15deg);opacity:0;filter:blur(3px)}
