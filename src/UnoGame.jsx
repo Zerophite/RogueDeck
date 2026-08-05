@@ -206,8 +206,9 @@ class AnimeSFX{
       case"green":this._windEl(t);break;case"yellow":this._lightEl(t);break;}}catch(e){}}
   p(type){if(!this.c)return;try{const n=this.c.currentTime;
     switch(type){
-      case "card":this._noise(n,0.07,0.5);this._bend(600,1200,"sine",n,0.08,0.2);this._osc(1000,"triangle",n+0.02,0.05,0.12);break;
-      case "draw":this._bend(300,600,"sine",n,0.15,0.18);this._bend(400,800,"triangle",n+0.05,0.12,0.12);this._noise(n,0.04,0.2);break;
+      case "card":this._fNoise(n,0.038,3200*(0.9+Math.random()*0.2),1.2,"bandpass",0.5);this._fNoise(n,0.055,700,1.4,"lowpass",0.34);this._osc(170,"sine",n,0.045,0.16);break;
+      case "draw":this._fNoise(n,0.13,1700*(0.9+Math.random()*0.2),2.6,"bandpass",0.3);this._bend(1100,2400,"sine",n,0.1,0.05);this._osc(150,"sine",n+0.09,0.04,0.1);break;
+      case "cardLift":this._fNoise(n,0.03,2600,2,"bandpass",0.18);this._osc(900,"triangle",n,0.03,0.05);break;
       case "action":this._bend(400,1200,"sawtooth",n,0.2,0.12);this._bend(600,1600,"square",n+0.05,0.18,0.08);this._shimmer(800,n+0.1,0.3,0.06);break;
       case "turn":this._chime([880,1100,1320],n,0.07,0.16);this._shimmer(1200,n+0.15,0.2,0.05);break;
       case "uno":this._chime([523,784,1047,1319,1568],n,0.06,0.18);this._shimmer(1500,n+0.2,0.4,0.07);this._bend(500,2000,"sine",n,0.4,0.1);break;
@@ -1550,6 +1551,35 @@ function calcScore(hands,winnerId){let total=0;
     for(const c of hand){if(c.type==="wild")total+=50;else if(c.value==="shadow")total+=40;else if(c.value==="snatch")total+=35;else if(c.value==="discardAll")total+=30;else if(c.type==="action")total+=20;else total+=parseInt(c.value)||0;}}
   return total;}
 
+/* ═══ CONFETTI — victory celebration ═══ */
+const ConfettiFX=()=>{
+  const ref=useRef(null);
+  useEffect(()=>{
+    const cv=ref.current;if(!cv)return;
+    const dpr=Math.min(2,window.devicePixelRatio||1);
+    const W=cv.width=Math.round(window.innerWidth*dpr),H=cv.height=Math.round(window.innerHeight*dpr);
+    const ctx=cv.getContext("2d");
+    const cols=["#FFD700","#FF5252","#4CAF50","#29B6F6","#E040FB","#FFEB3B","#FF9800"];
+    const P=Array.from({length:150},()=>({
+      x:Math.random()*W,y:-Math.random()*H,vx:(Math.random()-0.5)*3*dpr,vy:(2+Math.random()*4)*dpr,
+      w:(6+Math.random()*7)*dpr,h:(9+Math.random()*9)*dpr,rot:Math.random()*Math.PI*2,vr:(Math.random()-0.5)*0.3,
+      col:cols[Math.floor(Math.random()*cols.length)],sway:Math.random()*Math.PI*2,flat:Math.random()<0.5}));
+    let raf;
+    const anim=()=>{
+      ctx.clearRect(0,0,W,H);
+      P.forEach(p=>{p.sway+=0.05;p.x+=p.vx+Math.sin(p.sway)*1.3*dpr;p.y+=p.vy;p.rot+=p.vr;
+        if(p.y>H+30*dpr){p.y=-30*dpr;p.x=Math.random()*W;}
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+        ctx.fillStyle=p.col;ctx.globalAlpha=0.92;
+        const sw=p.flat?p.w:p.w*Math.abs(Math.cos(p.sway));
+        ctx.fillRect(-sw/2,-p.h/2,sw,p.h);ctx.restore();});
+      raf=requestAnimationFrame(anim);
+    };
+    anim();return()=>cancelAnimationFrame(raf);
+  },[]);
+  return <canvas ref={ref} style={{position:"fixed",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:151}}/>;
+};
+
 /* ═══ MAIN GAME ═══ */
 export default function UnoGame(){
   const pid=useRef(gpid()).current;
@@ -2814,22 +2844,36 @@ export default function UnoGame(){
           style={{marginTop:12,padding:"8px 24px",borderRadius:10,border:"none",background:"#333",color:"#aaa",fontSize:11,cursor:"pointer"}}>Cancel</button>
       </div>)}
 
-      {g.winner&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:150,
-        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)"}}>
-        <div style={{fontSize:70,marginBottom:14,animation:"wB 0.6s cubic-bezier(.34,1.56,.64,1)"}}>{g.winner===pid?"🎉":"🏆"}</div>
-        <div style={{fontSize:30,fontWeight:900,color:"#FFD700",marginBottom:10,
-          textShadow:"0 0 45px rgba(255,215,0,0.5),0 0 90px rgba(255,215,0,0.2)",
-          animation:"codeGlow 2s ease-in-out infinite",letterSpacing:3}}>{rd.players[g.winner]?.name} wins!</div>
-        <div style={{fontSize:26,color:"#4CAF50",marginBottom:18,fontWeight:900,
-          textShadow:"0 0 20px rgba(76,175,80,0.5)"}}>+{g.lastAward!=null?g.lastAward:0} points</div>
-        {isHost?(<>
-          <button onClick={restart} style={{...bst,maxWidth:260,background:"linear-gradient(135deg,#E53935,#C62828)",
-            boxShadow:"0 4px 25px rgba(229,57,53,0.5)"}}
-            onPointerEnter={e=>e.currentTarget.style.transform="scale(1.03)"}
-            onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>NEXT ROUND</button>
-          <button onClick={leave} style={{marginTop:12,background:"none",border:"none",color:"#889",fontSize:12,cursor:"pointer"}}>Close</button>
-        </>):<div style={{color:"#889",fontSize:12}}>Waiting for host...</div>}
-      </div>)}
+      {g.winner&&(()=>{const win=g.winner===pid;return(<>
+        {win&&<ConfettiFX/>}
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.94)",zIndex:150,overflow:"hidden",
+          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)"}}>
+          {win&&<div style={{position:"absolute",width:"150vmax",height:"150vmax",pointerEvents:"none",opacity:0.5,
+            background:"repeating-conic-gradient(from 0deg,rgba(255,215,0,0.10) 0deg 7deg,transparent 7deg 15deg)",
+            animation:"spinRays 16s linear infinite"}}/>}
+          <div style={{position:"absolute",width:"64vmin",height:"64vmin",borderRadius:"50%",pointerEvents:"none",
+            background:`radial-gradient(circle,${win?"rgba(255,215,0,0.28)":"rgba(120,130,150,0.14)"},transparent 70%)`}}/>
+          <div style={{fontSize:"min(96px,22vw)",marginBottom:2,zIndex:2,
+            filter:`drop-shadow(0 0 30px ${win?"rgba(255,215,0,0.7)":"rgba(150,160,180,0.4)"})`,
+            animation:"trophyPop 0.7s cubic-bezier(.34,1.7,.5,1) both"}}>{win?"🏆":"🎴"}</div>
+          <div style={{fontSize:"min(48px,12vw)",fontWeight:900,fontFamily:"'Chakra Petch',sans-serif",letterSpacing:5,zIndex:2,
+            color:win?"#FFD700":"#8892a6",textShadow:win?"0 0 44px rgba(255,215,0,0.6)":"none",
+            animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) 0.12s both"}}>{win?"VICTORY!":"DEFEAT"}</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#eee",marginTop:6,marginBottom:6,zIndex:2,
+            animation:"fadeIn 0.5s 0.5s both"}}>{rd.players[g.winner]?.name} wins</div>
+          {win&&<div style={{fontSize:26,color:"#4CAF50",marginBottom:6,fontWeight:900,zIndex:2,
+            textShadow:"0 0 20px rgba(76,175,80,0.5)",animation:"slamIn 0.45s cubic-bezier(.2,1.5,.4,1) 0.7s both"}}>+{g.lastAward!=null?g.lastAward:0} points</div>}
+          <div style={{marginTop:16,zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeIn 0.5s 0.9s both"}}>
+          {isHost?(<>
+            <button onClick={restart} style={{...bst,maxWidth:260,background:"linear-gradient(135deg,#E53935,#C62828)",
+              boxShadow:"0 4px 25px rgba(229,57,53,0.5)"}}
+              onPointerEnter={e=>e.currentTarget.style.transform="scale(1.03)"}
+              onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>NEXT ROUND</button>
+            <button onClick={leave} style={{marginTop:12,background:"none",border:"none",color:"#889",fontSize:12,cursor:"pointer"}}>Close</button>
+          </>):<div style={{color:"#889",fontSize:12}}>Waiting for host...</div>}
+          </div>
+        </div>
+      </>);})()}
 
       {showLB&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:160,
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)"}}
@@ -3007,7 +3051,7 @@ export default function UnoGame(){
                   drawStack>0?(drawStackType==="wild4"?card.value==="wild4":(card.value==="draw2"||card.value==="wild4")):canPlay(card,topC,g.currentColor));
                 const cardSz=isLandscape?"md":"lg";
                 const spacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));const xOff=(i-(n-1)/2)*spacing;
-                return(<div key={card.id} onClick={()=>{if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else setSel(i);}}}
+                return(<div key={card.id} onClick={()=>{if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,
                     transition:"left 0.28s cubic-bezier(.34,1.56,.64,1),bottom 0.28s ease,transform 0.28s ease",zIndex:isSel?50:i,
@@ -3053,6 +3097,9 @@ const globalCSS=`
     45%{transform:scale(0.98) translateY(2px) rotate(-0.5deg)}
     65%{transform:scale(1.01) translateY(-1px)}100%{transform:scale(1) translateY(0) rotate(0);opacity:1;filter:blur(0)}}
   @keyframes wB{0%{transform:scale(0)}40%{transform:scale(1.2)}70%{transform:scale(0.95)}100%{transform:scale(1)}}
+  @keyframes spinRays{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  @keyframes trophyPop{0%{opacity:0;transform:scale(0) translateY(30px) rotate(-18deg)}55%{opacity:1;transform:scale(1.25) translateY(0) rotate(6deg)}75%{transform:scale(0.92) rotate(-3deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
+  @keyframes slamIn{0%{opacity:0;transform:scale(2.4);filter:blur(6px)}60%{opacity:1;transform:scale(0.92);filter:blur(0)}100%{opacity:1;transform:scale(1)}}
   @keyframes cardDeal{0%{transform:translateY(-40px) scale(0.6) rotateY(90deg);opacity:0}
     40%{transform:translateY(5px) scale(1.05) rotateY(-10deg);opacity:1}
     70%{transform:translateY(-2px) scale(0.98) rotateY(3deg)}100%{transform:translateY(0) scale(1) rotateY(0)}}
