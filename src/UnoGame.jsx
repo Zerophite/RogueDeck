@@ -22,8 +22,8 @@ const ROUND_TIME=180;
 const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:10};
 const EMOTE_URL=import.meta.env.BASE_URL+"emotes/";
 const EMOTES=[
-  {id:"angry",gif:"angry.gif",sound:"angry.mp3",label:"Angry",vol:4.0},
-  {id:"laughing",gif:"laughing.gif",sound:"laughing.mp3",label:"Haha",vol:1.5},
+  {id:"angry",gif:"angry.gif",sound:"angry.mp3",label:"Angry",vol:5.0},
+  {id:"laughing",gif:"laughing.gif",sound:"laughing.mp3",label:"Haha",vol:1.0},
 ];
 
 /* ══ BACKGROUND MUSIC (Web Audio - upbeat funky bossa) ══ */
