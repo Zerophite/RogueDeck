@@ -989,155 +989,9 @@ const ElementalW4FX=({color,onDone})=>{
   </div>);
 };
 
-/* ═══ ELEMENT → CHIBI GENDER (fire/lightning = boy, water/wind = girl) ═══ */
-const ELEM_GENDER={red:"boy",yellow:"boy",blue:"girl",green:"girl"};
-
-/* ═══ ELEMENTAL ART SHEETS (4 columns: fire | lightning | water | wind) ═══ */
-const ART_URL=import.meta.env.BASE_URL+"art/";
-const ELEM_COL={red:0,yellow:1,blue:2,green:3};
-const artPosX=el=>((ELEM_COL[el]??0)/3)*100;
-/* Effect colors matched to the art (lightning art is purple, not yellow) */
+/* ═══ ELEMENT EFFECT COLORS (fire / lightning / water / wind) ═══ */
 const ART_GLOW={red:"#FF7A18",yellow:"#FFD21A",blue:"#29B6F6",green:"#66BB6A"};
 const ART_DARK={red:"#BF360C",yellow:"#F57F17",blue:"#01579B",green:"#1B5E20"};
-
-/* ═══ MANGA CHIBI (SVG, poses: slash / trip) — boy & girl variants ═══ */
-const Chibi=({pose="slash",accent="#FFD700",dark="#B8860B",gender="boy",element="red"})=>{
-  const poseAnim=pose==="trip"?"chibiTripFall 1s ease-in forwards":"chibiBounce 0.4s ease infinite alternate";
-  const isGirl=gender==="girl";const isTrip=pose==="trip";const u=gender;
-  const skin1="#FFE7CE",skin2="#FBD3A8";
-  const hairA=isGirl?accent:"#33334A",hairB=isGirl?dark:"#16161F";
-  return(<svg viewBox="0 0 120 178" width="98" height="145" style={{overflow:"visible",filter:"drop-shadow(0 6px 10px rgba(0,0,0,0.55))"}}>
-    <defs>
-      <radialGradient id={`chSkin_${u}`} cx="50%" cy="38%"><stop offset="0%" stopColor={skin1}/><stop offset="100%" stopColor={skin2}/></radialGradient>
-      <linearGradient id={`chHair_${u}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={hairA}/><stop offset="100%" stopColor={hairB}/></linearGradient>
-      <linearGradient id={`chBody_${u}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={accent}/><stop offset="100%" stopColor={dark}/></linearGradient>
-      <radialGradient id={`chIris_${u}`} cx="50%" cy="35%"><stop offset="0%" stopColor={accent}/><stop offset="100%" stopColor={dark}/></radialGradient>
-    </defs>
-    <g style={{animation:poseAnim,transformOrigin:"60px 110px"}}>
-      {/* girl twin-tails behind */}
-      {isGirl&&<><path d="M22,52 Q-2,88 8,132 Q22,124 26,88 Q24,66 32,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
-        <path d="M98,52 Q122,88 112,132 Q98,124 94,88 Q96,66 88,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/></>}
-      {/* legs */}
-      <rect x={isGirl?49:47} y={isGirl?150:142} width={isGirl?10:12} height={isGirl?18:24} rx="6" fill={`url(#chSkin_${u})`}/>
-      <rect x={isGirl?61:61} y={isGirl?150:142} width={isGirl?10:12} height={isGirl?18:24} rx="6" fill={`url(#chSkin_${u})`}/>
-      <ellipse cx={isGirl?54:53} cy={isGirl?168:166} rx="8" ry="5" fill={dark}/>
-      <ellipse cx={isGirl?66:67} cy={isGirl?168:166} rx="8" ry="5" fill={dark}/>
-      {/* body / outfit */}
-      {isGirl
-        ?<path d="M42,100 Q60,94 78,100 L98,158 Q60,172 22,158 Z" fill={`url(#chBody_${u})`} stroke={hairB} strokeWidth="1.5"/>
-        :<path d="M40,100 Q60,94 80,100 L86,146 Q60,154 34,146 Z" fill={`url(#chBody_${u})`} stroke="#0008" strokeWidth="1"/>}
-      <rect x={isGirl?40:38} y="118" width={isGirl?40:44} height="7" rx="3.5" fill="#fff" opacity="0.35"/>
-      {/* back arm (their left / screen right) */}
-      <rect x="78" y="99" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(14 84 102)"/>
-      {/* neck + collar */}
-      <rect x="52" y="90" width="16" height="14" rx="5" fill={`url(#chSkin_${u})`}/>
-      <path d="M44,96 Q60,105 76,96 L73,104 Q60,111 47,104 Z" fill={dark} stroke={hairB} strokeWidth="1"/>
-      {/* head */}
-      <ellipse cx="60" cy="58" rx="43" ry="41" fill={`url(#chSkin_${u})`} stroke="#E8B08A" strokeWidth="1.5"/>
-      <ellipse cx="46" cy="42" rx="19" ry="14" fill="#fff" opacity="0.16"/>
-      <path d="M92,52 Q98,76 72,94 Q90,72 84,52 Z" fill="#E39A6E" opacity="0.28"/>
-      {/* ears */}
-      <ellipse cx="18" cy="60" rx="6" ry="9" fill={`url(#chSkin_${u})`}/><ellipse cx="102" cy="60" rx="6" ry="9" fill={`url(#chSkin_${u})`}/>
-      {/* blush */}
-      <ellipse cx="29" cy="73" rx="7.5" ry="4" fill="#FF9AA2" opacity="0.55"/><ellipse cx="91" cy="73" rx="7.5" ry="4" fill="#FF9AA2" opacity="0.55"/>
-      {/* eyes */}
-      {isTrip
-        ?<><path d="M37,55 L51,67 M51,55 L37,67" stroke="#2A1622" strokeWidth="3.5" strokeLinecap="round"/>
-           <path d="M69,55 L83,67 M83,55 L69,67" stroke="#2A1622" strokeWidth="3.5" strokeLinecap="round"/></>
-        :<>
-           <ellipse cx="43" cy="61" rx="10.5" ry="13.5" fill="#fff"/><ellipse cx="77" cy="61" rx="10.5" ry="13.5" fill="#fff"/>
-           <ellipse cx="44" cy="63" rx="8.5" ry="11" fill={`url(#chIris_${u})`}/><ellipse cx="76" cy="63" rx="8.5" ry="11" fill={`url(#chIris_${u})`}/>
-           <ellipse cx="44" cy="64" rx="8.5" ry="11" fill="none" stroke="#000" strokeWidth="1" opacity="0.22"/>
-           <ellipse cx="76" cy="64" rx="8.5" ry="11" fill="none" stroke="#000" strokeWidth="1" opacity="0.22"/>
-           <ellipse cx="44" cy="65" rx="4" ry="5.6" fill="#120c1a"/><ellipse cx="76" cy="65" rx="4" ry="5.6" fill="#120c1a"/>
-           <ellipse cx="40" cy="58" rx="3.6" ry="4.4" fill="#fff"/><ellipse cx="72" cy="58" rx="3.6" ry="4.4" fill="#fff"/>
-           <circle cx="47" cy="68" r="2" fill="#fff" opacity="0.9"/><circle cx="79" cy="68" r="2" fill="#fff" opacity="0.9"/>
-           <path d="M35,69 Q44,73 52,69" stroke="#fff" strokeWidth="1.4" fill="none" opacity="0.45"/>
-           <path d="M68,69 Q76,73 85,69" stroke="#fff" strokeWidth="1.4" fill="none" opacity="0.45"/>
-           <path d="M31,53 Q43,47 55,54" stroke="#1c0e18" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-           <path d="M65,54 Q77,47 89,53" stroke="#1c0e18" strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-           <path d="M31,53 L26,49" stroke="#1c0e18" strokeWidth="3" fill="none" strokeLinecap="round"/>
-           <path d="M89,53 L94,49" stroke="#1c0e18" strokeWidth="3" fill="none" strokeLinecap="round"/>
-           <path d={pose==="slash"?"M31,41 Q43,37 51,43":"M32,42 Q43,38 52,44"} stroke={hairB} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-           <path d={pose==="slash"?"M69,43 Q77,37 89,41":"M68,44 Q77,38 88,42"} stroke={hairB} strokeWidth="3.5" fill="none" strokeLinecap="round"/>
-         </>}
-      {/* nose */}
-      {!isTrip&&<path d="M60,70 Q57.5,74 60.5,74.5" stroke="#D2916B" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity="0.75"/>}
-      {/* mouth */}
-      {isTrip
-        ?<ellipse cx="60" cy="83" rx="5" ry="6" fill="#7A2523"/>
-        :pose==="slash"
-          ?<><path d="M50,80 Q60,93 70,80 Q60,85 50,80 Z" fill="#7A2523"/><path d="M53,83 Q60,89 67,83 Z" fill="#E8636B"/><path d="M50,80 Q60,83 70,80" stroke="#fff" strokeWidth="1.5" fill="none" opacity="0.6"/></>
-          :<path d="M52,81 Q60,88 68,81" stroke="#B23A2E" strokeWidth="2.5" fill="none" strokeLinecap="round"/>}
-      {/* hair front */}
-      {isGirl
-        ?<><path d="M14,54 Q10,14 60,10 Q110,14 106,54 Q101,28 82,23 Q91,41 80,45 L71,27 Q66,42 60,45 Q54,42 49,27 L40,45 Q29,41 38,23 Q19,28 14,54 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
-           <path d="M30,30 Q42,19 58,21" stroke="#fff" strokeWidth="3" opacity="0.28" fill="none" strokeLinecap="round"/>
-           <path d="M66,22 Q80,25 90,36" stroke="#fff" strokeWidth="2.5" opacity="0.22" fill="none" strokeLinecap="round"/></>
-        :<><path d="M16,52 Q12,16 32,13 L28,31 L41,9 L45,29 L57,6 L61,28 L75,8 L77,29 L90,14 L87,33 Q106,21 104,52 Q95,31 76,29 Q60,27 44,29 Q25,31 16,52 Z" fill={`url(#chHair_${u})`} stroke={hairB} strokeWidth="1.5"/>
-           <path d="M40,20 L44,31 M57,13 L59,29 M73,17 L71,30" stroke="#fff" strokeWidth="2" opacity="0.22" strokeLinecap="round"/></>}
-      {/* boy headband */}
-      {!isGirl&&<><rect x="14" y="41" width="92" height="10" rx="5" fill={accent}/><rect x="14" y="41" width="92" height="3" rx="1.5" fill="#fff" opacity="0.4"/></>}
-      {/* girl bows at tails + top */}
-      {isGirl&&[[20,54],[100,54]].map(([bx,by],i)=><g key={i}>
-        <path d={`M${bx},${by} l-11,-6 l0,12 Z`} fill={accent} stroke={hairB} strokeWidth="1"/>
-        <path d={`M${bx},${by} l11,-6 l0,12 Z`} fill={accent} stroke={hairB} strokeWidth="1"/>
-        <circle cx={bx} cy={by} r="4" fill={dark}/></g>)}
-      {/* front slash arm + energy blade */}
-      {pose==="slash"&&<g>
-        <animateTransform attributeName="transform" type="rotate" values="48 40 104;-66 40 104;48 40 104" dur="0.5s" repeatCount="indefinite"/>
-        <rect x="34" y="76" width="12" height="32" rx="6" fill={`url(#chSkin_${u})`}/>
-        <g transform="translate(40,74) scale(0.52)"><ElementBlade element={element} accent={accent} dark={dark}/></g>
-      </g>}
-      {/* trip: flailing front arm + sweat */}
-      {isTrip&&<><rect x="24" y="96" width="12" height="30" rx="6" fill={`url(#chSkin_${u})`} transform="rotate(-40 30 100)"/>
-        <ellipse cx="30" cy="40" rx="6" ry="9" fill="#5AC8FA" opacity="0.9" style={{animation:"sweatFall 0.9s ease-in forwards"}}/></>}
-      {/* draw stance: element blade held across, ready to unsheathe */}
-      {pose==="draw"&&<g transform="rotate(-11 60 104)">
-        <g transform="translate(84,105) rotate(-90) scale(0.52)"><ElementBlade element={element} accent={accent} dark={dark}/></g>
-        <rect x="62" y="98.5" width="11" height="11" rx="5.5" fill={`url(#chSkin_${u})`}/>
-        <rect x="76" y="98.5" width="11" height="11" rx="5.5" fill={`url(#chSkin_${u})`}/>
-      </g>}
-    </g>
-  </svg>);};
-
-/* ═══ ELEMENTAL BLADE (energy weapon, shape varies by element) ═══ */
-/* Authored vertical: grip near y=0, blade tip toward y=-len. */
-const ElementBlade=({element,accent,dark})=>{
-  let blade;
-  if(element==="yellow"){/* lightning — jagged bolt */
-    blade=<path d="M0,2 L-8,-22 L5,-38 L-7,-62 L6,-82 L-4,-104 L3,-126 L9,-100 L-2,-80 L8,-58 L-3,-36 L9,-20 L4,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
-  }else if(element==="blue"){/* water — crescent curve */
-    blade=<path d="M-5,2 Q-26,-60 3,-128 Q13,-64 7,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
-  }else if(element==="green"){/* wind — slim glaive */
-    blade=<path d="M-4,2 L-6,-72 Q-3,-126 5,-130 Q11,-72 6,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
-  }else{/* fire — wavy flame blade */
-    blade=<path d="M-6,2 Q-11,-28 -3,-50 Q-12,-74 -2,-96 Q-9,-114 3,-130 Q12,-108 5,-86 Q13,-62 4,-44 Q11,-22 6,2 Z" fill={accent} stroke="#fff" strokeWidth="1.2"/>;
-  }
-  return(<g style={{filter:`drop-shadow(0 0 7px ${accent}) drop-shadow(0 0 15px ${accent}aa)`}}>
-    {blade}
-    <rect x="-3.5" y="0" width="7" height="20" rx="3" fill={dark}/>
-    <rect x="-10" y="-3" width="20" height="6" rx="3" fill={dark}/>
-    <rect x="-1.5" y="-118" width="3" height="112" rx="1.5" fill="#fff" opacity="0.55"/>
-  </g>);
-};
-
-/* ═══ ORNATE FRAME (gold filigree border, manhwa cover style) ═══ */
-const OrnateFrame=({accent})=>(
-  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{position:"absolute",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:6}}>
-    <defs><linearGradient id="ornGold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stopColor="#FFF3C4"/><stop offset="45%" stopColor="#E6B23A"/><stop offset="100%" stopColor="#9A6B12"/></linearGradient></defs>
-    <rect x="2.2" y="3" width="95.6" height="94" rx="1.2" fill="none" stroke="url(#ornGold)" strokeWidth="1.4"/>
-    <rect x="4" y="5" width="92" height="90" rx="0.8" fill="none" stroke="url(#ornGold)" strokeWidth="0.5" opacity="0.8"/>
-    {/* corner flourishes */}
-    {[[0,0,1,1],[100,0,-1,1],[0,100,1,-1],[100,100,-1,-1]].map(([cx,cy,sx,sy],i)=>(
-      <g key={i} transform={`translate(${cx} ${cy}) scale(${sx} ${sy})`} fill="url(#ornGold)">
-        <path d="M2.2,14 Q2.2,2.2 14,2.2 L22,2.2 Q9,3 5,9 Q3,13 2.2,22 Z" opacity="0.95"/>
-        <path d="M6,7 Q13,4 20,4.5 Q13,6.5 8.5,11 Q5.5,15 5,20 Q4.5,13 6,7 Z" opacity="0.9"/>
-        <circle cx="4.4" cy="4.4" r="1.5"/>
-      </g>))}
-  </svg>
-);
 
 /* ═══ +2 PENALTY — cards fan in the air then fly to the penalized player ═══ */
 const FLY_DIR={
@@ -1188,7 +1042,6 @@ const ChibiAttackFX=({element,victimName,count,toSelf,dir,onDone})=>{
     return()=>{clearTimeout(t1);clearTimeout(t2);};
   },[]);
   const em0=EM(element);const em={...em0,glow:ART_GLOW[element]||em0.glow,c3:ART_DARK[element]||em0.c3};
-  const gen=ELEM_GENDER[element]||"boy";const posX=artPosX(element);
   const rays=useMemo(()=>Array.from({length:22},(_,i)=>({id:i,a:(i/22)*360})),[element]);
   const vlines=useMemo(()=>Array.from({length:26},(_,i)=>({id:i,x:(i/26)*100,d:Math.random()*0.3,w:1+Math.random()*2})),[element]);
   const dust=useMemo(()=>Array.from({length:16},(_,i)=>({id:i,a:Math.random()*Math.PI*2,r:60+Math.random()*140,d:Math.random()*0.25,s:7+Math.random()*15})),[element]);
