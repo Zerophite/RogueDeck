@@ -30,7 +30,7 @@ const EMOTES=[
 const MUSIC_URL=import.meta.env.BASE_URL+"music/";
 const GAME_TRACKS=["gameplay1.mp3","gameplay2.mp3"];
 class BGMusic{
-  constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;}
+  constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;this.pool=[];}
   init(){}
   _fade(a,to,ms=1400,done){
     if(!a)return;a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
@@ -41,23 +41,27 @@ class BGMusic{
       if(p<1)requestAnimationFrame(tick);else if(done)done();};
     requestAnimationFrame(tick);}
   _fadeOut(a){if(a)this._fade(a,0,1600,()=>{try{a.pause();}catch(e){}});}
+  /* Fade out every track except the current one so no orphaned audio keeps playing. */
+  _fadeOthers(){this.pool.forEach(a=>{if(a!==this.audio){a.onended=null;this._fadeOut(a);}});
+    this.pool=this.audio?[this.audio]:[];}
   _pickGame(){const opts=GAME_TRACKS.filter(t=>t!==this.lastGame);
     const pool=opts.length?opts:GAME_TRACKS;const t=pool[Math.floor(Math.random()*pool.length)];this.lastGame=t;return t;}
   _spawn(src,loop,onended){
     const a=new Audio(MUSIC_URL+src);a.loop=loop;a.preload="auto";a.volume=0;
-    if(onended)a.onended=onended;
+    if(onended)a.onended=onended;this.pool.push(a);
     a.play().then(()=>{if(a===this.audio)this._fade(a,this.vol,1600);}).catch(()=>{});
     return a;}
   _startMode(mode){
-    const old=this.audio;this.mode=mode;this.playing=true;
+    this.mode=mode;this.playing=true;
     if(mode==="game"){
       const play=()=>{this.audio=this._spawn(this._pickGame(),false,()=>{if(this.playing&&this.mode==="game")play();});};
       play();
     }else this.audio=this._spawn("menu.mp3",true,null);
-    this._fadeOut(old);}
+    this._fadeOthers();}
   start(mode="menu"){if(this.playing&&this.mode===mode)return;this._startMode(mode);}
   setMode(mode){if(!this.playing||this.mode===mode)return;this._startMode(mode);}
-  stop(){this.playing=false;const a=this.audio;this.audio=null;this._fadeOut(a);}
+  stop(){this.playing=false;this.audio=null;
+    this.pool.forEach(a=>{a.onended=null;this._fadeOut(a);});this.pool=[];}
   toggle(mode="menu"){if(this.playing){this.stop();return false;}this._startMode(mode);return true;}
 }
 const bgm=new BGMusic();
@@ -2251,7 +2255,8 @@ export default function UnoGame(){
   const callUno=async()=>{if(!(g.calledUno||{})[pid]){
     await wgs({calledUno:{...(g.calledUno||{}),[pid]:true},message:(rd.players[pid]?.name)+" called UNO!"});
     setLMsg("UNO!");setTimeout(()=>setLMsg(""),1200);}};
-  const leave=async()=>{bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
+  const leave=async(e)=>{if(e&&e.stopPropagation)e.stopPropagation();
+    bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
     else await remove(ref(db,"rooms/"+rc+"/players/"+pid));setRc("");setRd(null);setScr("menu");};
   const restart=async()=>{if(!isHost)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);await update(ref(db,"rooms/"+rc),{status:"waiting",game:null});setScr("lobby");};
   const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");setMus(on);};
