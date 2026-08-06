@@ -1741,13 +1741,14 @@ export default function UnoGame(){
     const psl=g?.pendingSlash;
     if(psl&&psl.ts&&psl.ts!==slashRef.current){
       slashRef.current=psl.ts;
-      ps("penalty");
       if(psl.type==="wild4"){
         setChibiAttackFx({element:psl.element||"green",victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid});
-        const t=setTimeout(()=>trigShake(),SLASH_DELAY);
+        const t=setTimeout(()=>{trigShake();ps("penalty");},SLASH_DELAY);
         return()=>clearTimeout(t);
       }else{
         setCardFlyFx({element:psl.element||"yellow",count:psl.count||2,toSelf:psl.victim===pid});
+        const t=setTimeout(()=>ps("penalty"),DRAW2_DELAY);
+        return()=>clearTimeout(t);
       }
     }
   },[g?.pendingSlash,ps,trigShake,pid]);
@@ -2126,18 +2127,23 @@ export default function UnoGame(){
   const respondChallenge=useCallback(async(doChallenge)=>{
     if(!g||!challenge)return;setChallenge(null);
     const pc=g.pendingChallenge;if(!pc)return;
-    const nh={...g.hands};let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];let m="";
-    const ensureCards=count=>{if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
-      return ndp.splice(0,Math.min(count,ndp.length));};
-    if(doChallenge){ps("challenge");trigShake();
-      if(pc.hadMatchingColor){const dr=ensureCards(4);nh[pc.player]=[...(nh[pc.player]||[]),...dr];
-        m=(rd.players[pid]?.name)+" challenged! "+(rd.players[pc.player]?.name)+" was GUILTY! Draws 4!";trigBurst("red");}
-      else{const dr=ensureCards(6);nh[pid]=[...(nh[pid]||[]),...dr];
-        m=(rd.players[pid]?.name)+" challenged! "+(rd.players[pc.player]?.name)+" was INNOCENT! "+(rd.players[pid]?.name)+" draws 6!";ps("penalty");trigBurst("blue");}
-    }else{const dr=ensureCards(4);nh[pid]=[...(nh[pid]||[]),...dr];m=(rd.players[pid]?.name)+" accepts. Draws 4!";ps("draw4");}
-    await wgs({hands:nh,drawPile:ndp,discardPile:nd,currentPlayer:np(pid,g.direction),
-      message:m,pendingChallenge:null,turnTimestamp:Date.now()});
-  },[g,challenge,pid,np,wgs,rd,ps,trigShake,trigBurst]);
+    const element=g.currentColor||"green";
+    let victimId,count,m;
+    if(doChallenge){
+      if(pc.hadMatchingColor){victimId=pc.player;count=4;m=(rd.players[pid]?.name)+" challenged! "+(rd.players[pc.player]?.name)+" was GUILTY! Draws 4!";}
+      else{victimId=pid;count=6;m=(rd.players[pid]?.name)+" challenged! "+(rd.players[pc.player]?.name)+" was INNOCENT! "+(rd.players[pid]?.name)+" draws 6!";}
+    }else{victimId=pid;count=4;m=(rd.players[pid]?.name)+" accepts. Draws 4!";}
+    // Play the element penalty cinematic FIRST, then deliver the cards synced to its finish.
+    await wgs({pendingChallenge:null,pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:"wild4",count,ts:Date.now()}});
+    setTimeout(async()=>{
+      let cg=g;try{const snap=await get(ref(db,"rooms/"+rc+"/game"));if(snap.exists())cg=snap.val();}catch(e){}
+      const nh={...cg.hands};let ndp=[...(cg.drawPile||[])];const nd=[...(cg.discardPile||[])];
+      if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
+      const dr=ndp.splice(0,Math.min(count,ndp.length));
+      nh[victimId]=[...(nh[victimId]||[]),...dr];
+      await wgs({hands:nh,drawPile:ndp,discardPile:nd,currentPlayer:np(pid,g.direction),message:m,pendingSlash:null,turnTimestamp:Date.now()});
+    },SLASH_DELAY);
+  },[g,challenge,pid,np,wgs,rd,rc]);
 
   const doDraw=useCallback(async()=>{
     if(pickDr&&isAdm){setShowDk(true);return;}
