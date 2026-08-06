@@ -26,118 +26,39 @@ const EMOTES=[
   {id:"laughing",gif:"laughing.gif",sound:"laughing.mp3",label:"Haha",vol:1.0},
 ];
 
-/* ══ BACKGROUND MUSIC (Web Audio - upbeat funky bossa) ══ */
+/* ══ BACKGROUND MUSIC (streamed MP3 tracks: menu + two gameplay tracks) ══ */
+const MUSIC_URL=import.meta.env.BASE_URL+"music/";
+const GAME_TRACKS=["gameplay1.mp3","gameplay2.mp3"];
 class BGMusic{
-  constructor(){this.ctx=null;this.playing=false;this.master=null;this.timer=null;this.vol=0.2;this.bar=0;}
-  init(ctx){this.ctx=ctx;}
-  _pad(freqs,t,dur){
-    if(!this.ctx||!this.master)return;
-    freqs.forEach(freq=>{
-      const o1=this.ctx.createOscillator();const o2=this.ctx.createOscillator();
-      o1.type="triangle";o2.type="sine";
-      o1.frequency.value=freq;o2.frequency.value=freq*1.002;
-      const f=this.ctx.createBiquadFilter();f.type="lowpass";f.frequency.value=900;f.Q.value=1;
-      const g=this.ctx.createGain();
-      g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.018,t+0.5);
-      g.gain.setValueAtTime(0.015,t+dur-0.8);g.gain.linearRampToValueAtTime(0,t+dur);
-      o1.connect(f);o2.connect(f);f.connect(g);g.connect(this.master);
-      o1.start(t);o2.start(t);o1.stop(t+dur+0.1);o2.stop(t+dur+0.1);});}
-  _wBass(notes,t,bpm){
-    if(!this.ctx||!this.master)return;
-    const step=60/bpm;
-    notes.forEach((freq,i)=>{
-      const o=this.ctx.createOscillator();o.type="sine";o.frequency.value=freq;
-      const o2=this.ctx.createOscillator();o2.type="triangle";o2.frequency.value=freq;
-      const f=this.ctx.createBiquadFilter();f.type="lowpass";f.frequency.value=500;
-      const g=this.ctx.createGain();const nt=t+i*step;
-      g.gain.setValueAtTime(0,nt);g.gain.linearRampToValueAtTime(0.065,nt+0.02);
-      g.gain.setValueAtTime(0.055,nt+step*0.6);g.gain.linearRampToValueAtTime(0,nt+step*0.9);
-      o.connect(f);o2.connect(f);f.connect(g);g.connect(this.master);
-      o.start(nt);o2.start(nt);o.stop(nt+step+0.05);o2.stop(nt+step+0.05);});}
-  _pluck(freq,t,dur){
-    if(!this.ctx||!this.master)return;
-    const o=this.ctx.createOscillator();o.type="triangle";o.frequency.value=freq;
-    const o2=this.ctx.createOscillator();o2.type="sine";o2.frequency.value=freq*2;
-    const g=this.ctx.createGain();const g2=this.ctx.createGain();
-    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(0.035,t+0.005);g.gain.exponentialRampToValueAtTime(0.003,t+dur);
-    g2.gain.setValueAtTime(0,t);g2.gain.linearRampToValueAtTime(0.015,t+0.005);g2.gain.exponentialRampToValueAtTime(0.001,t+dur*0.5);
-    o.connect(g);o2.connect(g2);g.connect(this.master);g2.connect(this.master);
-    o.start(t);o2.start(t);o.stop(t+dur+0.05);o2.stop(t+dur+0.05);}
-  _hat(t,open){
-    if(!this.ctx||!this.master)return;
-    const len=open?0.08:0.03;const vol=open?0.035:0.028;
-    const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*len,this.ctx.sampleRate);
-    const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(d.length*(open?0.1:0.03)));
-    const b=this.ctx.createBufferSource();b.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type="highpass";f.frequency.value=open?4000:7000;
-    const g=this.ctx.createGain();g.gain.value=vol;
-    b.connect(f);f.connect(g);g.connect(this.master);b.start(t);}
-  _kick(t){
-    if(!this.ctx||!this.master)return;
-    const o=this.ctx.createOscillator();o.type="sine";
-    o.frequency.setValueAtTime(110,t);o.frequency.exponentialRampToValueAtTime(40,t+0.08);
-    const g=this.ctx.createGain();g.gain.setValueAtTime(0.06,t);g.gain.exponentialRampToValueAtTime(0.001,t+0.15);
-    o.connect(g);g.connect(this.master);o.start(t);o.stop(t+0.18);}
-  _snap(t){
-    if(!this.ctx||!this.master)return;
-    const buf=this.ctx.createBuffer(1,this.ctx.sampleRate*0.015,this.ctx.sampleRate);
-    const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(d.length*0.015));
-    const b=this.ctx.createBufferSource();b.buffer=buf;
-    const f=this.ctx.createBiquadFilter();f.type="bandpass";f.frequency.value=4500;f.Q.value=5;
-    const g=this.ctx.createGain();g.gain.value=0.05;
-    b.connect(f);f.connect(g);g.connect(this.master);b.start(t);}
-  _playLoop(){
-    if(!this.playing||!this.ctx)return;
-    const bpm=this.bpm;const step=60/bpm;const bd=step*8;const tr=this.transpose;
-    const t=this.ctx.currentTime+0.05;
-    const prog=this.progs[this.bar%this.progs.length];
-    this._pad(prog.pad.map(f=>f*tr),t,bd+0.6);
-    this._wBass(prog.bass.map(f=>f*tr),t,bpm);
-    prog.pl.forEach((notes,ci)=>{const ct=t+ci*step*2;
-      notes.forEach((f,fi)=>this._pluck(f*tr,ct+fi*step*0.5+(Math.random()*0.008),step*1.5));});
-    const bossa=[1,0,1,0,0,1,0,1,0,0,1,0,1,0,0,1];
-    for(let b=0;b<8;b++){
-      const bt=t+b*step;
-      if(this.groove===0){/* bossa */
-        this._hat(bt,b%4===0);
-        if(b%4===2)this._snap(bt);
-        if(bossa[b*2%16])this._kick(bt);
-        if(bossa[(b*2+1)%16])this._hat(bt+step*0.5,false);
-      }else{/* straight backbeat */
-        this._hat(bt,b%4===0);this._hat(bt+step*0.5,false);
-        if(b%2===0)this._kick(bt);
-        if(b%4===2)this._snap(bt);}}
-    this.bar++;
-    this.timer=setTimeout(()=>this._playLoop(),(bd-0.15)*1000);}
-  start(){
-    if(this.playing||!this.ctx)return;
-    if(this.ctx.state==="suspended")this.ctx.resume();
-    this.playing=true;this.bar=0;
-    /* pick a random happy song each game: progression set + key + tempo + groove */
-    const sets=[
-      [{pad:[261.63,329.63,392],bass:[65.41,82.41,98,82.41,65.41,98,82.41,65.41],pl:[[523,659],[392,523],[440,659],[523,784]]},
-       {pad:[293.66,349.23,440],bass:[73.42,87.31,98,110,98,87.31,73.42,98],pl:[[587,784],[440,587],[523,659],[587,880]]},
-       {pad:[349.23,440,523],bass:[87.31,110,130.81,110,87.31,130.81,110,87.31],pl:[[698,880],[523,698],[587,784],[698,1047]]},
-       {pad:[329.63,392,493.88],bass:[82.41,98,110,130.81,110,98,82.41,110],pl:[[659,880],[493,659],[523,784],[659,987]]}],
-      [{pad:[261.63,329.63,392],bass:[65.41,98,65.41,82.41,65.41,98,82.41,98],pl:[[523,659],[659,784],[523,659],[784,988]]},
-       {pad:[392,493.88,587.33],bass:[98,73.42,98,146.83,98,123.47,98,73.42],pl:[[587,784],[784,988],[587,784],[988,784]]},
-       {pad:[261.63,329.63,440],bass:[55,82.41,110,82.41,55,110,82.41,55],pl:[[440,659],[523,659],[440,523],[659,880]]},
-       {pad:[349.23,440,523.25],bass:[87.31,130.81,87.31,110,87.31,130.81,110,87.31],pl:[[523,698],[698,880],[523,698],[880,1047]]}],
-      [{pad:[293.66,349.23,440],bass:[73.42,110,73.42,87.31,73.42,110,87.31,110],pl:[[587,698],[698,880],[587,698],[880,698]]},
-       {pad:[392,493.88,587.33],bass:[98,146.83,98,123.47,98,146.83,123.47,98],pl:[[784,988],[587,784],[698,880],[988,784]]},
-       {pad:[261.63,329.63,392],bass:[65.41,98,130.81,98,65.41,130.81,98,65.41],pl:[[523,659],[784,659],[523,659],[784,1047]]},
-       {pad:[261.63,329.63,440],bass:[55,82.41,110,82.41,55,110,82.41,55],pl:[[440,659],[523,659],[440,523],[659,880]]}]];
-    this.progs=sets[Math.floor(Math.random()*sets.length)];
-    this.bpm=100+Math.floor(Math.random()*30);
-    this.transpose=Math.pow(2,(Math.floor(Math.random()*8)-3)/12);
-    this.groove=Math.random()<0.5?0:1;
-    this.master=this.ctx.createGain();this.master.gain.setValueAtTime(0,this.ctx.currentTime);
-    this.master.gain.linearRampToValueAtTime(this.vol,this.ctx.currentTime+2.5);
-    this.master.connect(this.ctx.destination);this._playLoop();}
-  stop(){this.playing=false;if(this.timer){clearTimeout(this.timer);this.timer=null;}
-    if(this.master&&this.ctx){try{this.master.gain.linearRampToValueAtTime(0,this.ctx.currentTime+1);}catch(e){}
-      setTimeout(()=>{try{this.master?.disconnect();}catch(e){}this.master=null;},1500);}}
-  toggle(){if(this.playing){this.stop();return false;}this.start();return true;}
+  constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;}
+  init(){}
+  _fade(a,to,ms=1400,done){
+    if(!a)return;a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
+    const from=a.volume,start=performance.now();
+    const tick=()=>{if(a._fadeId!==id)return;
+      const p=Math.min(1,(performance.now()-start)/ms);
+      a.volume=Math.max(0,Math.min(1,from+(to-from)*p));
+      if(p<1)requestAnimationFrame(tick);else if(done)done();};
+    requestAnimationFrame(tick);}
+  _fadeOut(a){if(a)this._fade(a,0,1600,()=>{try{a.pause();}catch(e){}});}
+  _pickGame(){const opts=GAME_TRACKS.filter(t=>t!==this.lastGame);
+    const pool=opts.length?opts:GAME_TRACKS;const t=pool[Math.floor(Math.random()*pool.length)];this.lastGame=t;return t;}
+  _spawn(src,loop,onended){
+    const a=new Audio(MUSIC_URL+src);a.loop=loop;a.preload="auto";a.volume=0;
+    if(onended)a.onended=onended;
+    a.play().then(()=>{if(a===this.audio)this._fade(a,this.vol,1600);}).catch(()=>{});
+    return a;}
+  _startMode(mode){
+    const old=this.audio;this.mode=mode;this.playing=true;
+    if(mode==="game"){
+      const play=()=>{this.audio=this._spawn(this._pickGame(),false,()=>{if(this.playing&&this.mode==="game")play();});};
+      play();
+    }else this.audio=this._spawn("menu.mp3",true,null);
+    this._fadeOut(old);}
+  start(mode="menu"){if(this.playing&&this.mode===mode)return;this._startMode(mode);}
+  setMode(mode){if(!this.playing||this.mode===mode)return;this._startMode(mode);}
+  stop(){this.playing=false;const a=this.audio;this.audio=null;this._fadeOut(a);}
+  toggle(mode="menu"){if(this.playing){this.stop();return false;}this._startMode(mode);return true;}
 }
 const bgm=new BGMusic();
 
@@ -2026,7 +1947,9 @@ export default function UnoGame(){
 
   const trigA=()=>{setCAn("cFly 0.6s cubic-bezier(.22,1,.36,1)");setTimeout(()=>setCAn(null),600);};
 
-  const startMusic=useCallback(()=>{ua();if(!bgm.playing){bgm.start();setMus(true);}},[]);
+  const startMusic=useCallback(()=>{ua();if(!bgm.playing){bgm.start("menu");setMus(true);}},[]);
+  // Swap between menu track and gameplay tracks as the screen changes.
+  useEffect(()=>{if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus]);
 
   const restoreAccount=async()=>{
     const id=restoreId.trim().toLowerCase();
@@ -2331,7 +2254,7 @@ export default function UnoGame(){
   const leave=async()=>{bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
     else await remove(ref(db,"rooms/"+rc+"/players/"+pid));setRc("");setRd(null);setScr("menu");};
   const restart=async()=>{if(!isHost)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);await update(ref(db,"rooms/"+rc),{status:"waiting",game:null});setScr("lobby");};
-  const toggleMusic=()=>{ua();const on=bgm.toggle();setMus(on);};
+  const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");setMus(on);};
 
   const shakeStyle=screenShake?{animation:"screenShake 0.4s ease-out"}:{};
   const gcHex=g?.currentColor?CH[g.currentColor]:"#FF6F00";
@@ -2824,7 +2747,7 @@ export default function UnoGame(){
       transition:"background 1s ease",
       boxShadow:myTurn&&!g.winner?`inset 0 0 30px ${gcHex}30,inset 0 0 80px ${gcHex}10`:"none",
       borderTop:myTurn&&!g.winner?`3px solid ${gcHex}66`:"3px solid transparent",
-      ...shakeStyle}} onClick={()=>{ua();if(mus&&!bgm.playing)bgm.start();}}>
+      ...shakeStyle}} onClick={()=>{ua();if(mus&&!bgm.playing)bgm.start("game");}}>
       <CanvasBG screen="game" currentColor={g.currentColor}/>
       {lightningColor&&<LightningFX color={lightningColor} onDone={()=>setLightningColor(null)}/>}
       {impactColor&&<AnimeImpact color={impactColor} onDone={()=>setImpactColor(null)}/>}
