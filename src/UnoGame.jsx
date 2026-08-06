@@ -20,6 +20,11 @@ const ADMIN_PASS="admin123";
 const TURN_TIME=15;
 const ROUND_TIME=180;
 const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:10};
+const EMOTE_URL=import.meta.env.BASE_URL+"emotes/";
+const EMOTES=[
+  {id:"angry",gif:"angry.gif",sound:"angry.mp3",label:"Angry",vol:4.0},
+  {id:"laughing",gif:"laughing.gif",sound:"laughing.mp3",label:"Haha",vol:1.5},
+];
 
 /* ══ BACKGROUND MUSIC (Web Audio - upbeat funky bossa) ══ */
 class BGMusic{
@@ -201,6 +206,14 @@ class AnimeSFX{
     this._thunder(t+0.06);this._thunder(t+0.2);
     for(let i=0;i<4;i++){this._osc(5000+i*1000,"sine",t+i*0.015,0.03,0.12);}
     this._osc(40,"sine",t+0.1,0.4,0.2);}
+  _emBuf={};_emLoaded=false;
+  loadEmotes(){if(!this.c||this._emLoaded)return;this._emLoaded=true;
+    EMOTES.forEach(e=>{fetch(EMOTE_URL+e.sound).then(r=>r.arrayBuffer()).then(ab=>this.c.decodeAudioData(ab)).then(buf=>{this._emBuf[e.id]=buf;}).catch(()=>{});});}
+  playEmote(id){if(!this.c||!this._emBuf[id])return;
+    const em=EMOTES.find(e=>e.id===id);
+    try{const s=this.c.createBufferSource();s.buffer=this._emBuf[id];
+      const g=this.c.createGain();g.gain.value=em?.vol||3.0;
+      s.connect(g);g.connect(this.c.destination);s.start();}catch(e){}}
   pEl(color){if(!this.c)return;try{const t=this.c.currentTime;
     switch(color){case"red":this._fireEl(t);break;case"blue":this._waterEl(t);break;
       case"green":this._windEl(t);break;case"yellow":this._lightEl(t);break;}}catch(e){}}
@@ -1202,13 +1215,18 @@ const OrnateFrame=({accent})=>(
 );
 
 /* ═══ +2 PENALTY — cards fan in the air then fly to the penalized player ═══ */
-const CardFlyFX=({element,count,toSelf,onDone})=>{
+const FLY_DIR={
+  down:{fy:305,fex:0,fl:"50%",ft:"87%"},
+  up:{fy:-250,fex:0,fl:"50%",ft:"15%"},
+  left:{fy:-60,fex:-340,fl:"12%",ft:"46%"},
+  right:{fy:-60,fex:340,fl:"88%",ft:"46%"}};
+const CardFlyFX=({element,count,toSelf,dir,onDone})=>{
   const doneRef=useRef(onDone);doneRef.current=onDone;
   useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2050);return()=>clearTimeout(t);},[]);
   const em=EM(element);const n=Math.min(count,8);
+  const D=FLY_DIR[dir]||(toSelf?FLY_DIR.down:FLY_DIR.up);
   const cards=useMemo(()=>Array.from({length:n},(_,i)=>({id:i,
     sx:n<=1?0:-84+i*(168/(n-1)),del:i*0.16,rot:-18+Math.random()*36})),[n]);
-  const fy=toSelf?305:-250;
   return(<div style={{position:"fixed",inset:0,zIndex:96,pointerEvents:"none",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
     {/* count badge rising from center */}
     <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",zIndex:2,
@@ -1216,11 +1234,11 @@ const CardFlyFX=({element,count,toSelf,onDone})=>{
       textShadow:`0 0 18px ${em.glow},0 3px 6px rgba(0,0,0,0.6)`,opacity:0,
       animation:"apop 0.5s cubic-bezier(.34,1.56,.64,1) both"}}>+{count}</div>
     {/* landing flash where the cards enter the hand */}
-    <div style={{position:"absolute",left:"50%",top:toSelf?"87%":"15%",transform:"translate(-50%,-50%)",width:170,height:64,borderRadius:"50%",
+    <div style={{position:"absolute",left:D.fl,top:D.ft,transform:"translate(-50%,-50%)",width:170,height:64,borderRadius:"50%",
       background:`radial-gradient(ellipse,${em.glow}dd,transparent 70%)`,mixBlendMode:"screen",opacity:0,
       filter:`blur(1px) drop-shadow(0 0 16px ${em.glow})`,animation:"landFlash 0.6s ease-out 1s both"}}/>
     {cards.map(c=><div key={c.id} style={{position:"absolute",
-      "--fx":`${c.sx}px`,"--fy":`${fy}px`,"--fr":`${c.rot}deg`,
+      "--fx":`${c.sx}px`,"--fy":`${D.fy}px`,"--fex":`${D.fex}px`,"--fr":`${c.rot}deg`,
       animation:`cardLand 1.4s cubic-bezier(.5,0,.32,1) ${c.del}s forwards`}}>
       <div style={{width:42,height:60,borderRadius:7,background:"linear-gradient(150deg,#232838,#0b0f18)",
         border:"1.5px solid rgba(255,215,0,0.5)",boxShadow:`0 6px 18px rgba(0,0,0,0.55),0 0 16px ${em.glow}66`,
@@ -1231,7 +1249,12 @@ const CardFlyFX=({element,count,toSelf,onDone})=>{
 };
 
 /* ═══ +4 PENALTY CINEMATIC — character card → element skill whirls the cards ═══ */
-const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
+const CHIBI_DIR={
+  down:{fy:330,fex:0,fl:"50%",ft:"88%"},
+  up:{fy:-290,fex:0,fl:"50%",ft:"14%"},
+  left:{fy:-70,fex:-360,fl:"12%",ft:"46%"},
+  right:{fy:-70,fex:360,fl:"88%",ft:"46%"}};
+const ChibiAttackFX=({element,victimName,count,toSelf,dir,onDone})=>{
   const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
   useEffect(()=>{
@@ -1312,19 +1335,20 @@ const ChibiAttackFX=({element,victimName,count,toSelf,onDone})=>{
       transformOrigin:"0 0",filter:`drop-shadow(0 0 9px ${em.glow})`,"--la":`${p.a}deg`,"--lr":`${p.r}px`,zIndex:3,
       animation:`leafSpiral 1.05s ease-out ${p.d}s forwards`}}/>)}
     {/* the penalty cards — gather in the element, then fly one-by-one into the victim's hand */}
-    {(()=>{const nC=Math.max(2,Math.min(count||4,8));const fy=toSelf?"330px":"-290px";
+    {(()=>{const nC=Math.max(2,Math.min(count||4,8));
+      const D=CHIBI_DIR[dir]||(toSelf?CHIBI_DIR.down:CHIBI_DIR.up);
       const flashDel=(0.2+(nC-1)*0.18+0.9).toFixed(2);
       return(<>
         {Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*Math.PI*2;
           return(<div key={i} style={{position:"absolute",left:"50%",top:"45%",zIndex:4,
-            "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":fy,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
+            "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":`${D.fy}px`,"--fex":`${D.fex}px`,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
             animation:`penaltyFling 1.55s cubic-bezier(.5,0,.32,1) ${(0.2+i*0.18).toFixed(2)}s both`}}>
             <div style={{width:36,height:52,borderRadius:6,background:CG[element]||em.grad,
               border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 4px 14px rgba(0,0,0,0.55),0 0 15px ${em.glow}aa`,
               display:"flex",alignItems:"center",justifyContent:"center"}}>
               <span style={{fontSize:13,fontWeight:900,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)"}}>+4</span></div>
           </div>);})}
-        <div style={{position:"absolute",left:"50%",top:toSelf?"88%":"14%",transform:"translate(-50%,-50%)",width:180,height:66,borderRadius:"50%",
+        <div style={{position:"absolute",left:D.fl,top:D.ft,transform:"translate(-50%,-50%)",width:180,height:66,borderRadius:"50%",
           background:`radial-gradient(ellipse,${em.glow}dd,transparent 70%)`,mixBlendMode:"screen",opacity:0,zIndex:4,
           filter:`blur(1px) drop-shadow(0 0 18px ${em.glow})`,animation:`landFlash 0.6s ease-out ${flashDel}s both`}}/>
       </>);})()}
@@ -1358,13 +1382,15 @@ const Draw2FX=({color,onDone})=>{
 };
 
 const DiscardAllFX=({color,count,onDone})=>{
-  useEffect(()=>{const t=setTimeout(onDone,3000);return()=>clearTimeout(t);},[onDone]);
+  const nCards=Math.min(Math.max(count,3),9);
+  const total=1000+nCards*260+900;
+  useEffect(()=>{const t=setTimeout(onDone,total);return()=>clearTimeout(t);},[onDone,total]);
   const gc=CH[color]||"#E040FB";
-  const cards=useMemo(()=>Array.from({length:Math.max(count,3)},(_,i)=>({
-    id:i,startX:-140+Math.random()*280,startY:180+Math.random()*40,
-    rot:-25+Math.random()*50,delay:i*0.1})),[count]);
+  const cards=useMemo(()=>Array.from({length:nCards},(_,i)=>({
+    id:i,startX:-150+Math.random()*300,startY:150+Math.random()*70,
+    rot:-25+Math.random()*50,delay:i*0.26})),[nCards]);
   return(<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",
-    display:"flex",alignItems:"center",justifyContent:"center",animation:"af 3s forwards"}}>
+    display:"flex",alignItems:"center",justifyContent:"center",animation:`discardFade ${(total/1000).toFixed(2)}s forwards`}}>
     <div style={{position:"absolute",inset:0,
       background:`radial-gradient(circle at 50% 55%,${gc}44,transparent 60%)`,
       animation:"bgPulse 1s ease-out"}}/>
@@ -1373,7 +1399,7 @@ const DiscardAllFX=({color,count,onDone})=>{
         background:CG[color],border:"2px solid rgba(255,255,255,0.6)",
         boxShadow:`0 4px 20px ${gc}88`,
         transform:`translate(${c.startX}px,${c.startY}px) rotate(${c.rot}deg)`,
-        animation:`discardPull 0.6s cubic-bezier(.22,1,.36,1) ${c.delay}s forwards`,
+        animation:`discardPull 1.05s cubic-bezier(.34,1.1,.5,1) ${c.delay}s forwards`,
         display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{width:"60%",height:"50%",borderRadius:"50%",background:"rgba(255,255,255,0.9)",
           display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1625,6 +1651,8 @@ export default function UnoGame(){
   const[restoreMsg,setRestoreMsg]=useState("");
   const[accounts,setAccounts]=useState(getAccounts());
   const[delAcc,setDelAcc]=useState(null);const[delText,setDelText]=useState("");
+  const[emoteTray,setEmoteTray]=useState(false);const[emoteCD,setEmoteCD]=useState(false);const[activeEmote,setActiveEmote]=useState(null);
+  const prevEmoteTs=useRef(0);
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
@@ -1655,6 +1683,13 @@ export default function UnoGame(){
   const trigImpact=useCallback(c=>{setImpactColor(c);setTimeout(()=>setImpactColor(null),600);},[]);
   const trigLightning=useCallback(c=>{setLightningColor(c);setTimeout(()=>setLightningColor(null),1500);},[]);
 
+  useEffect(()=>{if(sfx.c)sfx.loadEmotes();});
+  const sendEmote=useCallback(async(emoteId)=>{
+    if(emoteCD||!rc)return;setEmoteTray(false);setEmoteCD(true);
+    try{await update(ref(db,"rooms/"+rc+"/game"),{emote:{pid,id:emoteId,ts:Date.now()}});}catch(e){}
+    setTimeout(()=>setEmoteCD(false),3000);
+  },[rc,emoteCD,pid]);
+
   useEffect(()=>{if(!rc)return;const r=ref(db,"rooms/"+rc);
     const u=onValue(r,s=>{const d=s.val();if(d){setRd(d);if(d.settings)setSettings({...DEF_SETTINGS,...d.settings});}else{setRd(null);setScr("menu");setErr("Room closed");}});
     return()=>off(r);},[rc]);
@@ -1662,12 +1697,29 @@ export default function UnoGame(){
   const pls=rd?.players?Object.entries(rd.players).sort((a,b)=>a[1].order-b[1].order):[];
   const po=pls.map(([id])=>id);const isHost=rd?.host===pid;
   const g=rd?.game||null;const myH=g?.hands?.[pid]||[];
+  // Detect newly-arrived cards (draws/penalties) so they can slide in smoothly.
+  const prevHandIds=useRef(new Set());
+  const initialDeal=prevHandIds.current.size===0;
+  const newOrder=useMemo(()=>{const m={};let k=0;
+    myH.forEach(c=>{if(!prevHandIds.current.has(c.id))m[c.id]=k++;});return m;},[myH]);
+  useEffect(()=>{prevHandIds.current=new Set(myH.map(c=>c.id));},[myH]);
   const topC=g?.discardPile?g.discardPile[g.discardPile.length-1]:null;
   const myTurn=g?.currentPlayer===pid;const msg=g?.message||lMsg;
   const drawStack=g?.drawStack||0;
   const drawStackType=g?.drawStackType||null;
   const lastStackTypeRef=useRef(null);
   useEffect(()=>{if(g?.drawStackType)lastStackTypeRef.current=g.drawStackType;},[g?.drawStackType]);
+
+  useEffect(()=>{
+    if(!g?.emote?.ts)return;const e=g.emote;
+    if(e.ts<=prevEmoteTs.current||Date.now()-e.ts>5000)return;
+    prevEmoteTs.current=e.ts;
+    const em=EMOTES.find(x=>x.id===e.id);if(!em)return;
+    const senderName=rd?.players?.[e.pid]?.name||"???";
+    setActiveEmote({...em,senderName,senderId:e.pid,ts:e.ts});
+    if(snd)sfx.playEmote(e.id);
+    setTimeout(()=>setActiveEmote(a=>a?.ts===e.ts?null:a),3000);
+  },[g?.emote,rd?.players,snd]);
 
   useEffect(()=>{
     if(!g||!myTurn||g.winner)return;
@@ -1735,6 +1787,15 @@ export default function UnoGame(){
     setTimeout(()=>{wgs({...drawWrite,pendingSlash:null});},delay);
   },[g,wgs,rd]);
 
+  /* Which screen direction do penalty cards fly toward, from THIS client's view?
+     down=self (bottom hand), left/right=edge opponents, up=top opponents. */
+  const victimDir=useCallback(vid=>{
+    if(vid===pid)return "down";
+    const o=po.filter(id=>id!==pid);
+    if(o.length>2){if(vid===o[0])return "left";if(vid===o[o.length-1])return "right";}
+    return "up";
+  },[po,pid]);
+
   /* Watch pendingSlash → +4 sword cinematic, or +2 card-fly to the victim */
   const slashRef=useRef(null);
   useEffect(()=>{
@@ -1742,11 +1803,11 @@ export default function UnoGame(){
     if(psl&&psl.ts&&psl.ts!==slashRef.current){
       slashRef.current=psl.ts;
       if(psl.type==="wild4"){
-        setChibiAttackFx({element:psl.element||"green",victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid});
+        setChibiAttackFx({element:psl.element||"green",victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
         const t=setTimeout(()=>{trigShake();ps("penalty");},SLASH_DELAY);
         return()=>clearTimeout(t);
       }else{
-        setCardFlyFx({element:psl.element||"yellow",count:psl.count||2,toSelf:psl.victim===pid});
+        setCardFlyFx({element:psl.element||"yellow",count:psl.count||2,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
         const t=setTimeout(()=>ps("penalty"),DRAW2_DELAY);
         return()=>clearTimeout(t);
       }
@@ -2218,7 +2279,7 @@ export default function UnoGame(){
       const nh={...fg.hands};let ndp=[...(fg.drawPile||[])];const nd=[...fg.discardPile];
       if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];}
       nh[targetId]=[...(nh[targetId]||[]),...ndp.splice(0,2)];
-      setCardFlyFx({element:fg.currentColor||"yellow",count:2,toSelf:targetId===pid});
+      setCardFlyFx({element:fg.currentColor||"yellow",count:2,toSelf:targetId===pid,dir:victimDir(targetId)});
       await wgs({hands:nh,drawPile:ndp,message:(rd.players[targetId]?.name)+" caught! UNO penalty +2!",
         calledUno:{...cu,[targetId]:true}});}
   },[g,ps,wgs,rd,trigShake,rc]);
@@ -2771,14 +2832,43 @@ export default function UnoGame(){
       {pickCol&&<CWheel onPick={colPick} onCancel={colCancel}/>}
       {actFx&&<ActFX type={actFx} onDone={()=>setActFx(null)}/>}
       {wild4Fx&&<ElementalW4FX color={wild4Fx} onDone={()=>setWild4Fx(null)}/>}
-      {chibiAttackFx&&<ChibiAttackFX element={chibiAttackFx.element} victimName={chibiAttackFx.victimName} onDone={()=>setChibiAttackFx(null)}/>}
-      {cardFlyFx&&<CardFlyFX element={cardFlyFx.element} count={cardFlyFx.count} toSelf={cardFlyFx.toSelf} onDone={()=>setCardFlyFx(null)}/>}
+      {chibiAttackFx&&<ChibiAttackFX element={chibiAttackFx.element} victimName={chibiAttackFx.victimName} count={chibiAttackFx.count} toSelf={chibiAttackFx.toSelf} dir={chibiAttackFx.dir} onDone={()=>setChibiAttackFx(null)}/>}
+      {cardFlyFx&&<CardFlyFX element={cardFlyFx.element} count={cardFlyFx.count} toSelf={cardFlyFx.toSelf} dir={cardFlyFx.dir} onDone={()=>setCardFlyFx(null)}/>}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
       {reverseFx&&<ReverseFX color={reverseFx} onDone={()=>setReverseFx(null)}/>}
       {skipFx&&<SkipFX color={skipFx} onDone={()=>setSkipFx(null)}/>}
       {unoCallFx&&<UnoCallFX color={unoCallFx} onDone={()=>setUnoCallFx(null)}/>}
       {unoPenaltyFx!==null&&<UnoPenaltyFX victimName={unoPenaltyFx} onDone={()=>setUnoPenaltyFx(null)}/>}
       {discardFx&&<DiscardAllFX color={discardFx.color} count={discardFx.count} onDone={()=>setDiscardFx(null)}/>}
+      {activeEmote&&<div style={{position:"absolute",top:"15%",left:"50%",transform:"translateX(-50%)",zIndex:120,
+        display:"flex",flexDirection:"column",alignItems:"center",gap:6,pointerEvents:"none",
+        animation:"emotePopIn 0.35s cubic-bezier(.34,1.56,.64,1)"}}>
+        <div style={{background:"rgba(0,0,0,0.85)",borderRadius:12,padding:"4px 14px",
+          border:"1px solid rgba(255,215,0,0.25)",backdropFilter:"blur(8px)"}}>
+          <span style={{fontSize:10,color:"#FFD700",fontWeight:700,letterSpacing:1}}>{activeEmote.senderName}</span></div>
+        <img src={EMOTE_URL+activeEmote.gif} alt={activeEmote.id}
+          style={{width:100,height:100,objectFit:"contain",filter:"drop-shadow(0 4px 16px rgba(0,0,0,0.7))",
+            imageRendering:"auto"}}/>
+      </div>}
+      {emoteTray&&!g.winner&&<div onClick={()=>setEmoteTray(false)} style={{position:"absolute",inset:0,zIndex:99}}>
+        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:isLandscape?105:135,left:"50%",transform:"translateX(-50%)",
+          display:"flex",gap:10,padding:"10px 16px",borderRadius:18,
+          background:"rgba(8,16,14,0.92)",border:"1px solid rgba(255,215,0,0.15)",
+          backdropFilter:"blur(12px)",boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
+          animation:"aslide 0.2s ease-out"}}>
+          {EMOTES.map(em=>(
+            <div key={em.id} onClick={()=>{if(!emoteCD)sendEmote(em.id);}}
+              style={{width:60,height:60,borderRadius:14,cursor:emoteCD?"not-allowed":"pointer",
+                background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",
+                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+                opacity:emoteCD?0.3:1,transition:"all 0.2s"}}
+              onPointerEnter={e2=>{if(!emoteCD)e2.currentTarget.style.background="rgba(255,215,0,0.12)";e2.currentTarget.style.transform="scale(1.08)";}}
+              onPointerLeave={e2=>{e2.currentTarget.style.background="rgba(255,255,255,0.04)";e2.currentTarget.style.transform="scale(1)";}}>
+              <img src={EMOTE_URL+em.gif} alt={em.id} style={{width:40,height:40,objectFit:"contain",imageRendering:"auto"}}/>
+              <span style={{fontSize:7,color:"#889",fontWeight:700,letterSpacing:1}}>{em.label}</span>
+            </div>))}
+        </div>
+      </div>}
       {timeoutFx!==null&&<div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",
         pointerEvents:"none",animation:"timeoutFade 2s ease-out forwards"}}>
         <div style={{fontSize:"min(72px, 14vw)",fontWeight:900,fontFamily:"Arial Black",fontStyle:"italic",
@@ -2944,6 +3034,8 @@ export default function UnoGame(){
           <button onClick={()=>setShowLB(!showLB)} style={{padding:"2px 6px",borderRadius:6,border:"none",fontSize:11,cursor:"pointer",
             background:showLB?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:showLB?"#000":"#FFD700",
             transition:"all 0.2s",fontWeight:700}}>🏆</button>
+          {!g.winner&&<button onClick={()=>setEmoteTray(!emoteTray)} style={{background:emoteTray?"rgba(255,215,0,0.9)":"none",border:"none",fontSize:14,cursor:"pointer",
+            opacity:emoteCD?0.3:0.8,padding:"2px 4px",borderRadius:6,transition:"all 0.2s"}}>{"💬"}</button>}
           <button onClick={()=>setSnd(!snd)} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:snd?0.8:0.25,padding:2}}>
             {snd?"🔊":"🔇"}</button>
           <button onClick={e=>{e.stopPropagation();toggleMusic();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:mus?0.8:0.25,padding:2}}>{"🎵"}</button>
@@ -3057,11 +3149,15 @@ export default function UnoGame(){
                   drawStack>0?(drawStackType==="wild4"?card.value==="wild4":(card.value==="draw2"||card.value==="wild4")):canPlay(card,topC,g.currentColor));
                 const cardSz=isLandscape?"md":"lg";
                 const spacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));const xOff=(i-(n-1)/2)*spacing;
+                const no=newOrder[card.id];const isNew=no!==undefined;
+                const anim=isNew?(initialDeal
+                  ?`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`
+                  :`cardReceive 0.66s cubic-bezier(.34,1.35,.5,1) ${no*0.12}s both`):"none";
                 return(<div key={card.id} onClick={()=>{if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,
                     transition:"left 0.28s cubic-bezier(.34,1.56,.64,1),bottom 0.28s ease,transform 0.28s ease",zIndex:isSel?50:i,
-                    animation:`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`,
+                    animation:anim,
                     filter:isSel?"brightness(1.2)":playable?"brightness(1.06)":"none",
                     cursor:(myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)?"pointer":"default"}}>
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
@@ -3109,6 +3205,9 @@ const globalCSS=`
   @keyframes cardDeal{0%{transform:translateY(-40px) scale(0.6) rotateY(90deg);opacity:0}
     40%{transform:translateY(5px) scale(1.05) rotateY(-10deg);opacity:1}
     70%{transform:translateY(-2px) scale(0.98) rotateY(3deg)}100%{transform:translateY(0) scale(1) rotateY(0)}}
+  @keyframes cardReceive{0%{opacity:0;transform:translateY(-40px) scale(0.68) rotate(-4deg)}
+    50%{opacity:1;transform:translateY(6px) scale(1.06) rotate(1deg)}
+    76%{transform:translateY(-2px) scale(0.98)}100%{opacity:1;transform:translateY(0) scale(1) rotate(0)}}
   @keyframes cardDrawPull{0%{transform:translateX(-30px) scale(0.7) rotate(-8deg);opacity:0}
     50%{transform:translateX(5px) scale(1.06) rotate(2deg);opacity:1}100%{transform:translateX(0) scale(1) rotate(0)}}
   @keyframes cardHover3D{0%,100%{transform:perspective(400px) rotateY(0deg) rotateX(0deg)}
@@ -3144,8 +3243,8 @@ const globalCSS=`
   @keyframes cardFlipIn{0%{opacity:0;transform:perspective(700px) rotateY(-78deg) scale(0.82)}55%{opacity:1}100%{opacity:1;transform:perspective(700px) rotateY(0deg) scale(1)}}
   @keyframes cardTitleIn{0%{opacity:0;transform:translateY(10px) scale(0.8)}100%{opacity:1;transform:translateY(0) scale(1)}}
   @keyframes cardFly{0%{opacity:0;transform:translate(var(--fx),-24px) rotate(var(--fr)) scale(0.55)}22%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1)}45%{opacity:1;transform:translate(calc(var(--fx)*0.5),0) rotate(calc(var(--fr)*0.5)) scale(1)}100%{opacity:0;transform:translate(0,var(--fy)) rotate(0) scale(0.5)}}
-  @keyframes cardLand{0%{opacity:0;transform:translate(var(--fx),-46px) rotate(var(--fr)) scale(0.5)}16%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1.06)}68%{opacity:1;transform:translate(calc(var(--fx)*0.35),calc(var(--fy)*0.7)) rotate(calc(var(--fr)*0.35)) scale(0.92)}90%{opacity:1;transform:translate(0,var(--fy)) rotate(0deg) scale(0.72)}100%{opacity:0;transform:translate(0,calc(var(--fy) + 8px)) rotate(0deg) scale(0.62)}}
-  @keyframes penaltyFling{0%{opacity:0;transform:translate(calc(-50% + var(--rx)),calc(-50% + var(--ry))) rotate(var(--fr)) scale(0.4)}13%{opacity:1;transform:translate(calc(-50% + var(--rx)),calc(-50% + var(--ry))) rotate(var(--fr)) scale(1)}40%{opacity:1;transform:translate(-50%,-50%) rotate(0deg) scale(1.14)}74%{opacity:1;transform:translate(-50%,calc(-50% + var(--fy) * 0.78)) rotate(0deg) scale(0.86)}92%{opacity:1;transform:translate(-50%,calc(-50% + var(--fy))) rotate(0deg) scale(0.6)}100%{opacity:0;transform:translate(-50%,calc(-50% + var(--fy) + 10px)) rotate(0deg) scale(0.52)}}
+  @keyframes cardLand{0%{opacity:0;transform:translate(var(--fx),-46px) rotate(var(--fr)) scale(0.5)}16%{opacity:1;transform:translate(var(--fx),0) rotate(var(--fr)) scale(1.06)}68%{opacity:1;transform:translate(calc(var(--fx)*0.35 + var(--fex,0px)*0.6),calc(var(--fy)*0.7)) rotate(calc(var(--fr)*0.35)) scale(0.92)}90%{opacity:1;transform:translate(var(--fex,0px),var(--fy)) rotate(0deg) scale(0.72)}100%{opacity:0;transform:translate(var(--fex,0px),calc(var(--fy) + 8px)) rotate(0deg) scale(0.62)}}
+  @keyframes penaltyFling{0%{opacity:0;transform:translate(calc(-50% + var(--rx)),calc(-50% + var(--ry))) rotate(var(--fr)) scale(0.4)}13%{opacity:1;transform:translate(calc(-50% + var(--rx)),calc(-50% + var(--ry))) rotate(var(--fr)) scale(1)}40%{opacity:1;transform:translate(-50%,-50%) rotate(0deg) scale(1.14)}74%{opacity:1;transform:translate(calc(-50% + var(--fex,0px) * 0.78),calc(-50% + var(--fy) * 0.78)) rotate(0deg) scale(0.86)}92%{opacity:1;transform:translate(calc(-50% + var(--fex,0px)),calc(-50% + var(--fy))) rotate(0deg) scale(0.6)}100%{opacity:0;transform:translate(calc(-50% + var(--fex,0px)),calc(-50% + var(--fy) + 10px)) rotate(0deg) scale(0.52)}}
   @keyframes landFlash{0%{opacity:0;transform:translate(-50%,-50%) scale(0.4)}40%{opacity:0.95;transform:translate(-50%,-50%) scale(1.1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.35)}}
   @keyframes charZoom{0%{transform:scale(1.14)}100%{transform:scale(1)}}
   @keyframes skillErupt{0%{opacity:0;transform:translateX(-50%) scaleY(0.35)}35%{opacity:1}100%{opacity:0.92;transform:translateX(-50%) scaleY(1)}}
@@ -3174,12 +3273,18 @@ const globalCSS=`
   @keyframes spark{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(0);opacity:0}}
   @keyframes ringExpand{0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(3);opacity:0}}
   @keyframes bgPulse{0%{opacity:0}30%{opacity:1}100%{opacity:0.3}}
+  @keyframes emotePopIn{0%{opacity:0;transform:translateX(-50%) scale(0.2) translateY(30px)}
+    50%{opacity:1;transform:translateX(-50%) scale(1.12) translateY(-6px)}
+    100%{opacity:1;transform:translateX(-50%) scale(1) translateY(0)}}
   @keyframes screenShake{0%{transform:translate(0,0)}10%{transform:translate(-4px,2px)}20%{transform:translate(4px,-3px)}35%{transform:translate(-3px,3px)}50%{transform:translate(3px,-1px)}65%{transform:translate(-2px,1px)}80%{transform:translate(1px,-1px)}100%{transform:translate(0,0)}}
   @keyframes timeoutFade{0%{opacity:0;transform:scale(0.8)}15%{opacity:1;transform:scale(1.05)}30%{transform:scale(1)}70%{opacity:0.8}100%{opacity:0;transform:scale(1.1)}}
   @keyframes turnTextFade{0%{opacity:0;transform:scale(0.7)}12%{opacity:1;transform:scale(1.06)}25%{transform:scale(1)}65%{opacity:0.7}100%{opacity:0;transform:scale(1.08)}}
-  @keyframes discardPull{0%{opacity:1}30%{transform:translate(0,0) rotate(0deg) scale(1.1);opacity:1}
-    70%{transform:translate(0,-20px) rotate(360deg) scale(0.6);opacity:0.8}
-    100%{transform:translate(0,-40px) rotate(720deg) scale(0);opacity:0}}
+  @keyframes discardPull{0%{opacity:0}
+    18%{transform:translate(0,0) rotate(0deg) scale(1.14);opacity:1}
+    52%{transform:translate(0,-6px) rotate(0deg) scale(1.06);opacity:1}
+    78%{transform:translate(0,-24px) rotate(360deg) scale(0.55);opacity:0.9}
+    100%{transform:translate(0,-52px) rotate(720deg) scale(0);opacity:0}}
+  @keyframes discardFade{0%{opacity:1}82%{opacity:1}100%{opacity:0;transform:scale(1.04)}}
   @keyframes deckPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
   @keyframes w4bg{0%{opacity:0;transform:scale(0.5)}100%{opacity:1;transform:scale(1)}}
   @keyframes w4ring{0%{transform:rotate(0deg) scale(0.5);opacity:0}20%{opacity:0.8}100%{transform:rotate(360deg) scale(1.5);opacity:0}}
