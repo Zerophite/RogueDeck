@@ -32,6 +32,7 @@ const GAME_TRACKS=["gameplay1.mp3","gameplay2.mp3"];
 class BGMusic{
   constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;this.pool=[];}
   init(){}
+  setVol(v){this.vol=v;if(this.audio)this.audio.volume=v;}
   _fade(a,to,ms=1400,done){
     if(!a)return;a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
     const from=a.volume,start=performance.now();
@@ -68,24 +69,25 @@ const bgm=new BGMusic();
 
 /* ══ ANIME SFX ENGINE (LOUD - matches music volume) ══ */
 class AnimeSFX{
-  constructor(){this.c=null;}
-  init(){if(!this.c)try{this.c=new(window.AudioContext||window.webkitAudioContext)();if(this.c.state==="suspended")this.c.resume();bgm.init(this.c);}catch(e){}}
+  constructor(){this.c=null;this.master=null;this.vol=1;}
+  init(){if(!this.c)try{this.c=new(window.AudioContext||window.webkitAudioContext)();if(this.c.state==="suspended")this.c.resume();this.master=this.c.createGain();this.master.gain.value=this.vol;this.master.connect(this.c.destination);bgm.init(this.c);}catch(e){}}
+  setVol(v){this.vol=v;if(this.master)this.master.gain.value=v;}
   _osc(freq,type,t,dur,vol=0.18){
     const o=this.c.createOscillator();const g=this.c.createGain();o.type=type;o.frequency.value=freq;
     g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
-    o.connect(g);g.connect(this.c.destination);o.start(t);o.stop(t+dur);}
+    o.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur);}
   _bend(freq,endFreq,type,t,dur,vol=0.18){
     const o=this.c.createOscillator();const g=this.c.createGain();o.type=type;
     o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(endFreq,t+dur*0.6);
     const lp=this.c.createBiquadFilter();lp.type="lowpass";lp.frequency.value=3500;lp.Q.value=6;
     g.gain.setValueAtTime(vol,t);g.gain.setValueAtTime(vol*0.8,t+dur*0.3);g.gain.exponentialRampToValueAtTime(0.001,t+dur);
-    o.connect(lp);lp.connect(g);g.connect(this.c.destination);o.start(t);o.stop(t+dur);}
+    o.connect(lp);lp.connect(g);g.connect(this.master);o.start(t);o.stop(t+dur);}
   _noise(t,dur,vol=0.3){
     const buf=this.c.createBuffer(1,this.c.sampleRate*dur,this.c.sampleRate);
     const d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/(d.length*0.12));
     const b=this.c.createBufferSource();b.buffer=buf;const g=this.c.createGain();g.gain.value=vol;
     const f=this.c.createBiquadFilter();f.type="highpass";f.frequency.value=2500;
-    b.connect(f);f.connect(g);g.connect(this.c.destination);b.start(t);}
+    b.connect(f);f.connect(g);g.connect(this.master);b.start(t);}
   _shimmer(baseFreq,t,dur,vol=0.08){for(let i=0;i<5;i++){const f=baseFreq*(1+i*0.5)+Math.random()*100;this._osc(f,"sine",t+i*0.03,dur-i*0.03,vol*(1-i*0.15));}}
   _chime(notes,t,gap=0.08,vol=0.18){notes.forEach((f,i)=>{this._osc(f,"sine",t+i*gap,0.25,vol);this._osc(f*2,"sine",t+i*gap,0.12,vol*0.3);});}
   _thunder(t){
@@ -96,7 +98,7 @@ class AnimeSFX{
     const b=this.c.createBufferSource();b.buffer=buf;
     const f=this.c.createBiquadFilter();f.type="lowpass";f.frequency.value=800;f.Q.value=2;
     const g=this.c.createGain();g.gain.value=0.4;
-    b.connect(f);f.connect(g);g.connect(this.c.destination);b.start(t);
+    b.connect(f);f.connect(g);g.connect(this.master);b.start(t);
     this._bend(80,25,"sine",t,0.5,0.2);this._bend(60,20,"sine",t+0.05,0.4,0.15);}
   _fNoise(t,dur,freq,q,type,vol=0.2){
     const buf=this.c.createBuffer(1,this.c.sampleRate*dur,this.c.sampleRate);
@@ -104,7 +106,7 @@ class AnimeSFX{
     const b=this.c.createBufferSource();b.buffer=buf;const f=this.c.createBiquadFilter();
     f.type=type;f.frequency.value=freq;f.Q.value=q;
     const g=this.c.createGain();g.gain.value=vol;
-    b.connect(f);f.connect(g);g.connect(this.c.destination);b.start(t);}
+    b.connect(f);f.connect(g);g.connect(this.master);b.start(t);}
   _fireEl(t){
     for(let i=0;i<10;i++){const d=i*0.035;this._noise(t+d,0.04+Math.random()*0.03,0.2+Math.random()*0.15);}
     this._fNoise(t,0.5,600,4,"bandpass",0.25);this._fNoise(t+0.1,0.4,1200,3,"bandpass",0.15);
@@ -138,7 +140,7 @@ class AnimeSFX{
     const em=EMOTES.find(e=>e.id===id);
     try{const s=this.c.createBufferSource();s.buffer=this._emBuf[id];
       const g=this.c.createGain();g.gain.value=em?.vol||3.0;
-      s.connect(g);g.connect(this.c.destination);s.start();}catch(e){}}
+      s.connect(g);g.connect(this.master);s.start();}catch(e){}}
   pEl(color){if(!this.c)return;try{const t=this.c.currentTime;
     switch(color){case"red":this._fireEl(t);break;case"blue":this._waterEl(t);break;
       case"green":this._windEl(t);break;case"yellow":this._lightEl(t);break;}}catch(e){}}
@@ -192,6 +194,30 @@ function canPlay(c,top,curCol){if(c.type==="wild")return true;if(c.value==="shad
 const BOT_NAMES=["Marco","Jenny","Kyle23","Riza","Andrei","Sofia_M","Miguel","Hana","Leo","Grace","Tomas","Aria","Noah","Bea","Dexter","Luna","Rafael","Mika","Owen","Cielo","Jash","Nadia","Paolo","Yuki","Ivan","Trish","Cara","Enzo","Maya","Bryan"];
 const randBotName=(used=[])=>{const avail=BOT_NAMES.filter(n=>!used.includes(n));const pool=avail.length?avail:BOT_NAMES;return pool[Math.floor(Math.random()*pool.length)];};
 const isBot=id=>id?.startsWith("bot_");
+
+/* ═══ TOP-3 CROWNS (1=gold/shiny, 2=silver, 3=bronze) ═══ */
+const CROWN_C={
+  1:{a:"#FFF6B0",b:"#FFCF2E",c:"#B8860B",gem:"#FF4D6D",glow:"rgba(255,207,46,0.9)"},
+  2:{a:"#FBFBFE",b:"#C7CFDB",c:"#7A8290",gem:"#7EC8E3",glow:"rgba(199,207,219,0.7)"},
+  3:{a:"#F2B98C",b:"#CE834B",c:"#8B4A2F",gem:"#7BD88F",glow:"rgba(206,131,75,0.7)"}};
+const Crown=({rank,size=18})=>{const c=CROWN_C[rank];if(!c)return null;const id="cr"+rank;
+  return(<svg width={size} height={size} viewBox="0 0 24 26" style={{display:"block",overflow:"visible",
+    filter:`drop-shadow(0 1px 1.5px rgba(0,0,0,0.55))${rank===1?` drop-shadow(0 0 4px ${c.glow})`:""}`}}>
+    <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stopColor={c.a}/><stop offset="50%" stopColor={c.b}/><stop offset="100%" stopColor={c.c}/></linearGradient></defs>
+    <path d="M2.5 8 L7 13.5 L12 5.5 L17 13.5 L21.5 8 L20 19 L4 19 Z" fill={`url(#${id})`} stroke={c.c} strokeWidth="0.9" strokeLinejoin="round"/>
+    <rect x="4" y="18.4" width="16" height="3" rx="1.2" fill={`url(#${id})`} stroke={c.c} strokeWidth="0.7"/>
+    <circle cx="2.5" cy="8" r="1.6" fill={c.gem} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4"/>
+    <circle cx="12" cy="5.5" r="2" fill={c.gem} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4"/>
+    <circle cx="21.5" cy="8" r="1.6" fill={c.gem} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4"/>
+    <path d="M5 15 Q12 16.5 19 15" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
+    <text x="12" y="17.4" textAnchor="middle" fontSize="9.5" fontWeight="900"
+      fontFamily="'Arial Black',Arial,sans-serif" fill={c.c} stroke="#fff" strokeWidth="0.5"
+      style={{paintOrder:"stroke"}}>{rank}</text>
+    {rank===1&&<g style={{transformOrigin:"18px 4px",animation:"crownShine 1.8s ease-in-out infinite"}}>
+      <path d="M18 1 L18.7 3 L20.5 3.4 L18.7 3.8 L18 6 L17.3 3.8 L15.5 3.4 L17.3 3 Z" fill="#FFFDF0"/>
+    </g>}
+  </svg>);};
 function botPickColor(hand){const cnt={red:0,blue:0,green:0,yellow:0};hand.forEach(c=>{if(c.color!=="wild"&&cnt[c.color]!==undefined)cnt[c.color]++;});const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);return best[0][1]>0?best[0][0]:COLORS[Math.floor(Math.random()*4)];}
 function botChooseCard(playable,hand,curColor,intel,nextOppHL){if(intel===0)return playable[Math.floor(Math.random()*playable.length)];const scored=playable.map(c=>{let s=0;if(c.type!=="wild")s+=3;if(c.value==="discardAll")s+=8;if(c.value==="draw2")s+=5;if(c.value==="skip"||c.value==="reverse")s+=4;if(c.value==="snatch")s+=2;if(c.color===curColor)s+=2;if(intel>=2&&nextOppHL<=2){if(c.value==="draw2"||c.value==="wild4")s+=10;if(c.value==="skip")s+=6;}if(c.value==="wild4")s-=2;return{card:c,s};});scored.sort((a,b)=>b.s-a.s);if(intel<=1&&scored.length>1&&Math.random()>0.6)return scored[Math.min(1,scored.length-1)].card;return scored[0].card;}
 function gpid(){let i=localStorage.getItem("uno_pid");if(!i){i=gid();localStorage.setItem("uno_pid",i);}return i;}
@@ -1398,6 +1424,11 @@ export default function UnoGame(){
   const isLandscape=useLandscape();
   const[rd,setRd]=useState(null);const[pickCol,setPickCol]=useState(false);const[pendW,setPendW]=useState(null);
   const[lMsg,setLMsg]=useState("");const[snd,setSnd]=useState(true);const[mus,setMus]=useState(false);
+  const[musVol,setMusVol]=useState(()=>{const v=parseFloat(localStorage.getItem("uno_musvol"));return isNaN(v)?0.32:v;});
+  const[sfxVol,setSfxVol]=useState(()=>{const v=parseFloat(localStorage.getItem("uno_sfxvol"));return isNaN(v)?1:v;});
+  const[showAudio,setShowAudio]=useState(false);
+  useEffect(()=>{bgm.setVol(musVol);localStorage.setItem("uno_musvol",String(musVol));},[musVol]);
+  useEffect(()=>{sfx.setVol(sfxVol);localStorage.setItem("uno_sfxvol",String(sfxVol));},[sfxVol]);
   const[sel,setSel]=useState(-1);const[cAn,setCAn]=useState(null);const[actFx,setActFx]=useState(null);
   const[drawnCard,setDrawnCard]=useState(null);const[hasDrawn,setHasDrawn]=useState(false);
   const[challenge,setChallenge]=useState(null);
@@ -1531,7 +1562,7 @@ export default function UnoGame(){
     else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("skip");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
     else if(m.includes("played")){}
-    if(m.includes("timed out")){const tm=g.message.match(/^(.*?)\s+timed out/i);setTimeoutFx(tm?tm[1]:"");}
+    if(m.includes("timed out")){ps("timeout");const tm=g.message.match(/^(.*?)\s+timed out/i);setTimeoutFx(tm?tm[1]:"");}
   },[g?.message,ps,psE,trigShake,trigBurst,trigImpact,trigLightning,g?.currentColor]);
   useEffect(()=>{if(timeoutFx!==null){const t=setTimeout(()=>setTimeoutFx(null),2000);return()=>clearTimeout(t);}},[timeoutFx]);
 
@@ -1628,7 +1659,7 @@ export default function UnoGame(){
       const winnerId=g.winner;
       try{await update(ref(db,"rooms/"+rc+"/game"),{scored:true});}catch(e){}
       const baseScore=Math.max(20,calcScore(g.hands||{},winnerId));
-      let totalWin=0;
+      let totalWin=0;const deltas={};
       if(!isBot(winnerId)){
         const prev=(await get(ref(db,"leaderboard/"+winnerId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
         const wRank=getRank(prev.totalPoints,prev.gamesPlayed);
@@ -1645,38 +1676,46 @@ export default function UnoGame(){
             award=Math.max(1,Math.round(award*mult));
             beat[oppId]={c:b+1,t:now};
             const newPts=Math.max(0,(op.totalPoints||0)-award);
+            deltas[oppId]=newPts-(op.totalPoints||0); // actual points lost (clamped at 0)
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
               gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now});}
           totalWin+=award;}
+        deltas[winnerId]=totalWin;
         await update(ref(db,"leaderboard/"+winnerId),{name:rd.players[winnerId]?.name||"Player",
           totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:now,since:prev.since||now,beat});
       }else{totalWin=baseScore;}
       const curScores=(await get(ref(db,"rooms/"+rc+"/scores"))).val()||{};
       curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
       await update(ref(db,"rooms/"+rc),{scores:curScores});
-      await update(ref(db,"rooms/"+rc+"/game"),{lastAward:totalWin});
+      await update(ref(db,"rooms/"+rc+"/game"),{lastAward:totalWin,lastDeltas:deltas});
     })();
   },[g?.winner,g?.scored,g?.turnTimestamp,isHost,rc,pls,rd]);
 
   const autoPassRef=useRef(false);
-  useEffect(()=>{if(turnTimer===0&&myTurn&&!g?.winner&&!autoPassRef.current&&!snatchModal){
-    autoPassRef.current=true;ps("timeout");
+  /* HOST-AUTHORITATIVE timeout: only the host resolves a timeout, for whoever's
+     turn it currently is, and always advances the turn. This avoids every client
+     independently enforcing its own timer (which raced and could loop). */
+  useEffect(()=>{
+    if(!isHost||!g||g.winner||!g.currentPlayer||snatchModal)return;
+    if(turnTimer!==0||autoPassRef.current)return;
+    const cur=g.currentPlayer,dir=g.direction;const nm=rd?.players?.[cur]?.name||"Player";
+    autoPassRef.current=true;
     (async()=>{
-      if(drawStack>0){
-        await applyStackDraw(pid,myH,(rd.players[pid]?.name)+" timed out!",np(pid,g.direction));
-        return;
-      } else if(!hasDrawn){
-        const dp=[...(g.drawPile||[])];
-        if(dp.length){const drawn=dp.shift();const nh={...g.hands};nh[pid]=[...myH,drawn];
-          await wgs({hands:nh,drawPile:dp,currentPlayer:np(pid,g.direction),
-            message:(rd.players[pid]?.name)+" timed out",turnTimestamp:Date.now()});}
-        else await wgs({currentPlayer:np(pid,g.direction),message:(rd.players[pid]?.name)+" timed out",turnTimestamp:Date.now()});
-      } else {
-        await wgs({currentPlayer:np(pid,g.direction),message:(rd.players[pid]?.name)+" timed out",turnTimestamp:Date.now()});
-      }
+      try{
+        if((g.drawStack||0)>0){
+          await applyStackDraw(cur,g.hands?.[cur]||[],nm+" timed out!",np(cur,dir));
+          return; // currentPlayer advances after the cinematic → autoPassRef resets
+        }
+        let dp=[...(g.drawPile||[])];const nd=[...g.discardPile];
+        if(dp.length<1){const rs=sh(nd.slice(0,-1));dp=[...dp,...rs];nd.splice(0,nd.length-1);}
+        if(dp.length){const drawn=dp.shift();const nh={...g.hands};nh[cur]=[...(g.hands?.[cur]||[]),drawn];
+          await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(cur,dir),
+            message:nm+" timed out",turnTimestamp:Date.now()});}
+        else await wgs({currentPlayer:np(cur,dir),message:nm+" timed out",turnTimestamp:Date.now()});
+      }catch(e){}
       autoPassRef.current=false;
     })();
-  }},[turnTimer,myTurn,g,drawStack,hasDrawn,pid,myH,np,wgs,rd,ps,snatchModal,applyStackDraw]);
+  },[turnTimer,isHost,g,snatchModal,np,wgs,rd,applyStackDraw]);
   useEffect(()=>{autoPassRef.current=false;},[g?.currentPlayer]);
 
   const autoDrawRef=useRef(false);
@@ -1804,6 +1843,7 @@ export default function UnoGame(){
 
   const trigA=()=>{setCAn("cFly 0.6s cubic-bezier(.22,1,.36,1)");setTimeout(()=>setCAn(null),600);};
 
+  const musUserOff=useRef(false);
   const startMusic=useCallback(()=>{ua();if(!bgm.playing){bgm.start("menu");setMus(true);}},[]);
   // Swap between menu track and gameplay tracks as the screen changes.
   useEffect(()=>{if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus]);
@@ -2112,10 +2152,39 @@ export default function UnoGame(){
     bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
     else await remove(ref(db,"rooms/"+rc+"/players/"+pid));setRc("");setRd(null);setScr("menu");};
   const restart=async()=>{if(!isHost)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);await update(ref(db,"rooms/"+rc),{status:"waiting",game:null});setScr("lobby");};
-  const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");setMus(on);};
+  const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");musUserOff.current=!on;setMus(on);};
 
   const shakeStyle=screenShake?{animation:"screenShake 0.4s ease-out"}:{};
   const gcHex=g?.currentColor?CH[g.currentColor]:"#FF6F00";
+  // Top-3 global players → crown rank (1/2/3) keyed by player id.
+  const crownRank=useMemo(()=>{const m={};globalLB.slice(0,3).forEach((p,i)=>{if(p.id)m[p.id]=i+1;});return m;},[globalLB]);
+
+  /* Audio settings panel — music + sound-fx toggles and volume sliders */
+  const volRow=(icon,label,on,onToggle,vol,setVol,preview)=>(
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+        <span style={{color:"#ddd",fontSize:13,fontWeight:600}}>{icon} {label}</span>
+        <button onClick={onToggle} style={{background:on?"rgba(255,215,0,0.9)":"rgba(255,255,255,0.06)",
+          border:"none",borderRadius:8,padding:"3px 12px",fontSize:10,fontWeight:800,letterSpacing:1,
+          color:on?"#000":"#889",cursor:"pointer",transition:"all 0.2s"}}>{on?"ON":"OFF"}</button>
+      </div>
+      <input type="range" min="0" max="1" step="0.01" value={vol} disabled={!on}
+        onChange={e=>setVol(parseFloat(e.target.value))}
+        onPointerUp={()=>{if(on&&preview)preview();}}
+        style={{width:"100%",accentColor:"#FFD700",opacity:on?1:0.35,cursor:on?"pointer":"default"}}/>
+    </div>
+  );
+  const audioModal=showAudio&&(
+    <div onClick={()=>setShowAudio(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:400,
+      display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(5px)",animation:"fadeIn 0.2s"}}>
+      <div onClick={e=>e.stopPropagation()} style={{...GLASS,width:"min(88vw,330px)",padding:"22px 22px 24px",position:"relative"}}>
+        <button onClick={()=>setShowAudio(false)} style={{position:"absolute",top:8,right:12,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
+        <div style={{color:"#FFD700",fontWeight:800,fontSize:14,letterSpacing:3,marginBottom:20,fontFamily:"'Chakra Petch',sans-serif"}}>AUDIO</div>
+        {volRow("🎵","Music",mus,toggleMusic,musVol,setMusVol,null)}
+        {volRow("🔊","Sound FX",snd,()=>setSnd(!snd),sfxVol,setSfxVol,()=>sfx.p("card"))}
+      </div>
+    </div>
+  );
 
   /* ═══ MENU ═══ */
   const myRank=myStats?getRank(myStats.totalPoints,myStats.gamesPlayed):UNRANKED;
@@ -2126,7 +2195,7 @@ export default function UnoGame(){
     <div style={{height:"100%",background:"radial-gradient(ellipse at 50% 15%,#1a2826 0%,#121e1c 20%,#0c1614 40%,#080f0d 65%,#040807 100%)",
       display:"flex",flexDirection:"column",alignItems:"center",padding:0,
       fontFamily:"'Segoe UI',system-ui,sans-serif",position:"relative",overflow:"hidden"}}
-      onClick={()=>{ua();if(!bgm.playing)startMusic();}}>
+      onClick={()=>{ua();if(!bgm.playing&&!musUserOff.current)startMusic();}}>
       <CanvasBG screen="menu"/>
 
       {/* Floating decorative cards */}
@@ -2255,16 +2324,17 @@ export default function UnoGame(){
             onPointerEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.transform="translateY(-1px)";}}
             onPointerLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.transform="translateY(0)";}}>
             👤 ACCOUNT</button>
-          <button onClick={e=>{e.stopPropagation();toggleMusic();}} style={{background:"none",
+          <button onClick={e=>{e.stopPropagation();ua();setShowAudio(true);}} style={{background:"none",
             border:"1px solid rgba(255,255,255,0.1)",padding:"7px 16px",borderRadius:12,
-            color:mus?"#FFD700":"#778",fontSize:11,cursor:"pointer",transition:"all 0.2s",
+            color:(mus||snd)?"#FFD700":"#778",fontSize:11,cursor:"pointer",transition:"all 0.2s",
             display:"flex",alignItems:"center",gap:4}}
             onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.25)"}
             onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.1)"}>
-            🎵 {mus?"ON":"OFF"}</button>
+            🔊 AUDIO</button>
           <button onClick={()=>setShowAdm(true)} style={{background:"none",border:"none",color:isAdm?"#FFD700":"#222",fontSize:8,cursor:"pointer",padding:4,fontWeight:700,letterSpacing:1}}>{isAdm?"ADMIN":"•••"}</button>
         </div>
       </div>
+      {audioModal}
 
       {/* Global Leaderboard Modal */}
       {showGlobalLB&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
@@ -2285,9 +2355,8 @@ export default function UnoGame(){
                 background:isMe?"rgba(255,215,0,0.06)":i<3?"rgba(255,255,255,0.02)":"transparent",
                 border:isMe?"1px solid rgba(255,215,0,0.12)":i===0?"1px solid rgba(255,215,0,0.08)":"1px solid transparent",
                 animation:`slideIn 0.3s ease-out ${Math.min(i*0.04,0.8)}s both`}}>
-                <div style={{width:20,textAlign:"center",fontSize:i<3?13:9,fontWeight:800,
-                  color:i===0?"#FFD700":i===1?"#C0C0C0":i===2?"#CD7F32":"#556"}}>
-                  {i===0?"🥇":i===1?"🥈":i===2?"🥉":(i+1)}</div>
+                <div style={{width:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#556"}}>
+                  {i<3?<Crown rank={i+1} size={20}/>:(i+1)}</div>
                 <div style={{width:28,height:28,borderRadius:7,background:r.bg,
                   display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,
                   border:`1px solid ${r.color}44`}}>{r.icon}</div>
@@ -2575,6 +2644,7 @@ export default function UnoGame(){
           color:COLORS[opps.indexOf(id)%4]==="yellow"?"#333":"#fff",
           boxShadow:`0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}44`,flexShrink:0}}>
           {pd?.name?.[0]?.toUpperCase()}</div>
+        {crownRank[id]&&<Crown rank={crownRank[id]} size={14}/>}
         <span style={{fontSize:9,color:turn?"#fff":"#999",fontWeight:700,whiteSpace:"nowrap",
           textShadow:turn?`0 0 8px ${gcHex}66`:"none"}}>{pd?.name}</span>
         <span style={{fontSize:9,background:"rgba(255,255,255,0.1)",borderRadius:5,padding:"1px 5px",
@@ -2582,8 +2652,11 @@ export default function UnoGame(){
         {hasUno&&<span style={{fontSize:8,color:"#E53935",fontWeight:900,animation:"pulse 0.4s infinite"}}>UNO!</span>}
       </div>
       <div style={{display:"flex",flexDirection:isV?"column":"row"}}>
-        {h.slice(0,isLandscape?6:h.length).map((c,ci)=><Card key={c.id} card={c} sz="xs" faceDown={!peek||!isAdm}
-          style={isV?{marginTop:ci>0?-52:0}:{marginLeft:ci>0?(isLandscape?-32:-28):0}}/>)}
+        {(()=>{const cards=h.slice(0,40);const n=cards.length;const dim=isV?72:48;
+          const maxS=isV?230:(isLandscape?165:300);
+          const step=Math.max(3,Math.min(isV?20:16,(maxS-dim)/Math.max(n-1,1)));const ov=step-dim;
+          return cards.map((c,ci)=><Card key={c.id} card={c} sz="xs" faceDown={!peek||!isAdm}
+            style={isV?{marginTop:ci>0?ov:0}:{marginLeft:ci>0?ov:0}}/>);})()}
       </div>
       {canCatch&&<div style={{position:"absolute",bottom:isV?"auto":-12,right:isV?-8:"auto",left:isV?"auto":"auto",
         fontSize:7,color:"#FF9800",fontWeight:800,
@@ -2738,8 +2811,12 @@ export default function UnoGame(){
             animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) 0.12s both"}}>{win?"VICTORY!":"DEFEAT"}</div>
           <div style={{fontSize:20,fontWeight:800,color:"#eee",marginTop:6,marginBottom:6,zIndex:2,
             animation:"fadeIn 0.5s 0.5s both"}}>{rd.players[g.winner]?.name} wins</div>
-          {win&&<div style={{fontSize:26,color:"#4CAF50",marginBottom:6,fontWeight:900,zIndex:2,
-            textShadow:"0 0 20px rgba(76,175,80,0.5)",animation:"slamIn 0.45s cubic-bezier(.2,1.5,.4,1) 0.7s both"}}>+{g.lastAward!=null?g.lastAward:0} points</div>}
+          {(()=>{const d=g.lastDeltas?.[pid];
+            if(win)return(<div style={{fontSize:26,color:"#4CAF50",marginBottom:6,fontWeight:900,zIndex:2,
+              textShadow:"0 0 20px rgba(76,175,80,0.5)",animation:"slamIn 0.45s cubic-bezier(.2,1.5,.4,1) 0.7s both"}}>+{g.lastAward!=null?g.lastAward:(d||0)} points</div>);
+            if(d!=null&&d<0)return(<div style={{fontSize:26,color:"#EF5350",marginBottom:6,fontWeight:900,zIndex:2,
+              textShadow:"0 0 20px rgba(239,83,80,0.5)",animation:"slamIn 0.45s cubic-bezier(.2,1.5,.4,1) 0.7s both"}}>{d} points</div>);
+            return null;})()}
           <div style={{marginTop:16,zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeIn 0.5s 0.9s both"}}>
           {isHost?(<>
             <button onClick={restart} style={{...bst,maxWidth:260,background:"linear-gradient(135deg,#E53935,#C62828)",
@@ -2820,9 +2897,11 @@ export default function UnoGame(){
           <button onClick={()=>setSnd(!snd)} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:snd?0.8:0.25,padding:2}}>
             {snd?"🔊":"🔇"}</button>
           <button onClick={e=>{e.stopPropagation();toggleMusic();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:mus?0.8:0.25,padding:2}}>{"🎵"}</button>
+          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:0.6,padding:2}}>{"🎚"}</button>
           <button onClick={()=>{goFS();goLand();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:2,opacity:0.3}}>{"⛶"}</button>
         </div>
       </div>
+      {audioModal}
 
 
 
@@ -2919,6 +2998,7 @@ export default function UnoGame(){
                 animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
+            {crownRank[pid]&&<div style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 22px)`,bottom:36,zIndex:8,transition:"left 0.3s ease"}}><Crown rank={crownRank[pid]} size={15}/></div>}
             <span style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 16px)`,bottom:10,fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
               writingMode:"vertical-rl",textOrientation:"mixed",
               textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap",zIndex:7,transition:"left 0.3s ease"}}>{pName||"You"}</span>
@@ -3054,6 +3134,7 @@ const globalCSS=`
   @keyframes spark{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(0);opacity:0}}
   @keyframes ringExpand{0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(3);opacity:0}}
   @keyframes bgPulse{0%{opacity:0}30%{opacity:1}100%{opacity:0.3}}
+  @keyframes crownShine{0%,100%{opacity:0.35;transform:scale(0.7) rotate(-8deg)}50%{opacity:1;transform:scale(1.2) rotate(8deg)}}
   @keyframes emotePopIn{0%{opacity:0;transform:translateX(-50%) scale(0.2) translateY(30px)}
     50%{opacity:1;transform:translateX(-50%) scale(1.12) translateY(-6px)}
     100%{opacity:1;transform:translateX(-50%) scale(1) translateY(0)}}
