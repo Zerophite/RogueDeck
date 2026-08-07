@@ -30,15 +30,25 @@ const EMOTES=[
 const MUSIC_URL=import.meta.env.BASE_URL+"music/";
 const GAME_TRACKS=["gameplay1.mp3","gameplay2.mp3"];
 class BGMusic{
-  constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;this.pool=[];}
-  init(){}
-  setVol(v){this.vol=v;const a=this.audio;if(a){a._fadeId=(a._fadeId||0)+1;a.volume=Math.max(0,Math.min(1,v));}}
+  constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;this.pool=[];this.ctx=null;}
+  init(ctx){this.ctx=ctx;}
+  /* Route each track through a Web Audio gain node so volume is controllable on
+     iOS (iOS Safari ignores HTMLAudio.volume). Falls back to element volume. */
+  _node(a){
+    if(a._gnode!==undefined)return a._gnode;
+    if(this.ctx){try{const src=this.ctx.createMediaElementSource(a);const g=this.ctx.createGain();
+      g.gain.value=0;src.connect(g);g.connect(this.ctx.destination);a._gnode=g;}catch(e){a._gnode=null;}}
+    else a._gnode=null;
+    return a._gnode;}
+  _setV(a,v){v=Math.max(0,Math.min(1,v));const g=this._node(a);if(g)g.gain.value=v;else{try{a.volume=v;}catch(e){}}}
+  _curV(a){const g=a._gnode;return g?g.gain.value:(a.volume||0);}
+  setVol(v){this.vol=v;const a=this.audio;if(a){a._fadeId=(a._fadeId||0)+1;this._setV(a,v);}}
   _fade(a,to,ms=1400,done){
     if(!a)return;a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
-    const from=a.volume,start=performance.now();
+    const from=this._curV(a),start=performance.now();
     const tick=()=>{if(a._fadeId!==id)return;
       const p=Math.min(1,(performance.now()-start)/ms);
-      a.volume=Math.max(0,Math.min(1,from+(to-from)*p));
+      this._setV(a,from+(to-from)*p);
       if(p<1)requestAnimationFrame(tick);else if(done)done();};
     requestAnimationFrame(tick);}
   _fadeOut(a){if(a)this._fade(a,0,1600,()=>{try{a.pause();}catch(e){}});}
@@ -48,8 +58,8 @@ class BGMusic{
   _pickGame(){const opts=GAME_TRACKS.filter(t=>t!==this.lastGame);
     const pool=opts.length?opts:GAME_TRACKS;const t=pool[Math.floor(Math.random()*pool.length)];this.lastGame=t;return t;}
   _spawn(src,loop,onended){
-    const a=new Audio(MUSIC_URL+src);a.loop=loop;a.preload="auto";a.volume=0;
-    if(onended)a.onended=onended;this.pool.push(a);
+    const a=new Audio(MUSIC_URL+src);a.loop=loop;a.preload="auto";
+    if(onended)a.onended=onended;this.pool.push(a);this._setV(a,0);
     a.play().then(()=>{if(a===this.audio)this._fade(a,this.vol,1600);}).catch(()=>{});
     return a;}
   _startMode(mode){
@@ -2895,9 +2905,8 @@ export default function UnoGame(){
             transition:"all 0.2s",fontWeight:700}}>🏆</button>
           {!g.winner&&<button onClick={()=>setEmoteTray(!emoteTray)} style={{background:emoteTray?"rgba(255,215,0,0.9)":"none",border:"none",fontSize:14,cursor:"pointer",
             opacity:emoteCD?0.3:0.8,padding:"2px 4px",borderRadius:6,transition:"all 0.2s"}}>{"💬"}</button>}
-          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:snd?0.8:0.25,padding:2}}>
-            {snd?"🔊":"🔇"}</button>
-          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:mus?0.8:0.25,padding:2}}>{"🎵"}</button>
+          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",opacity:(snd||mus)?0.8:0.3,padding:2}}>
+            {(snd||mus)?"🔊":"🔇"}</button>
           <button onClick={()=>{goFS();goLand();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:2,opacity:0.3}}>{"⛶"}</button>
         </div>
       </div>
@@ -2998,10 +3007,13 @@ export default function UnoGame(){
                 animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
-            {crownRank[pid]&&<div style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 22px)`,bottom:36,zIndex:8,transition:"left 0.3s ease"}}><Crown rank={crownRank[pid]} size={15}/></div>}
-            <span style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 16px)`,bottom:10,fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.5)",letterSpacing:1,
-              writingMode:"vertical-rl",textOrientation:"mixed",
-              textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap",zIndex:7,transition:"left 0.3s ease"}}>{pName||"You"}</span>
+            <div style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 20px)`,bottom:8,zIndex:7,
+              display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"left 0.3s ease"}}>
+              {crownRank[pid]&&<Crown rank={crownRank[pid]} size={14}/>}
+              <span style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.55)",letterSpacing:1,
+                writingMode:"vertical-rl",textOrientation:"mixed",
+                textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap"}}>{pName||"You"}</span>
+            </div>
             <div className="uno-hand-area" style={{position:"relative",height:isLandscape?"min(100px, 24vh)":"min(120px, 22vh)",display:"flex",justifyContent:"center"}}>
               {myH.map((card,i)=>{
                 const angle=n<=1?0:st2+(i/Math.max(n-1,1))*spread;
