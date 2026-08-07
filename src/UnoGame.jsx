@@ -40,15 +40,23 @@ class BGMusic{
       g.gain.value=0;src.connect(g);g.connect(this.ctx.destination);a._gnode=g;}catch(e){a._gnode=null;}}
     else a._gnode=null;
     return a._gnode;}
-  _setV(a,v){v=Math.max(0,Math.min(1,v));const g=this._node(a);if(g)g.gain.value=v;else{try{a.volume=v;}catch(e){}}}
+  _setV(a,v){v=Math.max(0,Math.min(1,v));const g=this._node(a);
+    if(g&&this.ctx){const n=this.ctx.currentTime;g.gain.cancelScheduledValues(n);g.gain.setValueAtTime(v,n);}
+    else if(g){g.gain.value=v;}else{try{a.volume=v;}catch(e){}}}
   _curV(a){const g=a._gnode;return g?g.gain.value:(a.volume||0);}
-  setVol(v){this.vol=v;const a=this.audio;if(a){a._fadeId=(a._fadeId||0)+1;this._setV(a,v);}}
+  setVol(v){this.vol=v;const a=this.audio;if(a)this._setV(a,v);}
+  /* Fade via the Web Audio clock (linearRamp) — runs on the audio thread, so it
+     is NOT stalled when requestAnimationFrame is throttled (backgrounded tab,
+     mid-transition). Falls back to rAF only when there's no gain node. */
   _fade(a,to,ms=1400,done){
-    if(!a)return;a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
+    if(!a)return;to=Math.max(0,Math.min(1,to));const g=this._node(a);
+    if(g&&this.ctx){const n=this.ctx.currentTime;const from=g.gain.value;
+      g.gain.cancelScheduledValues(n);g.gain.setValueAtTime(from,n);g.gain.linearRampToValueAtTime(to,n+ms/1000);
+      if(done)setTimeout(done,ms+50);return;}
+    a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
     const from=this._curV(a),start=performance.now();
     const tick=()=>{if(a._fadeId!==id)return;
-      const p=Math.min(1,(performance.now()-start)/ms);
-      this._setV(a,from+(to-from)*p);
+      const p=Math.min(1,(performance.now()-start)/ms);this._setV(a,from+(to-from)*p);
       if(p<1)requestAnimationFrame(tick);else if(done)done();};
     requestAnimationFrame(tick);}
   _fadeOut(a){if(a)this._fade(a,0,1600,()=>{try{a.pause();}catch(e){}});}
