@@ -32,7 +32,7 @@ const GAME_TRACKS=["gameplay1.mp3","gameplay2.mp3"];
 class BGMusic{
   constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;this.pool=[];}
   init(){}
-  setVol(v){this.vol=v;if(this.audio)this.audio.volume=v;}
+  setVol(v){this.vol=v;const a=this.audio;if(a){a._fadeId=(a._fadeId||0)+1;a.volume=Math.max(0,Math.min(1,v));}}
   _fade(a,to,ms=1400,done){
     if(!a)return;a._fadeId=(a._fadeId||0)+1;const id=a._fadeId;
     const from=a.volume,start=performance.now();
@@ -1843,8 +1843,9 @@ export default function UnoGame(){
 
   const trigA=()=>{setCAn("cFly 0.6s cubic-bezier(.22,1,.36,1)");setTimeout(()=>setCAn(null),600);};
 
-  const musUserOff=useRef(false);
-  const startMusic=useCallback(()=>{ua();if(!bgm.playing){bgm.start("menu");setMus(true);}},[]);
+  // Music is ON by default; only off if the user explicitly turned it off before.
+  const musUserOff=useRef(localStorage.getItem("uno_musicoff")==="1");
+  const startMusic=useCallback(()=>{ua();if(!bgm.playing&&!musUserOff.current){bgm.start("menu");setMus(true);}},[]);
   // Swap between menu track and gameplay tracks as the screen changes.
   useEffect(()=>{if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus]);
 
@@ -2152,7 +2153,7 @@ export default function UnoGame(){
     bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
     else await remove(ref(db,"rooms/"+rc+"/players/"+pid));setRc("");setRd(null);setScr("menu");};
   const restart=async()=>{if(!isHost)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);await update(ref(db,"rooms/"+rc),{status:"waiting",game:null});setScr("lobby");};
-  const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");musUserOff.current=!on;setMus(on);};
+  const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");musUserOff.current=!on;localStorage.setItem("uno_musicoff",on?"0":"1");setMus(on);};
 
   const shakeStyle=screenShake?{animation:"screenShake 0.4s ease-out"}:{};
   const gcHex=g?.currentColor?CH[g.currentColor]:"#FF6F00";
