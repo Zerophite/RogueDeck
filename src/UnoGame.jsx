@@ -2169,10 +2169,10 @@ export default function UnoGame(){
           border:"none",borderRadius:8,padding:"3px 12px",fontSize:10,fontWeight:800,letterSpacing:1,
           color:on?"#000":"#889",cursor:"pointer",transition:"all 0.2s"}}>{on?"ON":"OFF"}</button>
       </div>
-      <input type="range" min="0" max="1" step="0.01" value={vol} disabled={!on}
+      <input type="range" min="0" max="1" step="0.01" value={vol}
         onChange={e=>setVol(parseFloat(e.target.value))}
-        onPointerUp={()=>{if(on&&preview)preview();}}
-        style={{width:"100%",accentColor:"#FFD700",opacity:on?1:0.35,cursor:on?"pointer":"default"}}/>
+        onPointerUp={()=>{if(preview)preview();}}
+        style={{width:"100%",accentColor:"#FFD700",cursor:"pointer"}}/>
     </div>
   );
   const audioModal=showAudio&&(
@@ -2895,10 +2895,9 @@ export default function UnoGame(){
             transition:"all 0.2s",fontWeight:700}}>🏆</button>
           {!g.winner&&<button onClick={()=>setEmoteTray(!emoteTray)} style={{background:emoteTray?"rgba(255,215,0,0.9)":"none",border:"none",fontSize:14,cursor:"pointer",
             opacity:emoteCD?0.3:0.8,padding:"2px 4px",borderRadius:6,transition:"all 0.2s"}}>{"💬"}</button>}
-          <button onClick={()=>setSnd(!snd)} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:snd?0.8:0.25,padding:2}}>
+          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:snd?0.8:0.25,padding:2}}>
             {snd?"🔊":"🔇"}</button>
-          <button onClick={e=>{e.stopPropagation();toggleMusic();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:mus?0.8:0.25,padding:2}}>{"🎵"}</button>
-          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:0.6,padding:2}}>{"🎚"}</button>
+          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",opacity:mus?0.8:0.25,padding:2}}>{"🎵"}</button>
           <button onClick={()=>{goFS();goLand();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:2,opacity:0.3}}>{"⛶"}</button>
         </div>
       </div>
