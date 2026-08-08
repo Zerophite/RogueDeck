@@ -25,6 +25,11 @@ const EMOTES=[
   {id:"angry",gif:"angry.gif",sound:"angry.mp3",label:"Angry",vol:5.0},
   {id:"laughing",gif:"laughing.gif",sound:"laughing.mp3",label:"Haha",vol:1.0},
 ];
+const SFX_URL=import.meta.env.BASE_URL+"sfx/";
+const SFX_FILES=[
+  {id:"uno",file:"uno.mp3",vol:1.0},
+  {id:"skip",file:"skip.mp3",vol:1.0},
+];
 
 /* ══ BACKGROUND MUSIC (streamed MP3 tracks: menu + two gameplay tracks) ══ */
 const MUSIC_URL=import.meta.env.BASE_URL+"music/";
@@ -65,9 +70,14 @@ class BGMusic{
     this.pool=this.audio?[this.audio]:[];}
   _pickGame(){const opts=GAME_TRACKS.filter(t=>t!==this.lastGame);
     const pool=opts.length?opts:GAME_TRACKS;const t=pool[Math.floor(Math.random()*pool.length)];this.lastGame=t;return t;}
+  /* Warm the buffers up-front (on app load) so the first play() starts instantly
+     instead of waiting several seconds for the MP3 to download+buffer. */
+  preload(){if(this._pre)return;this._pre={};
+    ["menu.mp3",...GAME_TRACKS].forEach(f=>{try{const a=new Audio(MUSIC_URL+f);a.preload="auto";a.load();this._pre[f]=a;}catch(e){}});}
   _spawn(src,loop,onended){
-    const a=new Audio(MUSIC_URL+src);a.loop=loop;a.preload="auto";
-    if(onended)a.onended=onended;this.pool.push(a);this._setV(a,0);
+    let a=this._pre&&this._pre[src];
+    if(a){this._pre[src]=null;}else{a=new Audio(MUSIC_URL+src);a.preload="auto";}
+    a.loop=loop;if(onended)a.onended=onended;this.pool.push(a);this._setV(a,0);
     a.play().then(()=>{if(a===this.audio)this._fade(a,this.vol,1600);}).catch(()=>{});
     return a;}
   _startMode(mode){
@@ -159,6 +169,14 @@ class AnimeSFX{
     try{const s=this.c.createBufferSource();s.buffer=this._emBuf[id];
       const g=this.c.createGain();g.gain.value=em?.vol||3.0;
       s.connect(g);g.connect(this.master);s.start();}catch(e){}}
+  _fxBuf={};_fxLoaded=false;
+  loadSfxFiles(){if(!this.c||this._fxLoaded)return;this._fxLoaded=true;
+    SFX_FILES.forEach(e=>{fetch(SFX_URL+e.file).then(r=>r.arrayBuffer()).then(ab=>this.c.decodeAudioData(ab)).then(buf=>{this._fxBuf[e.id]=buf;}).catch(()=>{});});}
+  pFile(id){if(!this.c||!this._fxBuf[id])return false;
+    const f=SFX_FILES.find(e=>e.id===id);
+    try{const s=this.c.createBufferSource();s.buffer=this._fxBuf[id];
+      const g=this.c.createGain();g.gain.value=f?.vol||1;
+      s.connect(g);g.connect(this.master);s.start();return true;}catch(e){return false;}}
   pEl(color){if(!this.c)return;try{const t=this.c.currentTime;
     switch(color){case"red":this._fireEl(t);break;case"blue":this._waterEl(t);break;
       case"green":this._windEl(t);break;case"yellow":this._lightEl(t);break;}}catch(e){}}
@@ -169,13 +187,13 @@ class AnimeSFX{
       case "cardLift":this._fNoise(n,0.03,2600,2,"bandpass",0.18);this._osc(900,"triangle",n,0.03,0.05);break;
       case "action":this._bend(400,1200,"sawtooth",n,0.2,0.12);this._bend(600,1600,"square",n+0.05,0.18,0.08);this._shimmer(800,n+0.1,0.3,0.06);break;
       case "turn":this._chime([880,1100,1320],n,0.07,0.16);this._shimmer(1200,n+0.15,0.2,0.05);break;
-      case "uno":this._chime([523,784,1047,1319,1568],n,0.06,0.18);this._shimmer(1500,n+0.2,0.4,0.07);this._bend(500,2000,"sine",n,0.4,0.1);break;
+      case "uno":if(this.pFile("uno"))break;this._chime([523,784,1047,1319,1568],n,0.06,0.18);this._shimmer(1500,n+0.2,0.4,0.07);this._bend(500,2000,"sine",n,0.4,0.1);break;
       case "win":this._chime([523,659,784,1047,1319,1568,2093],n,0.09,0.2);this._shimmer(2000,n+0.3,0.6,0.08);this._bend(400,2400,"sine",n,0.8,0.08);[523,1047,1568].forEach((f,i)=>this._osc(f,"triangle",n+0.5+i*0.1,0.4,0.12));break;
       case "error":this._bend(400,150,"sawtooth",n,0.2,0.18);this._bend(300,100,"square",n+0.1,0.2,0.12);break;
       case "join":this._chime([440,554,659,880],n,0.07,0.16);this._shimmer(800,n+0.15,0.3,0.06);break;
       case "challenge":this._bend(600,1400,"triangle",n,0.15,0.2);this._bend(1400,600,"triangle",n+0.15,0.15,0.2);this._bend(600,1800,"sawtooth",n+0.3,0.2,0.12);break;
       case "penalty":this._bend(520,300,"sine",n,0.22,0.09);[0,0.12,0.24,0.36].forEach((d,i)=>{this._fNoise(n+0.06+d,0.032,3000,1.3,"bandpass",0.3-i*0.02);this._fNoise(n+0.06+d,0.05,640,1.4,"lowpass",0.2);this._osc(160,"sine",n+0.06+d,0.04,0.11);});this._osc(88,"sine",n+0.44,0.24,0.09);break;
-      case "skip":this._bend(1000,400,"sine",n,0.12,0.2);this._bend(800,300,"triangle",n+0.06,0.1,0.15);break;
+      case "skip":if(this.pFile("skip"))break;this._bend(1000,400,"sine",n,0.12,0.2);this._bend(800,300,"triangle",n+0.06,0.1,0.15);break;
       case "reverse":this._bend(400,1200,"sine",n,0.12,0.18);this._bend(1200,400,"sine",n+0.12,0.12,0.18);this._shimmer(800,n+0.1,0.2,0.06);break;
       case "draw2":this._bend(320,880,"sine",n,0.12,0.13);this._fNoise(n+0.1,0.06,2600,2,"bandpass",0.32);this._osc(140,"sine",n+0.1,0.14,0.26);this._fNoise(n+0.22,0.055,2400,2,"bandpass",0.28);this._osc(120,"sine",n+0.22,0.13,0.22);this._shimmer(1400,n+0.32,0.22,0.05);break;
       case "draw4":this._bend(180,660,"sawtooth",n,0.2,0.11);this._shimmer(900,n+0.05,0.3,0.06);[0,0.11,0.22,0.33].forEach((d,i)=>{this._fNoise(n+0.14+d,0.05,2200+i*380,2.5,"bandpass",0.32-i*0.03);this._osc(150-i*10,"sine",n+0.14+d,0.13,0.24-i*0.03);});this._osc(58,"sine",n+0.14,0.5,0.18);this._chime([784,1047,1319],n+0.54,0.05,0.08);break;
@@ -1510,7 +1528,8 @@ export default function UnoGame(){
   const trigImpact=useCallback(c=>{setImpactColor(c);setTimeout(()=>setImpactColor(null),600);},[]);
   const trigLightning=useCallback(c=>{setLightningColor(c);setTimeout(()=>setLightningColor(null),1500);},[]);
 
-  useEffect(()=>{if(sfx.c)sfx.loadEmotes();});
+  useEffect(()=>{bgm.preload();},[]);
+  useEffect(()=>{if(sfx.c){sfx.loadEmotes();sfx.loadSfxFiles();}});
   const sendEmote=useCallback(async(emoteId)=>{
     if(emoteCD||!rc)return;setEmoteTray(false);setEmoteCD(true);
     try{await update(ref(db,"rooms/"+rc+"/game"),{emote:{pid,id:emoteId,ts:Date.now()}});}catch(e){}
