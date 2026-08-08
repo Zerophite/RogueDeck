@@ -1587,8 +1587,8 @@ export default function UnoGame(){
       ps("penalty");
       if(lastStackTypeRef.current!=="wild4")trigShake();
     }
-    else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
     else if(m.includes("reverse")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
+    else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
     else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);}
     else if(m.includes("+4")){const wc=g?.currentColor||"green";setWild4Fx(wc);ps("draw4");psE(wc);trigShake();trigBurst(wc);trigImpact(wc);}
     else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");}
@@ -1596,7 +1596,7 @@ export default function UnoGame(){
     else if(m.includes("discard all")){const dac=g?.currentColor||"yellow";ps("discardAll");psE(dac);
       const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
       if(cnt>1){setActFx("discardAll");trigBurst(dac);setDiscardFx({color:dac,count:cnt});}}
-    else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("skip");psE(shc);trigBurst(shc);}
+    else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("action");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
     else if(m.includes("played")){}
     if(m.includes("timed out")){ps("timeout");const tm=g.message.match(/^(.*?)\s+timed out/i);setTimeoutFx(tm?tm[1]:"");}
