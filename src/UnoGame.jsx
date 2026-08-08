@@ -1502,7 +1502,7 @@ export default function UnoGame(){
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
   const[roundTimer,setRoundTimer]=useState(ROUND_TIME);
-  const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);
+  const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);const unoSndRef=useRef(0);
 
   useEffect(()=>{
     if(pName)localStorage.setItem("uno_name",pName);
@@ -1579,7 +1579,7 @@ export default function UnoGame(){
     if(m.includes("challenge")&&m.includes("guilty")){setActFx("challenge");ps("challenge");trigShake();trigBurst("red");trigImpact("red");}
     else if(m.includes("challenge")&&m.includes("innocent")){setActFx("challenge");ps("challenge");trigBurst("blue");trigImpact("blue");}
     else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);}
-    else if(m.includes("called uno")){setUnoCallFx(g?.currentColor||"red");ps("uno");trigShake();}
+    else if(m.includes("called uno")){setUnoCallFx(g?.currentColor||"red");if(Date.now()-unoSndRef.current>1500)ps("uno");trigShake();}
     else if(m.includes("forgot uno")||m.includes("caught!")){ps("penalty");trigShake();
       const fm=g.message.match(/^(.*?)\s+played\s/i);const cm=g.message.match(/^(.*?)\s+caught!/i);
       setUnoPenaltyFx((cm&&cm[1])||(fm&&fm[1])||"");}
@@ -1883,6 +1883,14 @@ export default function UnoGame(){
   // Music is ON by default; only off if the user explicitly turned it off before.
   const musUserOff=useRef(localStorage.getItem("uno_musicoff")==="1");
   const startMusic=useCallback(()=>{ua();if(!bgm.playing&&!musUserOff.current){bgm.start("menu");setMus(true);}},[]);
+  // Browsers block audio until the first user gesture — start music on the very
+  // first touch/click/key anywhere (earliest the browser allows).
+  useEffect(()=>{
+    const go=()=>{ua();if(!bgm.playing&&!musUserOff.current){bgm.start("menu");setMus(true);}rm();};
+    const rm=()=>["pointerdown","touchstart","keydown","click"].forEach(e=>window.removeEventListener(e,go));
+    ["pointerdown","touchstart","keydown","click"].forEach(e=>window.addEventListener(e,go,{passive:true}));
+    return rm;
+  },[]);
   // Swap between menu track and gameplay tracks as the screen changes.
   useEffect(()=>{if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus]);
 
@@ -2184,6 +2192,7 @@ export default function UnoGame(){
   const colPick=c=>{setPickCol(false);if(pendW!==null){playC(pendW,c);setPendW(null);}};
   const colCancel=()=>{setPickCol(false);setPendW(null);};
   const callUno=async()=>{if(!(g.calledUno||{})[pid]){
+    ps("uno");unoSndRef.current=Date.now(); // immediate feedback on press
     await wgs({calledUno:{...(g.calledUno||{}),[pid]:true},message:(rd.players[pid]?.name)+" called UNO!"});
     setLMsg("UNO!");setTimeout(()=>setLMsg(""),1200);}};
   const leave=async(e)=>{if(e&&e.stopPropagation)e.stopPropagation();
