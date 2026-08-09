@@ -1226,9 +1226,10 @@ const DiscardAllFX=({color,count,onDone})=>{
   const total=1000+nCards*260+900;
   useEffect(()=>{const t=setTimeout(onDone,total);return()=>clearTimeout(t);},[onDone,total]);
   const gc=CH[color]||"#E040FB";
+  // Cards start down at the player's hand and sweep up into the discard pile (screen center).
   const cards=useMemo(()=>Array.from({length:nCards},(_,i)=>({
-    id:i,startX:-150+Math.random()*300,startY:150+Math.random()*70,
-    rot:-25+Math.random()*50,delay:i*0.26})),[nCards]);
+    id:i,startX:-90+Math.random()*180,startY:240+Math.random()*110,
+    rot:-25+Math.random()*50,delay:i*0.22})),[nCards]);
   return(<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",
     display:"flex",alignItems:"center",justifyContent:"center",animation:`discardFade ${(total/1000).toFixed(2)}s forwards`}}>
     <div style={{position:"absolute",inset:0,
@@ -1490,6 +1491,7 @@ export default function UnoGame(){
   const[unoCallFx,setUnoCallFx]=useState(null);
   const[unoPenaltyFx,setUnoPenaltyFx]=useState(null);
   const[timeoutFx,setTimeoutFx]=useState(null);
+  const[showWin,setShowWin]=useState(false);
   const[turnFx,setTurnFx]=useState(null);
   const[showAccount,setShowAccount]=useState(false);
   const[restoreId,setRestoreId]=useState("");
@@ -1587,8 +1589,8 @@ export default function UnoGame(){
       ps("penalty");
       if(lastStackTypeRef.current!=="wild4")trigShake();
     }
-    else if(m.includes("reverse")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
-    else if(m.includes("skip")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
+    else if(m.includes("reverse")&&!m.includes("started")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
+    else if(m.includes("skip")&&!m.includes("started")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
     else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);}
     else if(m.includes("+4")){const wc=g?.currentColor||"green";setWild4Fx(wc);ps("draw4");psE(wc);trigShake();trigBurst(wc);trigImpact(wc);}
     else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");}
@@ -1707,11 +1709,14 @@ export default function UnoGame(){
           const oRank=getRank(op.totalPoints,op.gamesPlayed);
           let award=calcElo(wRank.idx,oRank.idx,baseScore).winPts;
           if(!oppBot){
-            /* anti-farm: diminishing points for repeatedly beating the same opponent within 24h */
-            const b=(beat[oppId]&&(now-beat[oppId].t)<H2H_WIN)?beat[oppId].c:0;
-            const mult=b<2?1:b===2?0.6:b===3?0.35:b===4?0.2:0.08;
+            /* anti-farm: only diminish ONE-SIDED repeat wins (alt-farming). Friends
+               who trade wins keep near-full points because the net margin stays low. */
+            const aBeatB=(beat[oppId]&&(now-beat[oppId].t)<H2H_WIN)?beat[oppId].c:0;
+            const bBeatA=(op.beat&&op.beat[winnerId]&&(now-op.beat[winnerId].t)<H2H_WIN)?op.beat[winnerId].c:0;
+            const net=Math.max(0,aBeatB-bBeatA);
+            const mult=net<3?1:net<5?0.6:net<8?0.35:0.15;
             award=Math.max(1,Math.round(award*mult));
-            beat[oppId]={c:b+1,t:now};
+            beat[oppId]={c:aBeatB+1,t:now};
             const newPts=Math.max(0,(op.totalPoints||0)-award);
             deltas[oppId]=newPts-(op.totalPoints||0); // actual points lost (clamped at 0)
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
@@ -1727,6 +1732,10 @@ export default function UnoGame(){
       await update(ref(db,"rooms/"+rc+"/game"),{lastAward:totalWin,lastDeltas:deltas});
     })();
   },[g?.winner,g?.scored,g?.turnTimestamp,isHost,rc,pls,rd]);
+
+  /* When someone wins, first reveal everyone's final hands for a few seconds
+     (this also gives the async scoring time to finish before the points screen). */
+  useEffect(()=>{if(g?.winner){setShowWin(false);const t=setTimeout(()=>setShowWin(true),4000);return()=>clearTimeout(t);}setShowWin(false);},[g?.winner]);
 
   const autoPassRef=useRef(false);
   /* HOST-AUTHORITATIVE timeout: only the host resolves a timeout, for whoever's
@@ -1942,7 +1951,9 @@ export default function UnoGame(){
   const addBot=async()=>{if(!isHost||pls.length>=(settings.maxPlayers||10))return;
     const bc=pls.filter(([id])=>isBot(id)).length;const botId="bot_"+(bc+1)+"_"+Date.now();
     const used=pls.map(([id])=>rd.players[id]?.name).filter(Boolean);
-    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:randBotName(used),order:pls.length,isBot:true});};
+    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:randBotName(used),order:pls.length,isBot:true,ready:true});};
+  const toggleReady=async()=>{await update(ref(db,"rooms/"+rc+"/players/"+pid),{ready:!(rd?.players?.[pid]?.ready)});};
+  const allReady=pls.every(([id,pd])=>id===rd?.host||pd.ready);
   const removeBot=async(botId)=>{if(!isHost||!isBot(botId))return;await remove(ref(db,"rooms/"+rc+"/players/"+botId));};
 
   const quickPlay1v1=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
@@ -2593,6 +2604,9 @@ export default function UnoGame(){
               <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
               <span style={{fontSize:11,color:"#778",fontWeight:600,fontFamily:"monospace"}}>{rd?.scores?.[id]||0}</span>
               {id===rd?.host&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
+              {id!==rd?.host&&<span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 8px",borderRadius:6,
+                color:pd.ready?"#4CAF50":"#889",background:pd.ready?"rgba(76,175,80,0.12)":"rgba(255,255,255,0.04)",
+                border:pd.ready?"1px solid rgba(76,175,80,0.3)":"1px solid rgba(255,255,255,0.06)"}}>{pd.ready?"✓ READY":"NOT READY"}</span>}
               {isHost&&pd.isBot&&<button onClick={()=>removeBot(id)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",
                 color:"#FF5252",width:22,height:22,borderRadius:6,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
                 transition:"all 0.2s"}} onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.5)"}
@@ -2651,12 +2665,22 @@ export default function UnoGame(){
           </div>}
         </div>
 
-        {isHost&&pls.length>=2&&<button onClick={startGame} style={{...bst,maxWidth:380,
-          background:"linear-gradient(135deg,#2E7D32,#1B5E20)",fontSize:18,letterSpacing:6,
-          boxShadow:"0 6px 30px rgba(46,125,50,0.5)",animation:"pulse 2s infinite"}}
+        {isHost&&pls.length>=2&&(allReady
+          ?<button onClick={startGame} style={{...bst,maxWidth:380,
+            background:"linear-gradient(135deg,#2E7D32,#1B5E20)",fontSize:18,letterSpacing:6,
+            boxShadow:"0 6px 30px rgba(46,125,50,0.5)",animation:"pulse 2s infinite"}}
+            onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
+            onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>START GAME</button>
+          :<button disabled style={{...bst,maxWidth:380,background:"rgba(255,255,255,0.05)",color:"#667",
+            fontSize:14,letterSpacing:3,cursor:"not-allowed",border:"1px solid rgba(255,255,255,0.06)"}}>WAITING FOR PLAYERS…</button>)}
+        {isHost&&pls.length<2&&<div style={{color:"#889",fontSize:13,letterSpacing:2}}>Add players or bots to start</div>}
+        {!isHost&&<button onClick={toggleReady} style={{...bst,maxWidth:380,
+          background:rd?.players?.[pid]?.ready?"linear-gradient(135deg,#455A64,#37474F)":"linear-gradient(135deg,#2E7D32,#1B5E20)",
+          fontSize:16,letterSpacing:4,boxShadow:rd?.players?.[pid]?.ready?"none":"0 6px 30px rgba(46,125,50,0.5)",
+          animation:rd?.players?.[pid]?.ready?"none":"pulse 2s infinite"}}
           onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px)"}
-          onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>START GAME</button>}
-        {!isHost&&<div style={{color:"#889",fontSize:13,animation:"pulse 2s infinite",letterSpacing:2}}>Waiting for host...</div>}
+          onPointerLeave={e=>e.currentTarget.style.transform="translateY(0)"}>{rd?.players?.[pid]?.ready?"✓ READY — TAP TO CANCEL":"TAP WHEN READY"}</button>}
+        {!isHost&&<div style={{color:"#889",fontSize:11,marginTop:8,letterSpacing:2}}>Waiting for host to start…</div>}
         <button onClick={leave} style={{marginTop:14,background:"none",border:"1px solid rgba(255,255,255,0.08)",color:"#889",
           padding:"8px 24px",borderRadius:10,fontSize:11,cursor:"pointer",transition:"all 0.2s",letterSpacing:2}}
           onPointerEnter={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.25)";e.currentTarget.style.color="#aaa";}}
@@ -2841,7 +2865,32 @@ export default function UnoGame(){
           style={{marginTop:12,padding:"8px 24px",borderRadius:10,border:"none",background:"#333",color:"#aaa",fontSize:11,cursor:"pointer"}}>Cancel</button>
       </div>)}
 
-      {g.winner&&(()=>{const win=g.winner===pid;return(<>
+      {g.winner&&!showWin&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(4,8,10,0.94)",zIndex:150,overflow:"auto",
+          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:isLandscape?8:12,
+          padding:"18px 12px",backdropFilter:"blur(10px)",animation:"fadeIn 0.4s"}}>
+          <div style={{color:"#FFD700",fontWeight:800,fontSize:15,letterSpacing:3,fontFamily:"'Chakra Petch',sans-serif",
+            textShadow:"0 0 18px rgba(255,215,0,0.35)",marginBottom:2}}>ROUND OVER · FINAL HANDS</div>
+          {po.map(id=>{const h=g.hands?.[id]||[];const isW=id===g.winner;const n2=Math.min(h.length,14);
+            const step=Math.max(4,Math.min(20,(220-48)/Math.max(n2-1,1)));
+            return(<div key={id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,
+              padding:"5px 12px",borderRadius:12,maxWidth:"96vw",
+              background:isW?"rgba(255,215,0,0.10)":"rgba(255,255,255,0.03)",
+              border:isW?"1px solid rgba(255,215,0,0.35)":"1px solid rgba(255,255,255,0.05)",
+              boxShadow:isW?"0 0 22px rgba(255,215,0,0.15)":"none"}}>
+              <div style={{display:"flex",alignItems:"center",gap:5}}>
+                {crownRank[id]&&<Crown rank={crownRank[id]} size={13}/>}
+                <span style={{color:isW?"#FFD700":"#ddd",fontSize:12,fontWeight:800}}>{rd.players[id]?.name}</span>
+                {isW&&<span style={{fontSize:9,color:"#FFD700",fontWeight:900,letterSpacing:1}}>👑 WINNER</span>}
+                {!isW&&<span style={{fontSize:9,color:"#889"}}>{h.length} left</span>}
+              </div>
+              <div style={{display:"flex",minHeight:60}}>
+                {h.length===0?<span style={{color:"#4CAF50",fontSize:12,fontWeight:800,alignSelf:"center"}}>Cleared! 🎉</span>
+                  :h.slice(0,14).map((c,ci)=><div key={c.id} style={{marginLeft:ci>0?step-48:0}}><Card card={c} sz="xs"/></div>)}
+              </div>
+            </div>);})}
+        </div>)}
+      {g.winner&&showWin&&(()=>{const win=g.winner===pid;return(<>
         {win&&<ConfettiFX/>}
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.94)",zIndex:150,overflow:"hidden",
           display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)"}}>
