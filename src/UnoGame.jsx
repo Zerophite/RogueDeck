@@ -78,8 +78,13 @@ class BGMusic{
     let a=this._pre&&this._pre[src];
     if(a){this._pre[src]=null;}else{a=new Audio(MUSIC_URL+src);a.preload="auto";}
     a.loop=loop;if(onended)a.onended=onended;this.pool.push(a);this._setV(a,0);
-    a.play().then(()=>{if(a===this.audio)this._fade(a,this.vol,1600);}).catch(()=>{});
+    if(this.ctx&&this.ctx.state==="suspended")this.ctx.resume().catch(()=>{});
+    const go=()=>a.play().then(()=>{if(a===this.audio)this._fade(a,this.vol,1600);}).catch(()=>{});
+    go();
     return a;}
+  resume(){if(this.ctx&&this.ctx.state==="suspended")this.ctx.resume().catch(()=>{});
+    // if music should be on but the element got paused (iOS suspend), kick it again
+    if(this.playing&&this.audio&&this.audio.paused){try{this.audio.play().catch(()=>{});}catch(e){}}}
   _startMode(mode){
     this.mode=mode;this.playing=true;
     if(mode==="game"){
@@ -1941,6 +1946,16 @@ export default function UnoGame(){
     ["pointerdown","touchstart","keydown","click"].forEach(e=>window.addEventListener(e,go,{passive:true}));
     return rm;
   },[]);
+  // Keep audio alive: re-resume the context (and restart the paused music) on any
+  // interaction or when returning to the tab — fixes music intermittently not playing.
+  useEffect(()=>{
+    const resume=()=>{ua();bgm.resume();};
+    const evs=["pointerdown","touchstart","keydown","click"];
+    evs.forEach(e=>window.addEventListener(e,resume,{passive:true}));
+    const vis=()=>{if(!document.hidden)bgm.resume();};
+    document.addEventListener("visibilitychange",vis);
+    return()=>{evs.forEach(e=>window.removeEventListener(e,resume));document.removeEventListener("visibilitychange",vis);};
+  },[]);
   // Swap between menu track and gameplay tracks as the screen changes.
   useEffect(()=>{if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus]);
 
@@ -2455,7 +2470,7 @@ export default function UnoGame(){
             onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.25)"}
             onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,255,255,0.1)"}>
             🔊 AUDIO</button>
-          <button onClick={()=>setShowAdm(true)} style={{background:"none",border:"none",color:isAdm?"#FFD700":"#222",fontSize:8,cursor:"pointer",padding:4,fontWeight:700,letterSpacing:1}}>{isAdm?"ADMIN":"•••"}</button>
+          {isAdm&&<button onClick={()=>setShowAdm(true)} style={{background:"none",border:"none",color:"#FFD700",fontSize:8,cursor:"pointer",padding:4,fontWeight:700,letterSpacing:1}}>ADMIN</button>}
         </div>
       </div>
       {audioModal}
