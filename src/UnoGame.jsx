@@ -1500,6 +1500,12 @@ export default function UnoGame(){
   const[delAcc,setDelAcc]=useState(null);const[delText,setDelText]=useState("");
   const[emoteTray,setEmoteTray]=useState(false);const[emoteCD,setEmoteCD]=useState(false);const[activeEmote,setActiveEmote]=useState(null);
   const prevEmoteTs=useRef(0);
+  const[friends,setFriends]=useState({});
+  const[friendReqs,setFriendReqs]=useState({});
+  const[gameInvites,setGameInvites]=useState({});
+  const[showFriends,setShowFriends]=useState(false);
+  const[friendIdInput,setFriendIdInput]=useState("");
+  const[friendMsg,setFriendMsg]=useState("");
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
@@ -1523,6 +1529,36 @@ export default function UnoGame(){
       const me=d[pid];if(me)setMyStats(me);});
     return()=>off(lbRef);
   },[pid]);
+
+  /* ── Friends / requests / game invites (all keyed by this player's id) ── */
+  useEffect(()=>{
+    const fRef=ref(db,"friends/"+pid),rRef=ref(db,"freq/"+pid),iRef=ref(db,"ginv/"+pid);
+    const u1=onValue(fRef,s=>setFriends(s.val()||{}));
+    const u2=onValue(rRef,s=>setFriendReqs(s.val()||{}));
+    const u3=onValue(iRef,s=>{const d=s.val()||{};const now=Date.now();const fresh={};
+      Object.entries(d).forEach(([k,v])=>{if(v&&now-(v.ts||0)<180000)fresh[k]=v;else remove(ref(db,"ginv/"+pid+"/"+k)).catch(()=>{});});
+      setGameInvites(fresh);});
+    return()=>{off(fRef);off(rRef);off(iRef);};
+  },[pid]);
+  const sendFriendReq=async()=>{const fid=friendIdInput.trim().toLowerCase();
+    if(!fid){setFriendMsg("Enter a Player ID");return;}
+    if(fid===pid){setFriendMsg("That's your own ID");return;}
+    if(friends[fid]){setFriendMsg("Already friends");return;}
+    try{const snap=await get(ref(db,"leaderboard/"+fid));
+      if(!snap.exists()){setFriendMsg("No player with that ID");return;}
+      await set(ref(db,"freq/"+fid+"/"+pid),{name:pName.trim()||"Player",ts:Date.now()});
+      setFriendMsg("Request sent to "+(snap.val().name||"player")+"!");setFriendIdInput("");
+    }catch(e){setFriendMsg("Failed — try again");}};
+  const acceptFriendReq=async(fromId,name)=>{
+    await set(ref(db,"friends/"+pid+"/"+fromId),{name:name||"Player",ts:Date.now()});
+    await set(ref(db,"friends/"+fromId+"/"+pid),{name:pName.trim()||"Player",ts:Date.now()});
+    await remove(ref(db,"freq/"+pid+"/"+fromId));};
+  const declineFriendReq=async(fromId)=>{await remove(ref(db,"freq/"+pid+"/"+fromId));};
+  const removeFriend=async(fid)=>{await remove(ref(db,"friends/"+pid+"/"+fid));await remove(ref(db,"friends/"+fid+"/"+pid));};
+  const inviteFriend=async(fid)=>{if(!rc)return;
+    await set(ref(db,"ginv/"+fid+"/"+pid),{name:pName.trim()||"Player",code:rc,ts:Date.now()});
+    setFriendMsg("Invite sent!");setTimeout(()=>setFriendMsg(""),1500);};
+  const acceptInvite=async(fromId,code)=>{await remove(ref(db,"ginv/"+pid+"/"+fromId));setShowFriends(false);joinRoom(code);};
   const ps=useCallback(t=>{if(snd)sfx.p(t);},[snd]);
   const psE=useCallback(c=>{if(snd)sfx.pEl(c);},[snd]);
   const trigShake=useCallback(()=>{setScreenShake(true);setTimeout(()=>setScreenShake(false),400);},[]);
@@ -1709,16 +1745,21 @@ export default function UnoGame(){
           const oRank=getRank(op.totalPoints,op.gamesPlayed);
           let award=calcElo(wRank.idx,oRank.idx,baseScore).winPts;
           if(!oppBot){
-            /* anti-farm: only diminish ONE-SIDED repeat wins (alt-farming). Friends
-               who trade wins keep near-full points because the net margin stays low. */
+            /* Anti-farm layer 1: only diminish ONE-SIDED repeat wins (alt-feeding).
+               Friends who TRADE wins keep near-full points (net margin stays low),
+               while a main that keeps beating the same alt gets crushed as net grows. */
             const aBeatB=(beat[oppId]&&(now-beat[oppId].t)<H2H_WIN)?beat[oppId].c:0;
             const bBeatA=(op.beat&&op.beat[winnerId]&&(now-op.beat[winnerId].t)<H2H_WIN)?op.beat[winnerId].c:0;
             const net=Math.max(0,aBeatB-bBeatA);
-            const mult=net<3?1:net<5?0.6:net<8?0.35:0.15;
+            const mult=net<3?1:net<5?0.5:net<7?0.25:0.08;
             award=Math.max(1,Math.round(award*mult));
             beat[oppId]={c:aBeatB+1,t:now};
-            const newPts=Math.max(0,(op.totalPoints||0)-award);
-            deltas[oppId]=newPts-(op.totalPoints||0); // actual points lost (clamped at 0)
+            /* Anti-farm layer 2: ZERO-SUM. The winner gains ONLY what the loser
+               actually loses. A drained alt sitting at 0 pts feeds nothing, so you
+               can never mint points by repeatedly beating your own accounts. */
+            const before=op.totalPoints||0;const newPts=Math.max(0,before-award);
+            award=before-newPts;
+            deltas[oppId]=newPts-before;
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
               gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now});}
           totalWin+=award;}
@@ -1935,8 +1976,8 @@ export default function UnoGame(){
       players:{[pid]:{name:pName.trim(),order:0}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
     }catch(e){setErr("Check Firebase config.");console.error(e);}};
 
-  const joinRoom=async()=>{if(!pName.trim()){setErr("Enter name");return;}
-    const code=jc.trim().toUpperCase();if(code.length!==4){setErr("4-letter code");return;}ua();
+  const joinRoom=async(codeArg)=>{if(!pName.trim()){setErr("Enter name");return;}
+    const code=(typeof codeArg==="string"?codeArg:jc).trim().toUpperCase();if(code.length!==4){setErr("4-letter code");return;}ua();
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     try{const snap=await get(ref(db,"rooms/"+code));if(!snap.exists()){setErr("Not found");return;}
       const data=snap.val();if(data.status!=="waiting"){setErr("Already started");return;}
@@ -2256,6 +2297,19 @@ export default function UnoGame(){
       onClick={()=>{ua();if(!bgm.playing&&!musUserOff.current)startMusic();}}>
       <CanvasBG screen="menu"/>
 
+      {/* Incoming game invites banner */}
+      {Object.keys(gameInvites).length>0&&(()=>{const[fid,v]=Object.entries(gameInvites)[0];return(
+        <div style={{position:"absolute",top:"max(10px,env(safe-area-inset-top,10px))",left:"50%",transform:"translateX(-50%)",zIndex:60,
+          display:"flex",alignItems:"center",gap:10,padding:"8px 12px 8px 14px",borderRadius:14,
+          background:"linear-gradient(135deg,rgba(46,125,50,0.95),rgba(27,94,32,0.95))",
+          border:"1px solid rgba(129,199,132,0.4)",boxShadow:"0 6px 24px rgba(0,0,0,0.5)",
+          backdropFilter:"blur(8px)",animation:"aslide 0.4s ease-out",maxWidth:"92vw"}}>
+          <span style={{fontSize:18}}>🎮</span>
+          <span style={{fontSize:12,color:"#fff",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><b>{v.name}</b> invited you!</span>
+          <button onClick={e=>{e.stopPropagation();acceptInvite(fid,v.code);}} style={{background:"#fff",border:"none",borderRadius:9,color:"#1B5E20",fontSize:11,fontWeight:900,padding:"6px 14px",cursor:"pointer",letterSpacing:1}}>JOIN</button>
+          <button onClick={e=>{e.stopPropagation();remove(ref(db,"ginv/"+pid+"/"+fid));}} style={{background:"rgba(0,0,0,0.2)",border:"none",borderRadius:8,color:"#fff",fontSize:12,width:24,height:24,cursor:"pointer"}}>×</button>
+        </div>);})()}
+
       {/* Floating decorative cards */}
       <div style={{position:"absolute",top:"8%",left:"50%",transform:"translateX(-50%)",zIndex:1,pointerEvents:"none"}}>
         {menuCards.map((c,i)=>(
@@ -2382,6 +2436,18 @@ export default function UnoGame(){
             onPointerEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.transform="translateY(-1px)";}}
             onPointerLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.transform="translateY(0)";}}>
             👤 ACCOUNT</button>
+          <button onClick={()=>{setShowFriends(true);setFriendMsg("");}} style={{background:"rgba(255,255,255,0.04)",
+            border:"1px solid rgba(255,255,255,0.1)",padding:"7px 14px",borderRadius:12,position:"relative",
+            color:"#aaa",fontSize:11,fontWeight:700,cursor:"pointer",transition:"all 0.2s",
+            display:"flex",alignItems:"center",gap:4,letterSpacing:1}}
+            onPointerEnter={e=>{e.currentTarget.style.background="rgba(255,255,255,0.08)";e.currentTarget.style.transform="translateY(-1px)";}}
+            onPointerLeave={e=>{e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.transform="translateY(0)";}}>
+            🤝 FRIENDS
+            {(Object.keys(friendReqs).length+Object.keys(gameInvites).length)>0&&<span style={{position:"absolute",top:-5,right:-5,
+              background:"#E53935",color:"#fff",fontSize:9,fontWeight:900,minWidth:16,height:16,borderRadius:8,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",
+              boxShadow:"0 0 8px rgba(229,57,53,0.6)"}}>{Object.keys(friendReqs).length+Object.keys(gameInvites).length}</span>}
+          </button>
           <button onClick={e=>{e.stopPropagation();ua();setShowAudio(true);}} style={{background:"none",
             border:"1px solid rgba(255,255,255,0.1)",padding:"7px 16px",borderRadius:12,
             color:(mus||snd)?"#FFD700":"#778",fontSize:11,cursor:"pointer",transition:"all 0.2s",
@@ -2448,6 +2514,66 @@ export default function UnoGame(){
       {storeOpen&&<StoreModal onClose={()=>setStoreOpen(false)}/>}
 
       {/* Account Modal */}
+      {showFriends&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+        backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}} onClick={()=>{setShowFriends(false);setFriendMsg("");}}>
+        <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:"20px 18px",width:"92%",maxWidth:400,maxHeight:"88vh",overflow:"auto",position:"relative"}}>
+          <button onClick={()=>{setShowFriends(false);setFriendMsg("");}} style={{position:"absolute",top:8,right:12,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer"}}>×</button>
+          <div style={{fontSize:16,fontWeight:900,color:"#FFD700",letterSpacing:2,marginBottom:12,fontFamily:"'Chakra Petch',sans-serif"}}>🤝 FRIENDS</div>
+          {/* Your ID to share */}
+          <div style={{background:"rgba(255,215,0,0.06)",border:"1px solid rgba(255,215,0,0.15)",borderRadius:10,padding:"8px 12px",marginBottom:12}}>
+            <div style={{fontSize:8,color:"#889",letterSpacing:2,marginBottom:3}}>YOUR PLAYER ID — SHARE TO GET ADDED</div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{fontFamily:"monospace",fontSize:15,color:"#FFD700",fontWeight:800,letterSpacing:1,flex:1}}>{pid}</span>
+              <button onClick={()=>{try{navigator.clipboard.writeText(pid);setFriendMsg("ID copied!");setTimeout(()=>setFriendMsg(""),1200);}catch(e){}}}
+                style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:7,color:"#ddd",fontSize:10,fontWeight:700,padding:"5px 10px",cursor:"pointer"}}>COPY</button>
+            </div>
+          </div>
+          {/* Add friend */}
+          <div style={{display:"flex",gap:6,marginBottom:6}}>
+            <input value={friendIdInput} onChange={e=>setFriendIdInput(e.target.value)} placeholder="Enter friend's Player ID"
+              style={{...ist,marginBottom:0,flex:1,fontSize:12}}/>
+            <button onClick={sendFriendReq} style={{background:"linear-gradient(135deg,#2E7D32,#1B5E20)",border:"none",borderRadius:12,
+              color:"#fff",fontSize:11,fontWeight:800,letterSpacing:1,padding:"0 16px",cursor:"pointer"}}>ADD</button>
+          </div>
+          {friendMsg&&<div style={{fontSize:10,color:friendMsg.includes("Failed")||friendMsg.includes("No player")||friendMsg.includes("own")?"#EF5350":"#4CAF50",marginBottom:8,textAlign:"center"}}>{friendMsg}</div>}
+          {/* Pending game invites */}
+          {Object.keys(gameInvites).length>0&&<div style={{marginBottom:10}}>
+            <div style={{fontSize:9,color:"#4CAF50",letterSpacing:2,marginBottom:5,fontWeight:800}}>🎮 GAME INVITES</div>
+            {Object.entries(gameInvites).map(([fid,v])=>(
+              <div key={fid} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,marginBottom:4,
+                background:"rgba(76,175,80,0.1)",border:"1px solid rgba(76,175,80,0.25)"}}>
+                <span style={{flex:1,fontSize:12,color:"#ddd",fontWeight:600}}>{v.name} invited you</span>
+                <button onClick={()=>acceptInvite(fid,v.code)} style={{background:"#2E7D32",border:"none",borderRadius:7,color:"#fff",fontSize:10,fontWeight:800,padding:"5px 12px",cursor:"pointer"}}>JOIN</button>
+              </div>))}
+          </div>}
+          {/* Pending friend requests */}
+          {Object.keys(friendReqs).length>0&&<div style={{marginBottom:10}}>
+            <div style={{fontSize:9,color:"#FFD700",letterSpacing:2,marginBottom:5,fontWeight:800}}>FRIEND REQUESTS</div>
+            {Object.entries(friendReqs).map(([fid,v])=>(
+              <div key={fid} style={{display:"flex",alignItems:"center",gap:6,padding:"7px 10px",borderRadius:10,marginBottom:4,
+                background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)"}}>
+                <span style={{flex:1,fontSize:12,color:"#ddd",fontWeight:600}}>{v.name}</span>
+                <button onClick={()=>acceptFriendReq(fid,v.name)} style={{background:"#2E7D32",border:"none",borderRadius:7,color:"#fff",fontSize:10,fontWeight:800,padding:"5px 10px",cursor:"pointer"}}>✓</button>
+                <button onClick={()=>declineFriendReq(fid)} style={{background:"rgba(255,82,82,0.15)",border:"1px solid rgba(255,82,82,0.3)",borderRadius:7,color:"#FF5252",fontSize:10,fontWeight:800,padding:"5px 10px",cursor:"pointer"}}>✕</button>
+              </div>))}
+          </div>}
+          {/* Friends list */}
+          <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:5,fontWeight:800}}>MY FRIENDS ({Object.keys(friends).length})</div>
+          {Object.keys(friends).length===0&&<div style={{fontSize:11,color:"#667",textAlign:"center",padding:"12px 0"}}>No friends yet. Share your ID or add someone above.</div>}
+          {Object.entries(friends).map(([fid,v])=>{const online=globalLB.find(p=>p.id===fid);return(
+            <div key={fid} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,marginBottom:4,
+              background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{width:28,height:28,borderRadius:8,background:CG[COLORS[fid.charCodeAt(0)%4]],display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff"}}>{(v.name||"?")[0]?.toUpperCase()}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,color:"#ddd",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{online?.name||v.name}</div>
+                <div style={{fontSize:8,color:"#667"}}>{online?online.totalPoints+" pts":"—"}</div>
+              </div>
+              {rc&&scr==="lobby"&&<button onClick={()=>inviteFriend(fid)} style={{background:"#1565C0",border:"none",borderRadius:7,color:"#fff",fontSize:9,fontWeight:800,padding:"5px 10px",cursor:"pointer"}}>INVITE</button>}
+              <button onClick={()=>removeFriend(fid)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",borderRadius:6,color:"#FF5252",fontSize:11,width:24,height:24,cursor:"pointer"}}>×</button>
+            </div>);})}
+        </div>
+      </div>)}
       {showAccount&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
         display:"flex",alignItems:"center",justifyContent:"center",
         backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}} onClick={()=>{setShowAccount(false);setRestoreMsg("");}}>
@@ -2619,6 +2745,11 @@ export default function UnoGame(){
             onPointerLeave={e=>{e.currentTarget.style.borderColor="rgba(76,175,80,0.3)";e.currentTarget.style.background="rgba(76,175,80,0.06)";}}>
             + ADD BOT</button>}
         </div>
+        <button onClick={()=>{setShowFriends(true);setFriendMsg("");}} style={{width:"100%",maxWidth:380,padding:"9px 0",borderRadius:12,marginBottom:10,
+          border:"1px solid rgba(21,101,192,0.35)",background:"rgba(21,101,192,0.1)",color:"#64B5F6",
+          fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:2,transition:"all 0.2s"}}
+          onPointerEnter={e=>e.currentTarget.style.background="rgba(21,101,192,0.18)"}
+          onPointerLeave={e=>e.currentTarget.style.background="rgba(21,101,192,0.1)"}>🤝 INVITE FRIENDS</button>
         {/* Settings */}
         <div style={{width:"100%",maxWidth:380,marginBottom:10}}>
           <button onClick={()=>setShowSettings(!showSettings)} style={{background:"none",border:"1px solid rgba(255,215,0,0.12)",
