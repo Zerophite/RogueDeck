@@ -688,7 +688,7 @@ const ThrowSplat=({item})=>{
     {label}
   </>);
 };
-const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEquipThrow})=>{
+const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEquipThrow,isAdm})=>{
   const[catId,setCatId]=useState("avatar");
   const[preview,setPreview]=useState("celebrate");
   const[msg,setMsg]=useState("");
@@ -701,7 +701,7 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
   const handleTile=(it)=>{
     const own=owned.includes(it.id);
     if(own){if(catId==="avatar"){onEquipAvatar(it.id);flash(it.name+" equipped!");}else{onEquipThrow(it.id);flash(it.name+" selected!");}return;}
-    if(coins<it.price){flash("Not enough coins — win games to earn more!");return;}
+    if(!isAdm&&coins<it.price){flash("Not enough coins — win games to earn more!");return;}
     onBuy(it);flash("Unlocked "+it.name+"!");
   };
   const equippedId=catId==="avatar"?myAvatar:myThrow;
@@ -749,6 +749,7 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
             <span style={{fontSize:9,fontWeight:800,color:own?"#ddd":"#889",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{it.name}</span>
             {eq?<span style={{fontSize:7,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:5,padding:"1px 6px",letterSpacing:1}}>EQUIPPED</span>
               :own?<span style={{fontSize:7,fontWeight:800,color:"#4CAF50",letterSpacing:1}}>TAP TO USE</span>
+              :isAdm?<span style={{fontSize:7,fontWeight:900,color:"#4CAF50",letterSpacing:1}}>FREE</span>
               :<span style={{fontSize:9,fontWeight:900,color:"#FFD700",display:"flex",alignItems:"center",gap:2}}>🪙{it.price}</span>}
           </div>);})}
       </div>
@@ -1928,12 +1929,13 @@ export default function UnoGame(){
     }).catch(()=>{});
   },[pid]);
 
-  const buyItem=useCallback((it)=>{if(owned.includes(it.id)||coins<it.price)return;
-    const nc=coins-it.price,no=[...new Set([...owned,it.id])];
+  const buyItem=useCallback((it)=>{if(owned.includes(it.id))return;
+    if(!isAdm&&coins<it.price)return;
+    const nc=isAdm?coins:coins-it.price,no=[...new Set([...owned,it.id])];
     setCoins(nc);setOwned(no);ps("win");
     localStorage.setItem("uno_coins",String(nc));localStorage.setItem("uno_owned",JSON.stringify(no));
     update(ref(db,"leaderboard/"+pid),{coins:nc,owned:no}).catch(()=>{});
-  },[owned,coins,pid]);
+  },[owned,coins,pid,isAdm]);
 
   const equipAvatar=useCallback((id)=>{if(!owned.includes(id))return;setMyAvatar(id);
     localStorage.setItem("uno_avatar",id);
@@ -2995,7 +2997,7 @@ export default function UnoGame(){
 
       {statsView&&<PlayerStatsModal stats={statsView} isOwner={statsView.id===pid} onClose={()=>setStatsView(null)}/>}
       {storeOpen&&<StoreModal onClose={()=>setStoreOpen(false)} coins={coins} owned={owned}
-        myAvatar={myAvatar} myThrow={myThrow} onBuy={buyItem} onEquipAvatar={equipAvatar} onEquipThrow={equipThrow}/>}
+        myAvatar={myAvatar} myThrow={myThrow} onBuy={buyItem} onEquipAvatar={equipAvatar} onEquipThrow={equipThrow} isAdm={isAdm}/>}
 
       {/* Account Modal */}
       {showFriends&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
