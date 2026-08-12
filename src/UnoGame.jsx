@@ -359,45 +359,222 @@ function fmtLast(ts){if(!ts)return"—";const s=Math.floor((Date.now()-ts)/1000)
   if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";
   const d=Math.floor(s/86400);if(d<30)return d+"d ago";const mo=Math.floor(d/30);if(mo<12)return mo+"mo ago";return Math.floor(mo/12)+"y ago";}
 
-/* ═══ STORE (scaffold — items coming soon) ═══ */
-const STORE_CATS=[
-  {id:"character",name:"Character",icon:"🧑",subs:["Head","Eyes","Nose","Eyebrows","Mouth","Ears","Hair"]},
-  {id:"accessories",name:"Accessories",icon:"🎀",subs:["Head","Eyes","Nose","Eyebrows","Mouth","Ears","Hair"]},
-  {id:"emoji",name:"Emoji",icon:"😀",subs:null},
-  {id:"frame",name:"Frame",icon:"🖼️",subs:null},
-  {id:"banner",name:"Banner",icon:"🚩",subs:null},
+/* ═══ AVATARS (SVG characters — states: idle / hit / celebrate / uno) ═══ */
+const AVATARS=[
+  {id:"rookie", name:"Rookie",  price:0,  ring:"#F5A623",skin:["#FFE0B2","#EFA766"],eye:"round", top:"tuft",   hairC:"#6D4C2F",ears:"round"},
+  {id:"sunny",  name:"Sunny",   price:0,  ring:"#FFB300",skin:["#FFEB6B","#FFC107"],eye:"dot",   top:"none",   blush:"#FF8A65"},
+  {id:"golem",  name:"Golem",   price:0,  ring:"#90A4AE",skin:["#B6C2CB","#5E7681"],eye:"dot",   top:"rock",   ears:"round"},
+  {id:"ninja",  name:"Shadow",  price:200,ring:"#EF5350",skin:["#5C6BC0","#2E3B8F"],eye:"round", top:"band",   acc:"mask"},
+  {id:"robo",   name:"Robo",    price:300,ring:"#26C6DA",skin:["#E4EAEE","#8598A3"],eye:"square",top:"antenna",ears:"bolt"},
+  {id:"alien",  name:"Zorp",    price:350,ring:"#66BB6A",skin:["#C6FF6E","#5FD417"],eye:"big",   top:"antennae"},
+  {id:"kitty",  name:"Whiskers",price:400,ring:"#F48FB1",skin:["#FFFFFF","#F3D3DC"],eye:"round", top:"none",   ears:"cat",earC:"#F06292",blush:"#F8BBD0",whisk:true},
+  {id:"imp",    name:"Imp",     price:500,ring:"#E53935",skin:["#FF8A65","#E5392E"],eye:"round", top:"horns",  mood:"smirk"},
+  {id:"wizard", name:"Merlin",  price:650,ring:"#7E57C2",skin:["#FFE0B2","#E0A878"],eye:"round", top:"wizhat", beard:true},
+  {id:"royal",  name:"Monarch", price:900,ring:"#FFD54F",skin:["#FFE0B2","#E0A878"],eye:"round", top:"crown",  mood:"regal"},
 ];
-const StoreModal=({onClose})=>{
-  const[catId,setCatId]=useState("character");const cat=STORE_CATS.find(c=>c.id===catId);
-  const[sub,setSub]=useState(0);
+const AV_MAP=Object.fromEntries(AVATARS.map(a=>[a.id,a]));
+const avatarOf=id=>AV_MAP[id]||AVATARS[0];
+const AV_FREE=AVATARS.filter(a=>a.price===0).map(a=>a.id);
+const randAvatar=()=>AVATARS[Math.floor(Math.random()*AVATARS.length)].id;
+
+/* ═══ THROWABLES (tap an opponent in-game to fling one) ═══ */
+const THROWABLES=[
+  {id:"tomato",name:"Tomato",     price:0,  emoji:"🍅",splat:"#E53935",label:"SPLAT!"},
+  {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFE082",label:"CRACK!"},
+  {id:"snow",  name:"Snowball",   price:60, emoji:"⚪",splat:"#E1F5FE",label:"BRR!"},
+  {id:"pie",   name:"Cream Pie",  price:120,emoji:"🥧",splat:"#FFF3E0",label:"SPLAT!"},
+  {id:"water", name:"Water Balloon",price:150,emoji:"💧",splat:"#4FC3F7",label:"SPLASH!"},
+  {id:"boot",  name:"Old Boot",   price:220,emoji:"🥾",splat:"#8D6E63",label:"BONK!"},
+  {id:"poop",  name:"Stinker",    price:300,emoji:"💩",splat:"#795548",label:"EWW!"},
+  {id:"bomb",  name:"Cartoon Bomb",price:450,emoji:"💣",splat:"#616161",label:"BOOM!"},
+];
+const THROW_MAP=Object.fromEntries(THROWABLES.map(t=>[t.id,t]));
+const throwOf=id=>THROW_MAP[id]||THROWABLES[0];
+const THROW_FREE=THROWABLES.filter(t=>t.price===0).map(t=>t.id);
+const DEFAULT_OWNED=[...AV_FREE,...THROW_FREE];
+
+/* Cosmetics persistence — coins/avatar/owned live on the account (leaderboard node)
+   with a localStorage mirror for instant load. */
+function getCoins(){return parseInt(localStorage.getItem("uno_coins")||"0",10)||0;}
+function getMyAvatar(){return localStorage.getItem("uno_avatar")||"rookie";}
+function getMyThrow(){return localStorage.getItem("uno_throw")||"tomato";}
+function getOwned(){try{const a=JSON.parse(localStorage.getItem("uno_owned")||"[]");
+  return[...new Set([...DEFAULT_OWNED,...(Array.isArray(a)?a:[])])];}catch(e){return[...DEFAULT_OWNED];}}
+
+const Avatar=({id,state="idle",size=44,anim=true})=>{
+  const a=avatarOf(id);
+  const uid=useMemo(()=>Math.random().toString(36).slice(2,8),[]);
+  const gid=n=>uid+n;
+  const[sk1,sk2]=a.skin;
+  const ey=52,eL=39,eR=61;
+  const wrapAnim=!anim?"none":
+    state==="hit"?"avHit 0.26s ease-in-out infinite":
+    state==="celebrate"?"avCele 0.6s ease-in-out infinite":
+    state==="uno"?"avUno 0.5s ease-in-out infinite":
+    "avBob 3.6s ease-in-out infinite";
+  const skStroke="rgba(0,0,0,0.18)";
+  const eyes=(()=>{
+    if(state==="hit")return[eL,eR].map((x,i)=>(
+      <g key={i} stroke="#3A2A1A" strokeWidth="3.4" strokeLinecap="round">
+        <line x1={x-5} y1={ey-5} x2={x+5} y2={ey+5}/><line x1={x+5} y1={ey-5} x2={x-5} y2={ey+5}/></g>));
+    if(state==="celebrate")return[eL,eR].map((x,i)=>(
+      <path key={i} d={`M${x-6} ${ey+3} Q${x} ${ey-6} ${x+6} ${ey+3}`} fill="none" stroke="#3A2A1A" strokeWidth="3.6" strokeLinecap="round"/>));
+    const big=state==="uno";
+    if(a.eye==="dot")return[eL,eR].map((x,i)=><circle key={i} cx={x} cy={ey} r={big?6:5} fill="#2B2B2B"/>);
+    if(a.eye==="square")return[eL,eR].map((x,i)=>(
+      <g key={i}><rect x={x-6} y={ey-6} width="12" height="12" rx="3" fill="#08262C"/>
+        <rect x={x-4} y={ey-4} width="8" height="8" rx="2" fill="#2CE0F0"/></g>));
+    if(a.eye==="big")return[eL,eR].map((x,i)=>(
+      <g key={i}><ellipse cx={x} cy={ey} rx="7.5" ry="10.5" fill="#141414"/>
+        <circle cx={x-2} cy={ey-3.4} r="2.4" fill="#fff"/></g>));
+    return[eL,eR].map((x,i)=>(
+      <g key={i}><ellipse cx={x} cy={ey} rx={big?7:6} ry={big?8.6:7} fill="#fff"/>
+        <circle cx={x} cy={ey+(big?-1:0)} r="3.4" fill="#2B2B2B"/>
+        <circle cx={x-1.4} cy={ey-1.6} r="1.2" fill="#fff"/></g>));
+  })();
+  const mouth=(()=>{
+    if(a.acc==="mask")return null;
+    if(state==="hit")return<path d="M42 70 Q46 66 50 70 Q54 74 58 70" fill="none" stroke="#7A3B2E" strokeWidth="2.8" strokeLinecap="round"/>;
+    if(state==="celebrate")return(<g><path d="M38 66 Q50 84 62 66 Q50 72 38 66 Z" fill="#5A2A22"/>
+      <path d="M45 74 Q50 80 55 74 Q50 76 45 74 Z" fill="#FF6B6B"/></g>);
+    if(state==="uno")return<ellipse cx="50" cy="71" rx="8" ry="10" fill="#5A2A22"/>;
+    if(a.mood==="smirk")return<path d="M40 69 Q50 78 60 70" fill="none" stroke="#7A3B2E" strokeWidth="3" strokeLinecap="round"/>;
+    if(a.mood==="regal")return<path d="M43 70 Q50 74 57 70" fill="none" stroke="#7A3B2E" strokeWidth="3" strokeLinecap="round"/>;
+    return<path d="M40 69 Q50 77 60 69" fill="none" stroke="#7A3B2E" strokeWidth="3" strokeLinecap="round"/>;
+  })();
+  const ears=(()=>{
+    if(a.ears==="round")return(<g><circle cx="20" cy="56" r="7" fill={`url(#${gid("s")})`} stroke={skStroke}/>
+      <circle cx="80" cy="56" r="7" fill={`url(#${gid("s")})`} stroke={skStroke}/></g>);
+    if(a.ears==="cat")return(<g stroke={skStroke} strokeWidth="1">
+      <path d="M26 34 L22 12 L44 26 Z" fill={`url(#${gid("s")})`}/><path d="M28 30 L26 18 L38 26 Z" fill={a.earC||"#F06292"}/>
+      <path d="M74 34 L78 12 L56 26 Z" fill={`url(#${gid("s")})`}/><path d="M72 30 L74 18 L62 26 Z" fill={a.earC||"#F06292"}/></g>);
+    if(a.ears==="bolt")return(<g fill="#6B7C86" stroke="#4A5860" strokeWidth="1">
+      <rect x="14" y="50" width="7" height="12" rx="2"/><rect x="79" y="50" width="7" height="12" rx="2"/></g>);
+    return null;
+  })();
+  const top=(()=>{
+    switch(a.top){
+      case"tuft":return<path d="M30 30 Q34 18 42 26 Q48 16 56 26 Q64 18 70 30 Q50 22 30 30 Z" fill={a.hairC} stroke="rgba(0,0,0,0.2)"/>;
+      case"rock":return<path d="M24 34 L30 20 L38 30 L44 16 L50 28 L57 16 L63 30 L70 20 L76 34 Z" fill="#4A5B64" stroke="#37474F" strokeWidth="1.2" strokeLinejoin="round"/>;
+      case"band":return(<g><path d="M22 42 Q50 30 78 42 L78 50 Q50 40 22 50 Z" fill="#C62828"/>
+        <path d="M76 44 L92 40 L88 52 Z" fill="#B71C1C"/><path d="M78 48 L94 52 L86 58 Z" fill="#B71C1C"/></g>);
+      case"antenna":return(<g><rect x="48.5" y="18" width="3" height="14" rx="1.5" fill="#6B7C86"/>
+        <circle cx="50" cy="16" r="5" fill="#FF5252"/><circle cx="48" cy="14.5" r="1.6" fill="#fff" opacity="0.8"/></g>);
+      case"antennae":return(<g stroke="#4F9A24" strokeWidth="2.6" strokeLinecap="round" fill="none">
+        <path d="M40 34 Q34 20 30 14"/><path d="M60 34 Q66 20 70 14"/>
+        <circle cx="30" cy="12" r="4" fill="#B2FF59" stroke="none"/><circle cx="70" cy="12" r="4" fill="#B2FF59" stroke="none"/></g>);
+      case"horns":return(<g fill="#C62828" stroke="#8E1B18" strokeWidth="1"><path d="M28 34 Q22 20 30 16 Q30 26 36 32 Z"/>
+        <path d="M72 34 Q78 20 70 16 Q70 26 64 32 Z"/></g>);
+      case"wizhat":return(<g><path d="M50 2 L70 40 Q50 32 30 40 Z" fill="#5E35B1" stroke="#4527A0" strokeWidth="1.2" strokeLinejoin="round"/>
+        <path d="M26 40 Q50 30 74 40 Q50 50 26 40 Z" fill="#4527A0"/>
+        <path d="M50 14 l2.4 5 5.2 0.6 -3.8 3.6 1 5.2 -4.8 -2.6 -4.8 2.6 1 -5.2 -3.8 -3.6 5.2 -0.6 Z" fill="#FFD54F"/></g>);
+      case"crown":return(<g><path d="M28 34 L32 18 L40 28 L50 14 L60 28 L68 18 L72 34 Z" fill={`url(#${gid("cr")})`} stroke="#B8860B" strokeWidth="1" strokeLinejoin="round"/>
+        <rect x="28" y="32" width="44" height="6" rx="2" fill={`url(#${gid("cr")})`} stroke="#B8860B" strokeWidth="0.8"/>
+        <circle cx="50" cy="14" r="2.6" fill="#FF4D6D"/><circle cx="32" cy="18" r="2" fill="#7EC8E3"/><circle cx="68" cy="18" r="2" fill="#7EC8E3"/></g>);
+      default:return null;
+    }
+  })();
+  return(<svg width={size} height={size} viewBox="0 0 100 100" style={{display:"block",overflow:"visible"}}>
+    <defs>
+      <linearGradient id={gid("s")} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={sk1}/><stop offset="100%" stopColor={sk2}/></linearGradient>
+      <radialGradient id={gid("bg")} cx="50%" cy="36%" r="72%"><stop offset="0%" stopColor="#26324c"/><stop offset="100%" stopColor="#0d1420"/></radialGradient>
+      <linearGradient id={gid("cr")} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FFF6B0"/><stop offset="55%" stopColor="#FFCF2E"/><stop offset="100%" stopColor="#B8860B"/></linearGradient>
+    </defs>
+    <circle cx="50" cy="50" r="48" fill={`url(#${gid("bg")})`}/>
+    <circle cx="50" cy="50" r="47" fill="none" stroke={a.ring} strokeWidth="2.5" opacity="0.55"/>
+    <g style={{transformBox:"view-box",transformOrigin:"50px 62px",animation:wrapAnim}}>
+      {ears}
+      <ellipse cx="50" cy="56" rx="31" ry="32" fill={`url(#${gid("s")})`} stroke={skStroke} strokeWidth="1.2"/>
+      {top}
+      {a.blush&&<g fill={a.blush} opacity="0.55"><ellipse cx="31" cy="64" rx="6" ry="3.6"/><ellipse cx="69" cy="64" rx="6" ry="3.6"/></g>}
+      {state==="idle"?<g style={{transformBox:"view-box",transformOrigin:"50px 52px",animation:anim?"avBlink 4.2s ease-in-out infinite":"none"}}>{eyes}</g>:eyes}
+      {a.eye!=="big"&&a.eye!=="square"&&state!=="hit"&&state!=="celebrate"&&<ellipse cx="50" cy="61" rx="2.4" ry="1.6" fill="rgba(0,0,0,0.18)"/>}
+      {mouth}
+      {a.acc==="mask"&&<path d="M20 62 Q50 58 80 62 L80 80 Q50 92 20 80 Z" fill="#1A2352" stroke="#0F1636" strokeWidth="1"/>}
+      {a.beard&&<path d="M28 60 Q30 92 50 94 Q70 92 72 60 Q50 74 28 60 Z" fill="#ECEFF1" stroke="#B0BEC5" strokeWidth="0.8"/>}
+      {a.whisk&&<g stroke="#B0838F" strokeWidth="1.4" strokeLinecap="round">
+        <path d="M30 66 L14 62"/><path d="M30 70 L14 70"/><path d="M70 66 L86 62"/><path d="M70 70 L86 70"/></g>}
+    </g>
+    {state==="hit"&&anim&&<g style={{transformBox:"view-box",transformOrigin:"50px 26px",animation:"avDizzy 1.1s linear infinite"}}>
+      {[0,120,240].map((d,i)=><g key={i} transform={`rotate(${d} 50 26)`}>
+        <path d="M50 10 l1.6 3.4 3.6 0.4 -2.7 2.5 0.7 3.6 -3.2-1.8 -3.2 1.8 0.7-3.6 -2.7-2.5 3.6-0.4 Z" fill="#FFD54F"/></g>)}</g>}
+    {state==="celebrate"&&anim&&[[16,22],[84,24],[24,80],[80,78]].map(([x,y],i)=>
+      <path key={i} d={`M${x} ${y-5} l1.4 3 3 0.4 -2.2 2.1 0.6 3 -2.8-1.5 -2.8 1.5 0.6-3 -2.2-2.1 3-0.4 Z`}
+        fill="#FFE082" style={{transformBox:"view-box",transformOrigin:`${x}px ${y}px`,animation:`avSpark 0.9s ease-in-out ${i*0.18}s infinite`}}/>)}
+  </svg>);
+};
+
+/* ═══ STORE ═══ */
+const STORE_CATS=[
+  {id:"avatar",name:"Avatars",icon:"🧑",subs:null},
+  {id:"throw",name:"Throw",icon:"🍅",subs:null},
+];
+const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEquipThrow})=>{
+  const[catId,setCatId]=useState("avatar");
+  const[preview,setPreview]=useState("celebrate");
+  const[msg,setMsg]=useState("");
   const landscape=useLandscape();
-  const cols=landscape?6:3;
-  const tabS=on=>({flex:1,padding:"8px 4px",borderRadius:10,border:"none",cursor:"pointer",fontSize:10,fontWeight:800,letterSpacing:1,
+  const cols=landscape?5:3;
+  const items=catId==="avatar"?AVATARS:THROWABLES;
+  const tabS=on=>({flex:1,padding:"9px 4px",borderRadius:10,border:"none",cursor:"pointer",fontSize:11,fontWeight:800,letterSpacing:1,
     background:on?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.05)",color:on?"#1a1200":"#99a",transition:"all 0.2s"});
+  const flash=m=>{setMsg(m);setTimeout(()=>setMsg(""),1600);};
+  const handleTile=(it)=>{
+    const own=owned.includes(it.id);
+    if(own){if(catId==="avatar"){onEquipAvatar(it.id);flash(it.name+" equipped!");}else{onEquipThrow(it.id);flash(it.name+" selected!");}return;}
+    if(coins<it.price){flash("Not enough coins — win games to earn more!");return;}
+    onBuy(it);flash("Unlocked "+it.name+"!");
+  };
+  const equippedId=catId==="avatar"?myAvatar:myThrow;
   return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,
     display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out",
     padding:"calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))"}}>
-    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:landscape?"96vw":400,height:landscape?"94vh":"88vh",maxHeight:"100%",display:"flex",flexDirection:"column",
+    <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:landscape?"96vw":420,height:landscape?"94vh":"90vh",maxHeight:"100%",display:"flex",flexDirection:"column",
       background:"linear-gradient(160deg,#1a2338,#0b1120)",borderRadius:18,padding:16,position:"relative",
       border:"1px solid rgba(255,215,0,0.2)",boxShadow:"0 20px 60px rgba(0,0,0,0.7)"}}>
       <button onClick={onClose} style={{position:"absolute",top:6,right:6,width:40,height:40,zIndex:5,background:"none",border:"none",color:"#889",fontSize:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
-      <div style={{fontSize:18,fontWeight:900,color:"#FFD700",letterSpacing:4,marginBottom:12,paddingRight:36}}>🛒 STORE</div>
-      <div style={{display:"flex",gap:5,marginBottom:10}}>
-        {STORE_CATS.map(c=><button key={c.id} onClick={()=>{setCatId(c.id);setSub(0);}} style={tabS(c.id===catId)}>{c.icon}<br/>{c.name}</button>)}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,paddingRight:36}}>
+        <div style={{fontSize:18,fontWeight:900,color:"#FFD700",letterSpacing:4}}>🛒 STORE</div>
+        <div style={{display:"flex",alignItems:"center",gap:5,background:"rgba(255,215,0,0.1)",border:"1px solid rgba(255,215,0,0.25)",
+          borderRadius:20,padding:"4px 12px"}}>
+          <span style={{fontSize:14}}>🪙</span>
+          <span style={{fontSize:14,fontWeight:900,color:"#FFD700",fontFamily:"monospace"}}>{coins}</span></div>
       </div>
-      {cat.subs&&<div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
-        {cat.subs.map((s,i)=><button key={s} onClick={()=>setSub(i)} style={{padding:"5px 10px",borderRadius:8,border:"none",cursor:"pointer",fontSize:9,fontWeight:700,
-          background:i===sub?"rgba(255,215,0,0.25)":"rgba(255,255,255,0.05)",color:i===sub?"#FFD700":"#889"}}>{s}</button>)}
+      <div style={{display:"flex",gap:5,marginBottom:12}}>
+        {STORE_CATS.map(c=><button key={c.id} onClick={()=>setCatId(c.id)} style={tabS(c.id===catId)}>{c.icon} {c.name}</button>)}
+      </div>
+      {/* Preview of equipped avatar */}
+      {catId==="avatar"&&<div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,padding:"10px 12px",
+        background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.06)"}}>
+        <Avatar id={myAvatar} state={preview} size={64}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:2}}>EQUIPPED</div>
+          <div style={{fontSize:15,fontWeight:900,color:"#fff"}}>{avatarOf(myAvatar).name}</div>
+          <div style={{display:"flex",gap:4,marginTop:6,flexWrap:"wrap"}}>
+            {[["idle","Idle"],["celebrate","Win"],["hit","Hit"],["uno","UNO"]].map(([s,l])=>
+              <button key={s} onClick={()=>setPreview(s)} style={{padding:"3px 9px",borderRadius:7,border:"none",cursor:"pointer",fontSize:8,fontWeight:800,letterSpacing:1,
+                background:preview===s?"rgba(255,215,0,0.25)":"rgba(255,255,255,0.05)",color:preview===s?"#FFD700":"#889"}}>{l}</button>)}
+          </div>
+        </div>
       </div>}
-      <div style={{fontSize:10,color:"#778",letterSpacing:1,marginBottom:8}}>{cat.name}{cat.subs?" • "+cat.subs[sub]:""}</div>
+      {msg&&<div style={{textAlign:"center",fontSize:10,fontWeight:800,color:/not enough/i.test(msg)?"#FF9800":"#4CAF50",
+        marginBottom:8,padding:"5px 10px",borderRadius:8,background:/not enough/i.test(msg)?"rgba(255,152,0,0.1)":"rgba(76,175,80,0.1)"}}>{msg}</div>}
       <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:8,alignContent:"start"}}>
-        {Array.from({length:landscape?12:9}).map((_,i)=>(
-          <div key={i} style={{aspectRatio:"1",borderRadius:12,background:"rgba(255,255,255,0.03)",border:"1px dashed rgba(255,255,255,0.1)",
-            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,color:"#556"}}>
-            <span style={{fontSize:22,opacity:0.5}}>🔒</span>
-            <span style={{fontSize:7,letterSpacing:1,fontWeight:700}}>SOON</span></div>))}
+        {items.map(it=>{const own=owned.includes(it.id);const eq=it.id===equippedId;
+          return(<div key={it.id} onClick={()=>handleTile(it)} style={{aspectRatio:"0.82",borderRadius:12,cursor:"pointer",position:"relative",
+            background:eq?"rgba(255,215,0,0.12)":"rgba(255,255,255,0.03)",
+            border:eq?"2px solid #FFD700":own?"1px solid rgba(255,255,255,0.12)":"1px solid rgba(255,255,255,0.06)",
+            display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:4,transition:"all 0.15s",overflow:"hidden"}}>
+            {catId==="avatar"?<Avatar id={it.id} state={eq?"celebrate":"idle"} size={landscape?52:58} anim={eq}/>
+              :<span style={{fontSize:landscape?30:36,filter:own?"none":"grayscale(0.6)",opacity:own?1:0.7}}>{it.emoji}</span>}
+            <span style={{fontSize:9,fontWeight:800,color:own?"#ddd":"#889",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}}>{it.name}</span>
+            {eq?<span style={{fontSize:7,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:5,padding:"1px 6px",letterSpacing:1}}>EQUIPPED</span>
+              :own?<span style={{fontSize:7,fontWeight:800,color:"#4CAF50",letterSpacing:1}}>TAP TO USE</span>
+              :<span style={{fontSize:9,fontWeight:900,color:"#FFD700",display:"flex",alignItems:"center",gap:2}}>🪙{it.price}</span>}
+          </div>);})}
       </div>
-      <div style={{textAlign:"center",color:"#667",fontSize:9,letterSpacing:2,marginTop:10}}>✨ Customization items coming soon!</div>
+      <div style={{textAlign:"center",color:"#667",fontSize:8,letterSpacing:1,marginTop:10}}>
+        {catId==="avatar"?"🪙 Earn coins by winning games. Tap an owned avatar to equip.":"🍅 In a game, tap an opponent to throw your selected item at them!"}</div>
     </div>
   </div>);
 };
@@ -409,7 +586,6 @@ const PlayerStatsModal=({stats,isOwner,onClose})=>{
   const cellS={background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"8px 6px",textAlign:"center",border:"1px solid rgba(255,255,255,0.06)"};
   const lblS={fontSize:8,color:"#889",letterSpacing:1,fontWeight:700,marginBottom:3};
   const valS={fontSize:16,fontWeight:900,color:"#fff",fontFamily:"monospace"};
-  const initial=(stats.name||"?")[0]?.toUpperCase();
   return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",zIndex:300,
     display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out",
     padding:"calc(14px + env(safe-area-inset-top,0px)) 14px calc(14px + env(safe-area-inset-bottom,0px))"}}>
@@ -418,9 +594,7 @@ const PlayerStatsModal=({stats,isOwner,onClose})=>{
       border:`1px solid ${r.color}44`,boxShadow:`0 20px 60px rgba(0,0,0,0.7),0 0 40px ${r.color}22`}}>
       <button onClick={onClose} style={{position:"absolute",top:6,right:6,width:40,height:40,zIndex:5,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-        <div style={{width:56,height:56,borderRadius:14,background:"linear-gradient(145deg,#2a3550,#151d2e)",
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,fontWeight:900,color:"#fff",
-          border:`2px solid ${r.color}`,flexShrink:0}}>{initial}</div>
+        <div style={{flexShrink:0}}><Avatar id={stats.avatar} state="idle" size={58}/></div>
         <div style={{minWidth:0}}>
           <div style={{fontSize:18,fontWeight:900,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stats.name||"Player"}</div>
           <div style={{fontSize:11,fontWeight:800,color:r.color,letterSpacing:1}}>{r.icon} {r.name}{r.idx>=0?" • "+(stats.totalPoints||0)+" pts":""}</div>
@@ -1491,6 +1665,14 @@ export default function UnoGame(){
   const[showGlobalLB,setShowGlobalLB]=useState(false);
   const[statsView,setStatsView]=useState(null);
   const[storeOpen,setStoreOpen]=useState(false);
+  const[coins,setCoins]=useState(getCoins);
+  const[owned,setOwned]=useState(getOwned);
+  const[myAvatar,setMyAvatar]=useState(getMyAvatar);
+  const[myThrow,setMyThrow]=useState(getMyThrow);
+  const[throwAnim,setThrowAnim]=useState(null);
+  const[splatFx,setSplatFx]=useState(null);
+  const[hitFx,setHitFx]=useState({});
+  const oppRefs=useRef({});const throwCD=useRef(0);const prevThrow=useRef(0);
   const[snatchModal,setSnatchModal]=useState(null);
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
@@ -1539,8 +1721,62 @@ export default function UnoGame(){
     const u=onValue(lbRef,s=>{const d=s.val();if(!d){setGlobalLB([]);setMyStats(null);return;}
       const arr=Object.entries(d).map(([id,v])=>({id,...v})).sort((a,b)=>b.totalPoints-a.totalPoints);
       setGlobalLB(arr);
-      const me=d[pid];if(me)setMyStats(me);});
+      const me=d[pid];if(me){setMyStats(me);
+        // Merge server-side cosmetics (authoritative across devices) into local state.
+        if(typeof me.coins==="number"){setCoins(me.coins);localStorage.setItem("uno_coins",String(me.coins));}
+        if(Array.isArray(me.owned)){const merged=[...new Set([...DEFAULT_OWNED,...me.owned])];setOwned(merged);localStorage.setItem("uno_owned",JSON.stringify(merged));}
+        if(me.avatar&&AV_MAP[me.avatar]){setMyAvatar(me.avatar);localStorage.setItem("uno_avatar",me.avatar);}
+      }});
     return()=>off(lbRef);
+  },[pid]);
+
+  /* Ensure this account has a leaderboard node carrying cosmetics (so avatar shows
+     to others and coins/unlocks survive across devices). Runs once name is known. */
+  const cosmSeeded=useRef(false);
+  useEffect(()=>{if(cosmSeeded.current)return;cosmSeeded.current=true;
+    get(ref(db,"leaderboard/"+pid)).then(s=>{const v=s.val()||{};const patch={};
+      if(typeof v.coins!=="number")patch.coins=coins;
+      if(!Array.isArray(v.owned))patch.owned=owned;
+      if(!v.avatar)patch.avatar=myAvatar;
+      if(Object.keys(patch).length)update(ref(db,"leaderboard/"+pid),patch).catch(()=>{});
+    }).catch(()=>{});
+  },[pid]);
+
+  const buyItem=useCallback((it)=>{if(owned.includes(it.id)||coins<it.price)return;
+    const nc=coins-it.price,no=[...new Set([...owned,it.id])];
+    setCoins(nc);setOwned(no);ps("win");
+    localStorage.setItem("uno_coins",String(nc));localStorage.setItem("uno_owned",JSON.stringify(no));
+    update(ref(db,"leaderboard/"+pid),{coins:nc,owned:no}).catch(()=>{});
+  },[owned,coins,pid]);
+
+  const equipAvatar=useCallback((id)=>{if(!owned.includes(id))return;setMyAvatar(id);
+    localStorage.setItem("uno_avatar",id);
+    update(ref(db,"leaderboard/"+pid),{avatar:id}).catch(()=>{});
+    if(rc)update(ref(db,"rooms/"+rc+"/players/"+pid),{avatar:id}).catch(()=>{});
+  },[owned,pid,rc]);
+
+  const equipThrow=useCallback((id)=>{if(!owned.includes(id))return;setMyThrow(id);localStorage.setItem("uno_throw",id);},[owned]);
+
+  /* ── THROW ITEMS: tap an opponent → fling your equipped item at them. Broadcast
+     via the room game node so every client plays the same arc + hit reaction. ── */
+  const throwAt=useCallback((targetId)=>{
+    if(!targetId||targetId===pid)return;const now=Date.now();
+    if(now<throwCD.current)return;throwCD.current=now+1400;ua();
+    update(ref(db,"rooms/"+rc+"/game"),{throw:{from:pid,to:targetId,item:myThrow,ts:now}}).catch(()=>{});
+  },[rc,pid,myThrow]);
+  const runThrow=useCallback((t)=>{
+    const anchor=id=>{const el=oppRefs.current[id];if(el){const r=el.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2];}
+      return[window.innerWidth/2,window.innerHeight-90];};
+    const[sx,sy]=anchor(t.from);const[tx,ty]=anchor(t.to);const item=throwOf(t.item);
+    setThrowAnim({item,sx,sy,tx,ty,key:t.ts});
+    setTimeout(()=>{
+      setThrowAnim(a=>a&&a.key===t.ts?null:a);
+      setHitFx(h=>({...h,[t.to]:t.ts}));setSplatFx({item,tx,ty,key:t.ts});
+      ps("action");
+      if(t.to===pid){setScreenShake(true);setTimeout(()=>setScreenShake(false),480);}
+      setTimeout(()=>{setHitFx(h=>{const n={...h};if(n[t.to]===t.ts)delete n[t.to];return n;});
+        setSplatFx(s=>s&&s.key===t.ts?null:s);},1400);
+    },900);
   },[pid]);
 
   /* ── Friends / requests / game invites (all keyed by this player's id) ── */
@@ -1594,6 +1830,9 @@ export default function UnoGame(){
   const pls=rd?.players?Object.entries(rd.players).sort((a,b)=>a[1].order-b[1].order):[];
   const po=pls.map(([id])=>id);const isHost=rd?.host===pid;
   const g=rd?.game||null;const myH=g?.hands?.[pid]||[];
+  useEffect(()=>{const t=g?.throw;if(!t||!t.ts||t.ts<=prevThrow.current)return;
+    if(Date.now()-t.ts>8000){prevThrow.current=t.ts;return;} // ignore stale on late join
+    prevThrow.current=t.ts;runThrow(t);},[g?.throw,runThrow]);
   // Detect newly-arrived cards (draws/penalties) so they can slide in smoothly.
   const prevHandIds=useRef(new Set());
   const initialDeal=prevHandIds.current.size===0;
@@ -1759,6 +1998,7 @@ export default function UnoGame(){
       const winnerId=g.winner;
       try{await update(ref(db,"rooms/"+rc+"/game"),{scored:true});}catch(e){}
       const baseScore=Math.max(20,calcScore(g.hands||{},winnerId));
+      const coinGain=Math.min(60,20+Math.round(baseScore*0.4));
       let totalWin=0;const deltas={};
       if(!isBot(winnerId)){
         const prev=(await get(ref(db,"leaderboard/"+winnerId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
@@ -1786,16 +2026,18 @@ export default function UnoGame(){
             award=before-newPts;
             deltas[oppId]=newPts-before;
             await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
-              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now});}
+              gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now,
+              coins:(op.coins||0)+5});}
           totalWin+=award;}
         deltas[winnerId]=totalWin;
         await update(ref(db,"leaderboard/"+winnerId),{name:rd.players[winnerId]?.name||"Player",
-          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:now,since:prev.since||now,beat});
+          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:now,since:prev.since||now,beat,
+          coins:(prev.coins||0)+coinGain});
       }else{totalWin=baseScore;}
       const curScores=(await get(ref(db,"rooms/"+rc+"/scores"))).val()||{};
       curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
       await update(ref(db,"rooms/"+rc),{scores:curScores});
-      await update(ref(db,"rooms/"+rc+"/game"),{lastAward:totalWin,lastDeltas:deltas});
+      await update(ref(db,"rooms/"+rc+"/game"),{lastAward:totalWin,lastDeltas:deltas,lastCoin:coinGain});
     })();
   },[g?.winner,g?.scored,g?.turnTimestamp,isHost,rc,pls,rd]);
 
@@ -2012,7 +2254,7 @@ export default function UnoGame(){
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:Date.now(),
-      players:{[pid]:{name:pName.trim(),order:0}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
+      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
     }catch(e){setErr("Check Firebase config.");console.error(e);}};
 
   const joinRoom=async(codeArg)=>{if(!pName.trim()){setErr("Enter name");return;}
@@ -2021,7 +2263,7 @@ export default function UnoGame(){
     try{const snap=await get(ref(db,"rooms/"+code));if(!snap.exists()){setErr("Not found");return;}
       const data=snap.val();if(data.status!=="waiting"){setErr("Already started");return;}
       const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=MAX_PLAYERS){setErr("Full");return;}
-      if(!data.players?.[pid])await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt});
+      if(!data.players?.[pid])await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt,avatar:myAvatar});
       setRc(code);setErr("");setScr("lobby");ps("join");
     }catch(e){setErr("Failed.");console.error(e);}};
 
@@ -2031,7 +2273,7 @@ export default function UnoGame(){
   const addBot=async()=>{if(!isHost||pls.length>=(settings.maxPlayers||MAX_PLAYERS))return;
     const bc=pls.filter(([id])=>isBot(id)).length;const botId="bot_"+(bc+1)+"_"+Date.now();
     const used=pls.map(([id])=>rd.players[id]?.name).filter(Boolean);
-    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:randBotName(used),order:pls.length,isBot:true,ready:true});};
+    await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:randBotName(used),order:pls.length,isBot:true,ready:true,avatar:randAvatar()});};
   const toggleReady=async()=>{await update(ref(db,"rooms/"+rc+"/players/"+pid),{ready:!(rd?.players?.[pid]?.ready)});};
   const allReady=pls.every(([id,pd])=>id===rd?.host||(pd.ready&&!pd.reviewing));
   const removeBot=async(botId)=>{if(!isHost||!isBot(botId))return;await remove(ref(db,"rooms/"+rc+"/players/"+botId));};
@@ -2040,14 +2282,14 @@ export default function UnoGame(){
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();const now=Date.now();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
-      players:{[pid]:{name:pName.trim(),order:0},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true}},
+      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true,avatar:randAvatar()}},
       scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
 
   const quickPlayFFA=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
-    const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0}};
-    const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true};}
+    const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0,avatar:myAvatar}};
+    const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true,avatar:randAvatar()};}
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
       players,scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
@@ -2415,8 +2657,8 @@ export default function UnoGame(){
         <div style={{...GLASS,padding:"20px 20px 16px",width:"100%",marginBottom:8}}>
           <div onClick={()=>setStoreOpen(true)} title="Customize (Store)" style={{width:64,height:64,borderRadius:"50%",margin:"0 auto 12px",cursor:"pointer",
             background:"radial-gradient(circle at 50% 32%,#2a3550,#141d2e)",border:"2px solid rgba(255,215,0,0.25)",
-            display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,color:"#5a6785",position:"relative"}}>
-            👤
+            display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+            <Avatar id={myAvatar} state="idle" size={56}/>
             <div style={{position:"absolute",bottom:-2,right:-2,width:22,height:22,borderRadius:"50%",background:"#E040FB",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",border:"2px solid #0b1120"}}>+</div>
           </div>
@@ -2556,7 +2798,8 @@ export default function UnoGame(){
       </div>)}
 
       {statsView&&<PlayerStatsModal stats={statsView} isOwner={statsView.id===pid} onClose={()=>setStatsView(null)}/>}
-      {storeOpen&&<StoreModal onClose={()=>setStoreOpen(false)}/>}
+      {storeOpen&&<StoreModal onClose={()=>setStoreOpen(false)} coins={coins} owned={owned}
+        myAvatar={myAvatar} myThrow={myThrow} onBuy={buyItem} onEquipAvatar={equipAvatar} onEquipThrow={equipThrow}/>}
 
       {/* Account Modal */}
       {showFriends&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
@@ -2775,9 +3018,7 @@ export default function UnoGame(){
               background:id===pid?"rgba(255,215,0,0.06)":"transparent",borderRadius:12,marginBottom:4,
               transition:"all 0.3s",animation:`slideIn 0.4s ease-out ${i*0.08}s both`,
               border:id===pid?"1px solid rgba(255,215,0,0.1)":"1px solid transparent"}}>
-              <div style={{width:34,height:34,borderRadius:10,background:CG[COLORS[i%4]],display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:14,fontWeight:800,color:COLORS[i%4]==="yellow"?"#333":"#fff",
-                boxShadow:`0 3px 12px ${CH[COLORS[i%4]]}44`}}>{pd.name?.[0]?.toUpperCase()}</div>
+              <div style={{flexShrink:0}}><Avatar id={pd.avatar} state={pd.ready&&id!==rd?.host?"celebrate":"idle"} size={38}/></div>
               <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
               <span style={{fontSize:11,color:"#778",fontWeight:600,fontFamily:"monospace"}}>{rd?.scores?.[id]||0}</span>
               {id===rd?.host&&!pd.reviewing&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
@@ -2908,19 +3149,18 @@ export default function UnoGame(){
   const OppCard=({id,pos})=>{const pd=rd.players[id];const h=g.hands?.[id]||[];const turn=g.currentPlayer===id;
     const hasUno=h.length===1;const cu=g.calledUno||{};const canCatch=hasUno&&!cu[id];
     const isV=pos==="left"||pos==="right";
-    return(<div key={id} style={{display:"flex",flexDirection:isV?"row":"column",alignItems:"center",
+    const avState=hitFx[id]?"hit":(g.winner&&id===g.winner)?"celebrate":hasUno?"uno":"idle";
+    return(<div key={id} ref={el=>{if(el)oppRefs.current[id]=el;else delete oppRefs.current[id];}}
+      style={{display:"flex",flexDirection:isV?"row":"column",alignItems:"center",
       background:turn?"rgba(0,0,0,0.45)":"rgba(0,0,0,0.25)",borderRadius:10,padding:isV?"5px 4px":"4px 7px",
       border:turn?`1px solid ${gcHex}55`:"1px solid rgba(255,215,0,0.04)",
       boxShadow:turn?`0 0 20px ${gcHex}22,0 0 40px ${gcHex}08`:"none",
-      transition:"all 0.4s",cursor:canCatch?"pointer":"default",position:"relative",
+      transition:"all 0.4s",cursor:"pointer",position:"relative",
       backdropFilter:"blur(6px)",animation:turn?"neonPulse 2s ease-in-out infinite":"none"}}
-      onClick={canCatch?()=>catchUno(id):undefined}>
+      onClick={canCatch?()=>catchUno(id):()=>throwAt(id)}>
       <div style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0}}>
-        <div style={{width:28,height:28,borderRadius:8,background:CG[COLORS[opps.indexOf(id)%4]],
-          display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,
-          color:COLORS[opps.indexOf(id)%4]==="yellow"?"#333":"#fff",
-          boxShadow:`0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}44`,flexShrink:0}}>
-          {pd?.name?.[0]?.toUpperCase()}</div>
+        <div style={{flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
+          <Avatar id={pd?.avatar} state={avState} size={30}/></div>
         {crownRank[id]&&<Crown rank={crownRank[id]} size={14}/>}
         <span style={{fontSize:9,color:turn?"#fff":"#999",fontWeight:700,whiteSpace:"nowrap",
           textShadow:turn?`0 0 8px ${gcHex}66`:"none"}}>{pd?.name}</span>
@@ -3093,6 +3333,11 @@ export default function UnoGame(){
               if(pts<0)return<span style={{fontSize:24,fontWeight:900,color:"#EF5350",textShadow:"0 0 12px rgba(239,83,80,0.45)"}}>{pts}</span>;
               return null;})()}
           </div>
+          {win&&g.lastCoin>0&&<div style={{display:"flex",alignItems:"center",gap:5,padding:"4px 12px",borderRadius:12,
+            background:"linear-gradient(135deg,rgba(255,193,7,0.18),rgba(255,152,0,0.12))",border:"1px solid rgba(255,193,7,0.4)",
+            animation:"slamIn 0.5s 0.15s cubic-bezier(.2,1.5,.4,1) both"}}>
+            <span style={{fontSize:14}}>🪙</span>
+            <span style={{fontSize:13,fontWeight:900,color:"#FFC107"}}>+{g.lastCoin} coins</span></div>}
           <span style={{fontSize:8,color:"#99a",letterSpacing:1,textShadow:"0 1px 3px #000"}}>everyone's final hands are revealed</span>
         </div>
         {/* Back to lobby */}
@@ -3105,6 +3350,25 @@ export default function UnoGame(){
             onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>BACK TO LOBBY</button>
         </div>
       </>);})()}
+
+      {/* Flying throwable projectile */}
+      {throwAnim&&(<div style={{position:"fixed",left:throwAnim.tx,top:throwAnim.ty,zIndex:400,pointerEvents:"none",
+        fontSize:34,lineHeight:1,willChange:"transform",
+        "--tsx":`${throwAnim.sx-throwAnim.tx}px`,"--tsy":`${throwAnim.sy-throwAnim.ty}px`,"--tax":"0px","--tay":"0px",
+        animation:"throwArc 0.9s ease-in forwards"}}>
+        <span style={{display:"inline-block",filter:"drop-shadow(0 3px 6px rgba(0,0,0,0.55))"}}>{throwAnim.item.emoji}</span>
+      </div>)}
+
+      {/* Splat impact overlay */}
+      {splatFx&&(<div style={{position:"fixed",left:splatFx.tx,top:splatFx.ty,zIndex:401,pointerEvents:"none",
+        display:"flex",flexDirection:"column",alignItems:"center",willChange:"transform,opacity",
+        animation:"splatPop 1.4s ease-out forwards"}}>
+        <div style={{position:"absolute",left:"50%",top:0,width:70,height:70,borderRadius:"50%",transform:"translateX(-50%)",
+          background:`radial-gradient(circle,${splatFx.item.splat}cc,${splatFx.item.splat}00 68%)`}}/>
+        <span style={{fontSize:42,position:"relative",filter:"drop-shadow(0 2px 5px rgba(0,0,0,0.5))"}}>💥</span>
+        <span style={{position:"relative",marginTop:-4,fontSize:12,fontWeight:900,color:splatFx.item.splat,letterSpacing:1,
+          textShadow:`0 1px 4px #000,0 0 10px ${splatFx.item.splat}`}}>{splatFx.item.label}</span>
+      </div>)}
 
       {showLB&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:160,
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)"}}
@@ -3461,6 +3725,19 @@ const globalCSS=`
   @keyframes arrowFlip{0%{transform:scaleX(1) rotate(0deg)}50%{transform:scaleX(-1) rotate(180deg)}100%{transform:scaleX(1) rotate(360deg)}}
   @keyframes sealedPulse{0%{opacity:0;transform:scale(0.5)}40%{opacity:1;transform:scale(1.05)}100%{opacity:0;transform:scale(1.25)}}
   @keyframes dodgeOut{0%{opacity:0;transform:translateX(-40px) scale(0.6)}30%{opacity:1;transform:translateX(0) scale(1.1)}100%{opacity:0;transform:translateX(60px) scale(0.4)}}
+  @keyframes avBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.6px)}}
+  @keyframes avBlink{0%,90%,100%{transform:scaleY(1)}94%{transform:scaleY(0.12)}}
+  @keyframes avHit{0%,100%{transform:rotate(-6deg) translateY(1px)}50%{transform:rotate(6deg) translateY(-1px)}}
+  @keyframes avCele{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.04)}}
+  @keyframes avUno{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+  @keyframes avDizzy{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  @keyframes avSpark{0%,100%{opacity:0;transform:scale(0.4)}50%{opacity:1;transform:scale(1.1)}}
+  @keyframes throwArc{0%{opacity:0;transform:translate(var(--tsx),var(--tsy)) rotate(0deg) scale(0.5)}
+    12%{opacity:1;transform:translate(var(--tsx),var(--tsy)) rotate(90deg) scale(1)}
+    50%{opacity:1;transform:translate(calc(var(--tsx)*0.5 + var(--tax)),calc(var(--tsy)*0.5 - 60px)) rotate(360deg) scale(1.1)}
+    88%{opacity:1;transform:translate(0,0) rotate(680deg) scale(1)}
+    100%{opacity:0;transform:translate(0,0) rotate(720deg) scale(1.3)}}
+  @keyframes splatPop{0%{opacity:0;transform:translate(-50%,-50%) scale(0.2)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.15)}70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(1.1)}}
   *{-webkit-tap-highlight-color:transparent;user-select:none;box-sizing:border-box;margin:0;padding:0;}
   html,body,#root{height:100%;height:100dvh;overflow:hidden;}
   @supports(height:100dvh){html,body,#root{height:100dvh;}}
