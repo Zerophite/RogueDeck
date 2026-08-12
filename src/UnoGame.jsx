@@ -394,13 +394,13 @@ const THROW_GIF_URL=import.meta.env.BASE_URL+"throwables/";
 const THROW_SFX_URL=import.meta.env.BASE_URL+"sfx/throw/";
 const THROWABLES=[
   {id:"tomato",name:"Tomato",     price:0,  emoji:"🍅",splat:"#E53935",label:"SPLAT!", gif:true, sfx:true, vol:1.0},
-  {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!"},
-  {id:"snow",  name:"Snowball",   price:60, emoji:"⚪",splat:"#81D4FA",label:"BRR!"},
-  {id:"pie",   name:"Cream Pie",  price:120,emoji:"🥧",splat:"#FFECB3",label:"SPLAT!"},
-  {id:"water", name:"Water Balloon",price:150,emoji:"💧",splat:"#4FC3F7",label:"SPLASH!"},
-  {id:"boot",  name:"Old Boot",   price:220,emoji:"🥾",splat:"#FFCA28",label:"BONK!"},
-  {id:"poop",  name:"Stinker",    price:300,emoji:"💩",splat:"#8D6E63",label:"EWW!"},
-  {id:"bomb",  name:"Bomb",       price:450,emoji:"💣",splat:"#FF7043",label:"BOOM!"},
+  {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!", sfx:true, vol:1.0},
+  {id:"snow",  name:"Snowball",   price:60, emoji:"⚪",splat:"#81D4FA",label:"BRR!",   sfx:true, vol:1.0},
+  {id:"pie",   name:"Cream Pie",  price:120,emoji:"🥧",splat:"#FFECB3",label:"SPLAT!", sfx:true, vol:1.0},
+  {id:"water", name:"Water Balloon",price:150,emoji:"💧",splat:"#4FC3F7",label:"SPLASH!",sfx:true, vol:1.0},
+  {id:"boot",  name:"Old Boot",   price:220,emoji:"🥾",splat:"#FFCA28",label:"BONK!",  sfx:true, vol:1.0},
+  {id:"poop",  name:"Stinker",    price:300,emoji:"💩",splat:"#8D6E63",label:"EWW!",   sfx:true, vol:1.0},
+  {id:"bomb",  name:"Bomb",       price:450,emoji:"💣",splat:"#FF7043",label:"BOOM!",  sfx:true, vol:1.0},
 ];
 const THROW_MAP=Object.fromEntries(THROWABLES.map(t=>[t.id,t]));
 const throwOf=id=>THROW_MAP[id]||THROWABLES[0];
