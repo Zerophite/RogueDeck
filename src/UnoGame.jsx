@@ -1227,32 +1227,30 @@ const Draw2FX=({color,onDone})=>{
   </div>);
 };
 
-const DiscardAllFX=({color,count,onDone})=>{
-  const nCards=Math.min(Math.max(count,3),9);
-  const total=1000+nCards*260+900;
+const DiscardAllFX=({color,count,cards:realCards,onDone})=>{
+  const nCards=Math.min(realCards?.length||Math.max(count,3),12);
+  const total=1000+nCards*240+900;
   useEffect(()=>{const t=setTimeout(onDone,total);return()=>clearTimeout(t);},[onDone,total]);
   const gc=CH[color]||"#E040FB";
   // Cards start down at the player's hand and sweep up into the discard pile (screen center).
-  const cards=useMemo(()=>Array.from({length:nCards},(_,i)=>({
+  const anim=useMemo(()=>Array.from({length:nCards},(_,i)=>({
     id:i,startX:-100+Math.random()*200,startY:250+Math.random()*90,
-    rot:-30+Math.random()*60,delay:i*0.2,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards]);
+    rot:-30+Math.random()*60,delay:i*0.19,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards]);
   return(<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",
     display:"flex",alignItems:"center",justifyContent:"center",animation:`discardFade ${(total/1000).toFixed(2)}s forwards`}}>
     <div style={{position:"absolute",inset:0,
       background:`radial-gradient(circle at 50% 55%,${gc}44,transparent 60%)`,
       animation:"bgPulse 1s ease-out"}}/>
-    {cards.map(c=>(
-      <div key={c.id} style={{position:"absolute",width:50,height:75,borderRadius:8,
-        background:CG[color],border:"2px solid rgba(255,255,255,0.6)",
-        boxShadow:`0 4px 20px ${gc}88`,
+    {anim.map(c=>{const rc=realCards&&realCards[c.id];return(
+      <div key={c.id} style={{position:"absolute",
         "--sx":`${c.startX}px`,"--sy":`${c.startY}px`,"--sr":`${c.rot}deg`,"--ax":`${c.arc}px`,
-        animation:`discardArc 1.15s cubic-bezier(.45,0,.35,1) ${c.delay}s forwards`,
-        display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{width:"60%",height:"50%",borderRadius:"50%",background:"rgba(255,255,255,0.9)",
-          display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <span style={{fontSize:14,fontWeight:900,color:gc,fontFamily:"Arial Black"}}>✕</span>
-        </div>
-      </div>))}
+        filter:`drop-shadow(0 4px 16px ${gc}aa)`,
+        animation:`discardArc 1.15s cubic-bezier(.45,0,.35,1) ${c.delay}s forwards`}}>
+        {rc?<Card card={rc} sz="sm"/>
+          :<div style={{width:44,height:66,borderRadius:7,background:CG[color],border:"2px solid rgba(255,255,255,0.6)",
+            display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <div style={{width:20,height:20,transform:"rotate(45deg)",borderRadius:5,background:"rgba(255,255,255,0.9)"}}/></div>}
+      </div>);})}
     <div style={{position:"absolute",fontSize:28,fontWeight:900,color:"#fff",letterSpacing:8,
       textShadow:`0 0 30px ${gc},0 0 60px ${gc}88,0 2px 4px rgba(0,0,0,0.9)`,
       animation:"aslide 0.5s ease-out 0.6s both",zIndex:2,
@@ -1366,26 +1364,32 @@ const SkipFX=({color,onDone})=>{
 
 
 const ChallengeModal=({playerName,onChallenge,onAccept})=>(
-  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:90,
+  <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 38%,rgba(70,20,95,0.6),rgba(0,0,0,0.95))",zIndex:90,
     display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,
-    backdropFilter:"blur(12px)",animation:"fadeIn 0.3s ease-out"}}>
-    <div style={{fontSize:52,animation:"apop 0.4s cubic-bezier(.34,1.56,.64,1)",
-      textShadow:"0 0 40px #9C27B0,0 0 80px #9C27B0"}}>+4</div>
-    <div style={{color:"#FF9800",fontSize:18,fontWeight:800,textAlign:"center",maxWidth:300}}>
-      {playerName} played Wild Draw Four!</div>
-    <div style={{color:"#889",fontSize:11,textAlign:"center",maxWidth:280,lineHeight:1.6,
-      background:"rgba(255,255,255,0.03)",padding:"10px 16px",borderRadius:12,
-      border:"1px solid rgba(255,255,255,0.05)"}}>
-      Challenge if you think they had a matching color card.<br/>Guilty = they draw 4 | Innocent = you draw 6!</div>
-    <div style={{display:"flex",gap:14,marginTop:6}}>
-      <button onClick={onChallenge} style={{...MBTN,background:"linear-gradient(135deg,#FF6F00,#E65100)",
-        boxShadow:"0 4px 25px rgba(255,111,0,0.5)",animation:"pulse 1.2s infinite"}}
-        onPointerEnter={e=>e.currentTarget.style.transform="scale(1.06)"}
-        onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>CHALLENGE!</button>
-      <button onClick={onAccept} style={{...MBTN,background:"rgba(255,255,255,0.06)",
-        border:"1px solid rgba(255,255,255,0.1)",color:"#999"}}
-        onPointerEnter={e=>e.currentTarget.style.transform="scale(1.06)"}
-        onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>ACCEPT +4</button>
+    backdropFilter:"blur(14px)",animation:"fadeIn 0.3s ease-out",padding:16}}>
+    <div style={{position:"relative",animation:"apop 0.5s cubic-bezier(.34,1.7,.5,1)"}}>
+      <div style={{width:72,height:108,borderRadius:12,background:"conic-gradient(from 40deg,#ED1C24,#FFDE00,#00A651,#0956BF,#ED1C24)",
+        display:"flex",alignItems:"center",justifyContent:"center",border:"3px solid #fff",
+        boxShadow:"0 0 44px rgba(156,39,176,0.75),0 8px 30px rgba(0,0,0,0.6)"}}>
+        <div style={{background:"rgba(0,0,0,0.58)",borderRadius:9,padding:"7px 11px"}}>
+          <span style={{fontSize:30,fontWeight:900,color:"#fff",fontFamily:"Arial Black,sans-serif"}}>+4</span></div>
+      </div>
+    </div>
+    <div style={{color:"#fff",fontSize:17,fontWeight:800,textAlign:"center",maxWidth:320,lineHeight:1.3}}>
+      <span style={{color:"#E040FB"}}>{playerName}</span> hit you with a Wild +4!</div>
+    <div style={{color:"#aab",fontSize:11,textAlign:"center",maxWidth:300,lineHeight:1.55}}>
+      A +4 is only fair if they held <b style={{color:"#eee"}}>no card of the current color</b>. Think they bluffed? Call it.</div>
+    <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap",justifyContent:"center"}}>
+      <button onClick={onChallenge} style={{...MBTN,padding:"11px 20px",background:"linear-gradient(135deg,#9C27B0,#5E1770)",
+        boxShadow:"0 4px 24px rgba(142,36,170,0.5)",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:138,animation:"pulse 1.4s infinite"}}
+        onPointerEnter={e=>e.currentTarget.style.transform="scale(1.05)"} onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+        <span style={{fontSize:15,letterSpacing:1}}>⚖️ CHALLENGE</span>
+        <span style={{fontSize:8,opacity:0.9,fontWeight:600,letterSpacing:0,textTransform:"none"}}>bluffed → they draw 4 · fair → you draw 6</span></button>
+      <button onClick={onAccept} style={{...MBTN,padding:"11px 20px",background:"rgba(255,255,255,0.07)",
+        border:"1px solid rgba(255,255,255,0.14)",color:"#ccc",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:138}}
+        onPointerEnter={e=>e.currentTarget.style.transform="scale(1.05)"} onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+        <span style={{fontSize:15,letterSpacing:1}}>🃏 ACCEPT</span>
+        <span style={{fontSize:8,opacity:0.75,fontWeight:600,letterSpacing:0,textTransform:"none"}}>just take the 4 cards</span></button>
     </div>
   </div>);
 
@@ -1643,7 +1647,9 @@ export default function UnoGame(){
     else if(m.includes("discard all")){
       if(Date.now()-discardFxRef.current>1500){const dac=g?.currentColor||"yellow";ps("discardAll");psE(dac);
         const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
-        if(cnt>1){setActFx("discardAll");trigBurst(dac);setDiscardFx({color:dac,count:cnt});}}}
+        if(cnt>1){setActFx("discardAll");trigBurst(dac);
+          const real=(g.discardPile||[]).slice(-cnt); // the just-discarded cards are the last N of the pile
+          setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});}}}
     else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("action");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
     else if(m.includes("played")){}
@@ -1827,6 +1833,8 @@ export default function UnoGame(){
   const autoDrawRef=useRef(false);
   useEffect(()=>{
     if(!myTurn||!g||g.winner||drawStack<=0||autoDrawRef.current)return;
+    // A +4 challenge is pending for me — I must answer it (challenge/accept), NOT auto-draw.
+    if(g.pendingChallenge&&g.pendingChallenge.target===pid)return;
     const hasCounter=drawStackType==="wild4"
       ?myH.some(c=>c.value==="wild4"||c.value==="shadow")
       :myH.some(c=>c.value==="draw2"||c.value==="wild4"||c.value==="shadow");
@@ -2088,7 +2096,7 @@ export default function UnoGame(){
       const dCount=discarded.length;
       m+=" Discard all "+matchColor+"! (-"+(dCount+1)+" cards)";
       // Trigger the fly-to-pile animation locally right away (fires even on a winning discard-all).
-      discardFxRef.current=Date.now();ps("discardAll");setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,ts:Date.now()});
+      discardFxRef.current=Date.now();ps("discardAll");setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});
     } else {
       nd.push(card);
     }
@@ -2961,7 +2969,7 @@ export default function UnoGame(){
       {skipFx&&<SkipFX color={skipFx} onDone={()=>setSkipFx(null)}/>}
       {unoCallFx&&<UnoCallFX color={unoCallFx} onDone={()=>setUnoCallFx(null)}/>}
       {unoPenaltyFx!==null&&<UnoPenaltyFX victimName={unoPenaltyFx} onDone={()=>setUnoPenaltyFx(null)}/>}
-      {discardFx&&<DiscardAllFX color={discardFx.color} count={discardFx.count} onDone={()=>setDiscardFx(null)}/>}
+      {discardFx&&<DiscardAllFX color={discardFx.color} count={discardFx.count} cards={discardFx.cards} onDone={()=>setDiscardFx(null)}/>}
       {activeEmote&&<div style={{position:"absolute",top:"15%",left:"50%",transform:"translateX(-50%)",zIndex:120,
         display:"flex",flexDirection:"column",alignItems:"center",gap:6,pointerEvents:"none",
         animation:"emotePopIn 0.35s cubic-bezier(.34,1.56,.64,1)"}}>
@@ -3064,9 +3072,10 @@ export default function UnoGame(){
 
       {g.winner&&(()=>{const win=g.winner===pid;const d=g.lastDeltas?.[pid];return(<>
         {win&&<ConfettiFX/>}
-        {/* Centered compact win banner — kept off the top so opponents' revealed cards stay visible */}
-        <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:151,
-          display:"flex",flexDirection:"column",alignItems:"center",gap:5,pointerEvents:"none",width:"94%",maxWidth:400}}>
+        {/* Centered win banner that celebrates, then fades out so the deck/pile & all cards are reviewable */}
+        <div style={{position:"absolute",top:"46%",left:"50%",zIndex:151,
+          display:"flex",flexDirection:"column",alignItems:"center",gap:5,pointerEvents:"none",width:"94%",maxWidth:400,
+          animation:"winBannerAway 3.8s ease-out forwards"}}>
           <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px",borderRadius:16,
             background:"linear-gradient(135deg,rgba(18,24,28,0.95),rgba(8,12,14,0.95))",
             border:`1px solid ${win?"rgba(255,215,0,0.45)":"rgba(239,83,80,0.3)"}`,backdropFilter:"blur(8px)",
@@ -3402,6 +3411,7 @@ const globalCSS=`
   @keyframes ringExpand{0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(3);opacity:0}}
   @keyframes bgPulse{0%{opacity:0}30%{opacity:1}100%{opacity:0.3}}
   @keyframes crownShine{0%,100%{opacity:0.35;transform:scale(0.7) rotate(-8deg)}50%{opacity:1;transform:scale(1.2) rotate(8deg)}}
+  @keyframes winBannerAway{0%{opacity:0;transform:translate(-50%,-50%) scale(0.9)}8%{opacity:1;transform:translate(-50%,-50%) scale(1)}70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-64%) scale(0.85);visibility:hidden}}
   @keyframes emotePopIn{0%{opacity:0;transform:translateX(-50%) scale(0.2) translateY(30px)}
     50%{opacity:1;transform:translateX(-50%) scale(1.12) translateY(-6px)}
     100%{opacity:1;transform:translateX(-50%) scale(1) translateY(0)}}
