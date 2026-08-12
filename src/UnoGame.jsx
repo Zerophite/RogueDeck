@@ -212,7 +212,7 @@ class AnimeSFX{
       case "cardSlide":this._noise(n,0.1,0.3);this._bend(200,400,"sine",n,0.08,0.08);break;
       case "stack":this._bend(240,780,"sawtooth",n,0.16,0.12);[0,0.1,0.2].forEach((d,i)=>{this._fNoise(n+0.12+d,0.05,2600+i*300,2.5,"bandpass",0.3-i*0.03);this._osc(150-i*12,"sine",n+0.12+d,0.12,0.22);});this._osc(60,"sine",n+0.12,0.4,0.16);this._shimmer(1200,n+0.32,0.25,0.06);break;
       case "discardAll":this._chime([523,659,784,1047,1319,1568],n,0.05,0.16);this._shimmer(1500,n+0.2,0.5,0.08);this._bend(400,2000,"sine",n,0.4,0.1);this._noise(n+0.1,0.08,0.2);break;
-      case "tick":this._osc(1200,"sine",n,0.03,0.1);break;
+      case "tick":this._fNoise(n,0.018,2600,4,"bandpass",0.34);this._osc(1500,"sine",n,0.014,0.16);this._osc(520,"sine",n+0.006,0.03,0.12);break;
       case "timeout":this._bend(600,200,"sawtooth",n,0.25,0.2);this._bend(400,120,"square",n+0.12,0.2,0.15);break;
     }
   }catch(e){}}
@@ -1519,7 +1519,7 @@ export default function UnoGame(){
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
   const[roundTimer,setRoundTimer]=useState(ROUND_TIME);
-  const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);const unoSndRef=useRef(0);
+  const prevT=useRef(null);const prevM=useRef("");const lbUpdated=useRef(false);const unoSndRef=useRef(0);const discardFxRef=useRef(0);
 
   useEffect(()=>{
     if(pName)localStorage.setItem("uno_name",pName);
@@ -1622,7 +1622,7 @@ export default function UnoGame(){
         playerHadColor:g.pendingChallenge.hadMatchingColor});}
   },[g?.pendingChallenge,myTurn,g?.winner,pid,rd?.players,g]);
 
-  useEffect(()=>{if(!g?.message||g.message===prevM.current)return;prevM.current=g.message;const m=g.message.toLowerCase();
+  useEffect(()=>{const mkey=g?.message?g.message+"|"+g.turnTimestamp:null;if(!mkey||mkey===prevM.current)return;prevM.current=mkey;const m=g.message.toLowerCase();
     if(m.includes("challenge")&&m.includes("guilty")){setActFx("challenge");ps("challenge");trigShake();trigBurst("red");trigImpact("red");}
     else if(m.includes("challenge")&&m.includes("innocent")){setActFx("challenge");ps("challenge");trigBurst("blue");trigImpact("blue");}
     else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);}
@@ -1637,17 +1637,18 @@ export default function UnoGame(){
     else if(m.includes("reverse")&&!m.includes("started")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
     else if(m.includes("skip")&&!m.includes("started")){const sc=g?.currentColor||"red";setSkipFx(sc);ps("skip");psE(sc);trigBurst(sc);}
     else if(m.includes("+2")&&!m.includes("+4")&&!m.includes("stack")){const dc=g?.currentColor||"yellow";setDraw2Fx(dc);ps("draw2");psE(dc);}
-    else if(m.includes("+4")){const wc=g?.currentColor||"green";setWild4Fx(wc);ps("draw4");psE(wc);trigShake();trigBurst(wc);trigImpact(wc);}
+    else if(m.includes("+4")){const wc=g?.currentColor||"green";ps("draw4");trigShake();trigBurst(wc);trigImpact(wc);}
     else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");}
     else if(m.includes("wins")){ps("win");trigBurst("yellow");trigImpact("yellow");}
-    else if(m.includes("discard all")){const dac=g?.currentColor||"yellow";ps("discardAll");psE(dac);
-      const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
-      if(cnt>1){setActFx("discardAll");trigBurst(dac);setDiscardFx({color:dac,count:cnt});}}
+    else if(m.includes("discard all")){
+      if(Date.now()-discardFxRef.current>1500){const dac=g?.currentColor||"yellow";ps("discardAll");psE(dac);
+        const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
+        if(cnt>1){setActFx("discardAll");trigBurst(dac);setDiscardFx({color:dac,count:cnt});}}}
     else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("action");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
     else if(m.includes("played")){}
     if(m.includes("timed out")){ps("timeout");const tm=g.message.match(/^(.*?)\s+timed out/i);setTimeoutFx(tm?tm[1]:"");}
-  },[g?.message,ps,psE,trigShake,trigBurst,trigImpact,trigLightning,g?.currentColor]);
+  },[g?.message,g?.turnTimestamp,ps,psE,trigShake,trigBurst,trigImpact,trigLightning,g?.currentColor]);
   useEffect(()=>{if(timeoutFx!==null){const t=setTimeout(()=>setTimeoutFx(null),2000);return()=>clearTimeout(t);}},[timeoutFx]);
 
   useEffect(()=>{if(g?.currentPlayer&&g.currentPlayer!==prevT.current){
@@ -1671,7 +1672,7 @@ export default function UnoGame(){
   /* Resolve a draw-stack penalty. Play an animation first, then deliver the
      penalty cards when it lands: +4 (wild4) → sword-draw cinematic (~850ms),
      +2 (draw2) → cards fly to the penalized player (~650ms). */
-  const SLASH_DELAY=2150,DRAW2_DELAY=1500;
+  const SLASH_DELAY=2650,DRAW2_DELAY=1650;
   const applyStackDraw=useCallback(async(victimId,victimHand,reasonBase,nextPlayer)=>{
     const cnt=g.drawStack||0;const type=g.drawStackType;const element=g.currentColor||"green";
     let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
@@ -1701,7 +1702,8 @@ export default function UnoGame(){
     if(psl&&psl.ts&&psl.ts!==slashRef.current){
       slashRef.current=psl.ts;
       if(psl.type==="wild4"){
-        setChibiAttackFx({element:psl.element||"green",victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
+        const el=psl.element||"green";psE(el); // element sound plays once, with the cinematic
+        setChibiAttackFx({element:el,victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
         const t=setTimeout(()=>{trigShake();ps("penalty");},SLASH_DELAY);
         return()=>clearTimeout(t);
       }else{
@@ -1710,7 +1712,7 @@ export default function UnoGame(){
         return()=>clearTimeout(t);
       }
     }
-  },[g?.pendingSlash,ps,trigShake,pid]);
+  },[g?.pendingSlash,ps,psE,trigShake,pid]);
 
   useEffect(()=>{if(!g||g.winner||!g.currentPlayer)return;
     setTurnTimer(settings.turnTime);
@@ -2085,6 +2087,8 @@ export default function UnoGame(){
       nd.push(...discarded,card);
       const dCount=discarded.length;
       m+=" Discard all "+matchColor+"! (-"+(dCount+1)+" cards)";
+      // Trigger the fly-to-pile animation locally right away (fires even on a winning discard-all).
+      discardFxRef.current=Date.now();ps("discardAll");setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,ts:Date.now()});
     } else {
       nd.push(card);
     }
@@ -3060,25 +3064,24 @@ export default function UnoGame(){
 
       {g.winner&&(()=>{const win=g.winner===pid;const d=g.lastDeltas?.[pid];return(<>
         {win&&<ConfettiFX/>}
-        {/* Compact win banner — the field with everyone's revealed cards stays visible behind it */}
-        <div style={{position:"absolute",top:"calc(env(safe-area-inset-top,0px) + 46px)",left:"50%",transform:"translateX(-50%)",zIndex:151,
-          display:"flex",flexDirection:"column",alignItems:"center",gap:8,pointerEvents:"none",width:"94%",maxWidth:440}}>
-          <div style={{display:"flex",alignItems:"center",gap:12,padding:"8px 18px",borderRadius:16,
-            background:"linear-gradient(135deg,rgba(18,24,28,0.94),rgba(8,12,14,0.94))",
-            border:`1px solid ${win?"rgba(255,215,0,0.45)":"rgba(150,160,180,0.25)"}`,backdropFilter:"blur(8px)",
-            boxShadow:win?"0 6px 34px rgba(255,215,0,0.22)":"0 6px 24px rgba(0,0,0,0.55)",animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) both"}}>
-            <span style={{fontSize:34,filter:`drop-shadow(0 0 14px ${win?"rgba(255,215,0,0.7)":"rgba(150,160,180,0.4)"})`}}>{win?"🏆":"🎴"}</span>
-            <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
-              <span style={{fontSize:18,fontWeight:900,color:win?"#FFD700":"#8892a6",fontFamily:"'Chakra Petch',sans-serif",letterSpacing:2}}>{win?"VICTORY!":"DEFEAT"}</span>
+        {/* Centered compact win banner — kept off the top so opponents' revealed cards stay visible */}
+        <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:151,
+          display:"flex",flexDirection:"column",alignItems:"center",gap:5,pointerEvents:"none",width:"94%",maxWidth:400}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 20px",borderRadius:16,
+            background:"linear-gradient(135deg,rgba(18,24,28,0.95),rgba(8,12,14,0.95))",
+            border:`1px solid ${win?"rgba(255,215,0,0.45)":"rgba(239,83,80,0.3)"}`,backdropFilter:"blur(8px)",
+            boxShadow:win?"0 6px 34px rgba(255,215,0,0.25)":"0 6px 24px rgba(0,0,0,0.55)",animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) both"}}>
+            <span style={{fontSize:38,filter:`drop-shadow(0 0 14px ${win?"rgba(255,215,0,0.7)":"rgba(239,83,80,0.35)"})`}}>{win?"🏆":"💀"}</span>
+            <div style={{display:"flex",flexDirection:"column",lineHeight:1.2}}>
+              <span style={{fontSize:20,fontWeight:900,color:win?"#FFD700":"#EF5350",fontFamily:"'Chakra Petch',sans-serif",letterSpacing:2}}>{win?"VICTORY!":"DEFEAT"}</span>
               <span style={{fontSize:11,color:"#ccc",fontWeight:600}}>{rd.players[g.winner]?.name} wins</span>
             </div>
-            {win&&<span style={{fontSize:20,fontWeight:900,color:"#4CAF50",textShadow:"0 0 14px rgba(76,175,80,0.5)"}}>+{g.lastAward!=null?g.lastAward:(d||0)}</span>}
-            {!win&&d!=null&&d<0&&<span style={{fontSize:18,fontWeight:900,color:"#EF5350"}}>{d}</span>}
+            {(()=>{const pts=win?(g.lastAward!=null?g.lastAward:(d||0)):(d||0);
+              if(win)return<span style={{fontSize:26,fontWeight:900,color:"#4CAF50",textShadow:"0 0 14px rgba(76,175,80,0.5)"}}>+{pts}</span>;
+              if(pts<0)return<span style={{fontSize:24,fontWeight:900,color:"#EF5350",textShadow:"0 0 12px rgba(239,83,80,0.45)"}}>{pts}</span>;
+              return null;})()}
           </div>
-          {topC&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,animation:"cardFlipIn 0.6s cubic-bezier(.34,1.2,.5,1) 0.35s both"}}>
-            <span style={{fontSize:8,color:"#FFD700",letterSpacing:2,fontWeight:800,textShadow:"0 0 8px rgba(255,215,0,0.4)"}}>WINNING CARD</span>
-            <Card card={topC} sz="sm"/>
-          </div>}
+          <span style={{fontSize:8,color:"#99a",letterSpacing:1,textShadow:"0 1px 3px #000"}}>everyone's final hands are revealed</span>
         </div>
         {/* Back to lobby */}
         <div style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom,0px) + 16px)",left:"50%",transform:"translateX(-50%)",zIndex:151,
@@ -3207,7 +3210,8 @@ export default function UnoGame(){
                   fontSize:11,fontWeight:900,color:"#fff",background:"#E53935",borderRadius:8,padding:"2px 8px",
                   boxShadow:"0 0 10px rgba(229,57,53,0.5)",zIndex:4}}>+{drawStack}</div>}
               </div>
-              <div style={{position:"relative"}}>{topC&&<Card card={topC} sz={isLandscape?"sm":"md"} animate={cAn}/>}
+              <div style={{position:"relative",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>{topC&&<Card card={topC} sz={isLandscape?"sm":"md"} animate={cAn}/>}
+                {g.winner&&<div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",fontSize:7,color:"#FFD700",fontWeight:900,letterSpacing:1,whiteSpace:"nowrap",textShadow:"0 0 6px rgba(255,215,0,0.6)",pointerEvents:"none"}}>👑 WINNING CARD</div>}
                 <div style={{position:"absolute",top:-8,right:-8,width:isLandscape?16:22,height:isLandscape?16:22,borderRadius:"50%",
                   background:CG[g.currentColor],border:"2px solid rgba(255,255,255,0.7)",
                   boxShadow:`0 0 18px ${gcHex}aa,0 0 35px ${gcHex}44`,transition:"all 0.5s"}}/>
@@ -3276,7 +3280,7 @@ export default function UnoGame(){
                 const no=newOrder[card.id];const isNew=no!==undefined;
                 const anim=isNew?(initialDeal
                   ?`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`
-                  :`cardReceive 0.66s cubic-bezier(.34,1.35,.5,1) ${no*0.12}s both`):"none";
+                  :`cardReceive 0.7s cubic-bezier(.34,1.25,.5,1) ${no*0.14}s both`):"none";
                 return(<div key={card.id} onClick={()=>{if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,
