@@ -19,7 +19,8 @@ const VALS=["0","1","2","3","4","5","6","7","8","9","skip","reverse","draw2"];
 const ADMIN_PASS="admin123";
 const TURN_TIME=15;
 const ROUND_TIME=180;
-const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:10};
+const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:4};
+const MAX_PLAYERS=4;
 const EMOTE_URL=import.meta.env.BASE_URL+"emotes/";
 const EMOTES=[
   {id:"angry",gif:"angry.gif",sound:"angry.mp3",label:"Angry",vol:5.0},
@@ -1233,8 +1234,8 @@ const DiscardAllFX=({color,count,onDone})=>{
   const gc=CH[color]||"#E040FB";
   // Cards start down at the player's hand and sweep up into the discard pile (screen center).
   const cards=useMemo(()=>Array.from({length:nCards},(_,i)=>({
-    id:i,startX:-90+Math.random()*180,startY:240+Math.random()*110,
-    rot:-25+Math.random()*50,delay:i*0.22})),[nCards]);
+    id:i,startX:-100+Math.random()*200,startY:250+Math.random()*90,
+    rot:-30+Math.random()*60,delay:i*0.2,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards]);
   return(<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",
     display:"flex",alignItems:"center",justifyContent:"center",animation:`discardFade ${(total/1000).toFixed(2)}s forwards`}}>
     <div style={{position:"absolute",inset:0,
@@ -1244,8 +1245,8 @@ const DiscardAllFX=({color,count,onDone})=>{
       <div key={c.id} style={{position:"absolute",width:50,height:75,borderRadius:8,
         background:CG[color],border:"2px solid rgba(255,255,255,0.6)",
         boxShadow:`0 4px 20px ${gc}88`,
-        transform:`translate(${c.startX}px,${c.startY}px) rotate(${c.rot}deg)`,
-        animation:`discardPull 1.05s cubic-bezier(.34,1.1,.5,1) ${c.delay}s forwards`,
+        "--sx":`${c.startX}px`,"--sy":`${c.startY}px`,"--sr":`${c.rot}deg`,"--ax":`${c.arc}px`,
+        animation:`discardArc 1.15s cubic-bezier(.45,0,.35,1) ${c.delay}s forwards`,
         display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{width:"60%",height:"50%",borderRadius:"50%",background:"rgba(255,255,255,0.9)",
           display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1511,6 +1512,9 @@ export default function UnoGame(){
   const[showFriends,setShowFriends]=useState(false);
   const[friendIdInput,setFriendIdInput]=useState("");
   const[friendMsg,setFriendMsg]=useState("");
+  const[delFriendId,setDelFriendId]=useState(null);
+  const[showInvite,setShowInvite]=useState(false);
+  const[inviteSel,setInviteSel]=useState({});
   const[settings,setSettings]=useState(DEF_SETTINGS);
   const[showSettings,setShowSettings]=useState(false);
   const[autoStart,setAutoStart]=useState(false);
@@ -1654,6 +1658,11 @@ export default function UnoGame(){
     prevT.current=g.currentPlayer;setHasDrawn(false);setDrawnCard(null);setTurnTimer(settings.turnTime);}},[g?.currentPlayer,pid,ps,rd?.players]);
   useEffect(()=>{if(turnFx!==null){const t=setTimeout(()=>setTurnFx(null),1800);return()=>clearTimeout(t);}},[turnFx]);
   useEffect(()=>{setSel(-1);},[myH.length]);
+  // Animate the discard pile whenever a NEW card lands on it (any player), so plays
+  // don't look like the pile just "changed color".
+  const prevTopRef=useRef();
+  useEffect(()=>{const id=topC?.id;if(id&&id!==prevTopRef.current){prevTopRef.current=id;
+    setCAn("cFly 0.5s cubic-bezier(.22,1,.36,1)");const t=setTimeout(()=>setCAn(null),520);return()=>clearTimeout(t);}},[topC?.id]);
 
   const np=useCallback((cur,dir,skip=false)=>{const i=po.indexOf(cur);const n=po.length;
     let x=(i+dir+n)%n;if(skip)x=(x+dir+n)%n;return po[x];},[po]);
@@ -1779,9 +1788,12 @@ export default function UnoGame(){
     })();
   },[g?.winner,g?.scored,g?.turnTimestamp,isHost,rc,pls,rd]);
 
-  /* When someone wins, first reveal everyone's final hands for a few seconds
-     (this also gives the async scoring time to finish before the points screen). */
-  useEffect(()=>{if(g?.winner){setShowWin(false);const t=setTimeout(()=>setShowWin(true),4000);return()=>clearTimeout(t);}setShowWin(false);},[g?.winner]);
+  /* On a win, reveal everyone's hands ON the field and mark this player as
+     "reviewing" so the lobby shows their status until they close the review. */
+  useEffect(()=>{
+    if(g?.winner&&scr==="game"){setShowWin(true);update(ref(db,"rooms/"+rc+"/players/"+pid),{reviewing:true}).catch(()=>{});}
+    else if(!g?.winner)setShowWin(false);
+  },[g?.winner,scr,rc,pid]);
 
   const autoPassRef=useRef(false);
   /* HOST-AUTHORITATIVE timeout: only the host resolves a timeout, for whoever's
@@ -1933,7 +1945,6 @@ export default function UnoGame(){
     },1200+Math.random()*1300);
   });
 
-  const trigA=()=>{setCAn("cFly 0.6s cubic-bezier(.22,1,.36,1)");setTimeout(()=>setCAn(null),600);};
 
   // Music is ON by default; only off if the user explicitly turned it off before.
   const musUserOff=useRef(localStorage.getItem("uno_musicoff")==="1");
@@ -1996,7 +2007,7 @@ export default function UnoGame(){
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     try{const snap=await get(ref(db,"rooms/"+code));if(!snap.exists()){setErr("Not found");return;}
       const data=snap.val();if(data.status!=="waiting"){setErr("Already started");return;}
-      const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=10){setErr("Full");return;}
+      const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=MAX_PLAYERS){setErr("Full");return;}
       if(!data.players?.[pid])await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt});
       setRc(code);setErr("");setScr("lobby");ps("join");
     }catch(e){setErr("Failed.");console.error(e);}};
@@ -2004,12 +2015,12 @@ export default function UnoGame(){
   const saveSetting=async(key,val)=>{const ns={...settings,[key]:val};setSettings(ns);
     if(rc)await update(ref(db,"rooms/"+rc),{settings:ns});};
 
-  const addBot=async()=>{if(!isHost||pls.length>=(settings.maxPlayers||10))return;
+  const addBot=async()=>{if(!isHost||pls.length>=(settings.maxPlayers||MAX_PLAYERS))return;
     const bc=pls.filter(([id])=>isBot(id)).length;const botId="bot_"+(bc+1)+"_"+Date.now();
     const used=pls.map(([id])=>rd.players[id]?.name).filter(Boolean);
     await update(ref(db,"rooms/"+rc+"/players/"+botId),{name:randBotName(used),order:pls.length,isBot:true,ready:true});};
   const toggleReady=async()=>{await update(ref(db,"rooms/"+rc+"/players/"+pid),{ready:!(rd?.players?.[pid]?.ready)});};
-  const allReady=pls.every(([id,pd])=>id===rd?.host||pd.ready);
+  const allReady=pls.every(([id,pd])=>id===rd?.host||(pd.ready&&!pd.reviewing));
   const removeBot=async(botId)=>{if(!isHost||!isBot(botId))return;await remove(ref(db,"rooms/"+rc+"/players/"+botId));};
 
   const quickPlay1v1=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
@@ -2053,11 +2064,11 @@ export default function UnoGame(){
 
   useEffect(()=>{if(autoStart&&isHost&&pls.length>=2&&scr==="lobby"){setAutoStart(false);startGame();}},[autoStart,isHost,pls.length,scr]);
 
-  useEffect(()=>{if(rd?.status==="playing"&&scr==="lobby"&&!isHost){ua();startMusic();setScr("game");ps("gameOn");goFS();goLand();}},[rd?.status,scr,isHost,ps,startMusic]);
+  useEffect(()=>{if(rd?.status==="playing"&&scr==="lobby"&&!isHost&&rd?.game&&!rd.game.winner){ua();startMusic();setScr("game");ps("gameOn");goFS();goLand();}},[rd?.status,rd?.game?.turnTimestamp,rd?.game?.winner,scr,isHost,ps,startMusic]);
   useEffect(()=>{if(rd?.status==="waiting"&&scr==="game"){setScr("lobby");setSel(-1);setDrawnCard(null);setHasDrawn(false);setChallenge(null);setActFx(null);setWild4Fx(null);setChibiAttackFx(null);setDraw2Fx(null);setReverseFx(null);setSkipFx(null);setUnoCallFx(null);setUnoPenaltyFx(null);}},[rd?.status,scr]);
 
   const playC=useCallback(async(ci,cc)=>{if(!g||!myTurn)return;
-    const card=myH[ci];ps("card");trigA();setSel(-1);setDrawnCard(null);setHasDrawn(false);
+    const card=myH[ci];ps("card");setSel(-1);setDrawnCard(null);setHasDrawn(false);
     const cCol=card.color==="wild"?(cc||"yellow"):card.color;
     trigBurst(cCol);trigImpact(cCol);
     const nh={...g.hands};let remainHand=myH.filter((_,i)=>i!==ci);
@@ -2265,7 +2276,11 @@ export default function UnoGame(){
   const leave=async(e)=>{if(e&&e.stopPropagation)e.stopPropagation();
     bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
     else await remove(ref(db,"rooms/"+rc+"/players/"+pid));setRc("");setRd(null);setScr("menu");};
-  const restart=async()=>{if(!isHost)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);await update(ref(db,"rooms/"+rc),{status:"waiting",game:null});setScr("lobby");};
+  const restart=async()=>{if(!isHost)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);
+    const upd={status:"waiting",game:null};pls.forEach(([id,pd])=>{if(!pd.isBot){upd["players/"+id+"/ready"]=false;upd["players/"+id+"/reviewing"]=null;}});
+    await update(ref(db,"rooms/"+rc),upd);setScr("lobby");};
+  // Leave the post-win review and go back to the lobby (resets my ready + reviewing flag).
+  const backToLobby=async()=>{try{await update(ref(db,"rooms/"+rc+"/players/"+pid),{reviewing:null,ready:false});}catch(e){}setScr("lobby");};
   const toggleMusic=()=>{ua();const on=bgm.toggle(scr==="game"?"game":"menu");musUserOff.current=!on;localStorage.setItem("uno_musicoff",on?"0":"1");setMus(on);};
 
   const shakeStyle=screenShake?{animation:"screenShake 0.4s ease-out"}:{};
@@ -2584,8 +2599,14 @@ export default function UnoGame(){
                 <div style={{fontSize:12,color:"#ddd",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{online?.name||v.name}</div>
                 <div style={{fontSize:8,color:"#667"}}>{online?online.totalPoints+" pts":"—"}</div>
               </div>
-              {rc&&scr==="lobby"&&<button onClick={()=>inviteFriend(fid)} style={{background:"#1565C0",border:"none",borderRadius:7,color:"#fff",fontSize:9,fontWeight:800,padding:"5px 10px",cursor:"pointer"}}>INVITE</button>}
-              <button onClick={()=>removeFriend(fid)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",borderRadius:6,color:"#FF5252",fontSize:11,width:24,height:24,cursor:"pointer"}}>×</button>
+              {delFriendId===fid?(<>
+                <span style={{fontSize:9,color:"#EF5350",fontWeight:700}}>Remove?</span>
+                <button onClick={()=>{removeFriend(fid);setDelFriendId(null);}} style={{background:"#C62828",border:"none",borderRadius:6,color:"#fff",fontSize:9,fontWeight:800,padding:"5px 9px",cursor:"pointer"}}>YES</button>
+                <button onClick={()=>setDelFriendId(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:6,color:"#ddd",fontSize:9,fontWeight:800,padding:"5px 9px",cursor:"pointer"}}>NO</button>
+              </>):(<>
+                {rc&&scr==="lobby"&&<button onClick={()=>inviteFriend(fid)} style={{background:"#1565C0",border:"none",borderRadius:7,color:"#fff",fontSize:9,fontWeight:800,padding:"5px 10px",cursor:"pointer"}}>INVITE</button>}
+                <button onClick={()=>setDelFriendId(fid)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",borderRadius:6,color:"#FF5252",fontSize:11,width:24,height:24,cursor:"pointer"}}>×</button>
+              </>)}
             </div>);})}
         </div>
       </div>)}
@@ -2733,7 +2754,7 @@ export default function UnoGame(){
           textShadow:"0 0 45px rgba(255,215,0,0.5),0 0 90px rgba(255,215,0,0.2)",marginBottom:20,fontFamily:"Arial Black",
           animation:"codeGlow 2s ease-in-out infinite"}}>{rc}</div>
         <div style={{...GLASS,padding:20,width:"100%",maxWidth:380,marginBottom:18}}>
-          <div style={{color:"#889",fontSize:9,marginBottom:12,letterSpacing:3}}>PLAYERS ({pls.length}/10)</div>
+          <div style={{color:"#889",fontSize:9,marginBottom:12,letterSpacing:3}}>PLAYERS ({pls.length}/{settings.maxPlayers||MAX_PLAYERS})</div>
           {pls.map(([id,pd],i)=>(
             <div key={id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
               background:id===pid?"rgba(255,215,0,0.06)":"transparent",borderRadius:12,marginBottom:4,
@@ -2744,8 +2765,10 @@ export default function UnoGame(){
                 boxShadow:`0 3px 12px ${CH[COLORS[i%4]]}44`}}>{pd.name?.[0]?.toUpperCase()}</div>
               <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
               <span style={{fontSize:11,color:"#778",fontWeight:600,fontFamily:"monospace"}}>{rd?.scores?.[id]||0}</span>
-              {id===rd?.host&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
-              {id!==rd?.host&&<span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 8px",borderRadius:6,
+              {id===rd?.host&&!pd.reviewing&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
+              {pd.reviewing?<span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 8px",borderRadius:6,
+                color:"#FFB74D",background:"rgba(255,152,0,0.12)",border:"1px solid rgba(255,152,0,0.3)",animation:"pulse 1.4s infinite"}}>🎴 IN-GAME</span>
+                :id!==rd?.host&&<span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 8px",borderRadius:6,
                 color:pd.ready?"#4CAF50":"#889",background:pd.ready?"rgba(76,175,80,0.12)":"rgba(255,255,255,0.04)",
                 border:pd.ready?"1px solid rgba(76,175,80,0.3)":"1px solid rgba(255,255,255,0.06)"}}>{pd.ready?"✓ READY":"NOT READY"}</span>}
               {isHost&&pd.isBot&&<button onClick={()=>removeBot(id)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",
@@ -2753,14 +2776,14 @@ export default function UnoGame(){
                 transition:"all 0.2s"}} onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.5)"}
                 onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.2)"}>×</button>}
             </div>))}
-          {isHost&&pls.length<(settings.maxPlayers||10)&&<button onClick={addBot} style={{width:"100%",padding:"8px 0",borderRadius:10,
+          {isHost&&pls.length<(settings.maxPlayers||MAX_PLAYERS)&&<button onClick={addBot} style={{width:"100%",padding:"8px 0",borderRadius:10,
             border:"1px dashed rgba(76,175,80,0.3)",background:"rgba(76,175,80,0.06)",color:"#4CAF50",
             fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:3,transition:"all 0.2s",marginTop:4}}
             onPointerEnter={e=>{e.currentTarget.style.borderColor="rgba(76,175,80,0.5)";e.currentTarget.style.background="rgba(76,175,80,0.12)";}}
             onPointerLeave={e=>{e.currentTarget.style.borderColor="rgba(76,175,80,0.3)";e.currentTarget.style.background="rgba(76,175,80,0.06)";}}>
             + ADD BOT</button>}
         </div>
-        <button onClick={()=>{setShowFriends(true);setFriendMsg("");}} style={{width:"100%",maxWidth:380,padding:"9px 0",borderRadius:12,marginBottom:10,
+        <button onClick={()=>{setShowInvite(true);setInviteSel({});setFriendMsg("");}} style={{width:"100%",maxWidth:380,padding:"9px 0",borderRadius:12,marginBottom:10,
           border:"1px solid rgba(21,101,192,0.35)",background:"rgba(21,101,192,0.1)",color:"#64B5F6",
           fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:2,transition:"all 0.2s"}}
           onPointerEnter={e=>e.currentTarget.style.background="rgba(21,101,192,0.18)"}
@@ -2832,6 +2855,28 @@ export default function UnoGame(){
           onPointerEnter={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.25)";e.currentTarget.style.color="#aaa";}}
           onPointerLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.08)";e.currentTarget.style.color="#889";}}>{isHost?"Close":"Leave"}</button>
       </div>
+      {showInvite&&(()=>{const selCount=Object.values(inviteSel).filter(Boolean).length;return(
+        <div onClick={()=>setShowInvite(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:250,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.3s"}}>
+          <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:"20px 18px",width:"92%",maxWidth:380,maxHeight:"86vh",overflow:"auto",position:"relative"}}>
+            <button onClick={()=>setShowInvite(false)} style={{position:"absolute",top:8,right:12,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer"}}>×</button>
+            <div style={{fontSize:15,fontWeight:900,color:"#64B5F6",letterSpacing:2,marginBottom:4,fontFamily:"'Chakra Petch',sans-serif"}}>🤝 INVITE FRIENDS</div>
+            <div style={{fontSize:9,color:"#889",marginBottom:12,letterSpacing:1}}>Tap to select, then send — they get a join notification.</div>
+            {Object.keys(friends).length===0&&<div style={{fontSize:11,color:"#667",textAlign:"center",padding:"16px 0"}}>No friends yet. Add friends from the menu first.</div>}
+            {Object.entries(friends).map(([fid,v])=>{const online=globalLB.find(p=>p.id===fid);const already=pls.some(([id])=>id===fid);const sel=!!inviteSel[fid];return(
+              <div key={fid} onClick={()=>!already&&setInviteSel(s=>({...s,[fid]:!s[fid]}))} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderRadius:10,marginBottom:4,cursor:already?"default":"pointer",
+                background:sel?"rgba(21,101,192,0.15)":"rgba(255,255,255,0.03)",border:sel?"1px solid rgba(21,101,192,0.4)":"1px solid rgba(255,255,255,0.06)",opacity:already?0.45:1}}>
+                <div style={{width:22,height:22,borderRadius:6,border:sel?"none":"1.5px solid rgba(255,255,255,0.2)",background:sel?"#1565C0":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#fff",flexShrink:0}}>{sel?"✓":""}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,color:"#ddd",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{online?.name||v.name}</div>
+                  <div style={{fontSize:8,color:already?"#4CAF50":"#667"}}>{already?"already in room":(online?online.totalPoints+" pts":"—")}</div>
+                </div>
+              </div>);})}
+            {friendMsg&&<div style={{fontSize:11,color:"#4CAF50",textAlign:"center",margin:"6px 0",fontWeight:700}}>{friendMsg}</div>}
+            {Object.keys(friends).length>0&&<button onClick={()=>{const ids=Object.keys(inviteSel).filter(k=>inviteSel[k]);if(!ids.length)return;ids.forEach(fid=>inviteFriend(fid));setFriendMsg("Invited "+ids.length+" friend"+(ids.length>1?"s":"")+"!");setInviteSel({});setTimeout(()=>{setShowInvite(false);setFriendMsg("");},1000);}}
+              style={{...bst,marginTop:8,background:selCount?"linear-gradient(135deg,#1565C0,#0D47A1)":"rgba(255,255,255,0.05)",
+              color:selCount?"#fff":"#667",fontSize:13,letterSpacing:2,cursor:selCount?"pointer":"not-allowed",boxShadow:selCount?"0 4px 18px rgba(21,101,192,0.4)":"none"}}>SEND INVITES ({selCount})</button>}
+          </div>
+        </div>);})()}
       <style>{globalCSS}</style>
     </div>);
 
@@ -2872,8 +2917,10 @@ export default function UnoGame(){
         {(()=>{const cards=h.slice(0,40);const n=cards.length;const dim=isV?72:48;
           const maxS=isV?230:(isLandscape?165:300);
           const step=Math.max(3,Math.min(isV?20:16,(maxS-dim)/Math.max(n-1,1)));const ov=step-dim;
-          return cards.map((c,ci)=><Card key={c.id} card={c} sz="xs" faceDown={!peek||!isAdm}
-            style={isV?{marginTop:ci>0?ov:0}:{marginLeft:ci>0?ov:0}}/>);})()}
+          const reveal=!!g.winner; // flip everyone's cards face-up when the round is over
+          return cards.map((c,ci)=><div key={c.id} style={{...(isV?{marginTop:ci>0?ov:0}:{marginLeft:ci>0?ov:0}),
+            animation:reveal?`cardFlipIn 0.55s cubic-bezier(.34,1.2,.5,1) ${ci*0.06}s both`:"none"}}>
+            <Card card={c} sz="xs" faceDown={reveal?false:(!peek||!isAdm)}/></div>);})()}
       </div>
       {canCatch&&<div style={{position:"absolute",bottom:isV?"auto":-12,right:isV?-8:"auto",left:isV?"auto":"auto",
         fontSize:7,color:"#FF9800",fontWeight:800,
@@ -3011,63 +3058,36 @@ export default function UnoGame(){
           style={{marginTop:12,padding:"8px 24px",borderRadius:10,border:"none",background:"#333",color:"#aaa",fontSize:11,cursor:"pointer"}}>Cancel</button>
       </div>)}
 
-      {g.winner&&!showWin&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(4,8,10,0.94)",zIndex:150,overflow:"auto",
-          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:isLandscape?8:12,
-          padding:"18px 12px",backdropFilter:"blur(10px)",animation:"fadeIn 0.4s"}}>
-          <div style={{color:"#FFD700",fontWeight:800,fontSize:15,letterSpacing:3,fontFamily:"'Chakra Petch',sans-serif",
-            textShadow:"0 0 18px rgba(255,215,0,0.35)",marginBottom:2}}>ROUND OVER · FINAL HANDS</div>
-          {po.map(id=>{const h=g.hands?.[id]||[];const isW=id===g.winner;const n2=Math.min(h.length,14);
-            const step=Math.max(4,Math.min(20,(220-48)/Math.max(n2-1,1)));
-            return(<div key={id} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,
-              padding:"5px 12px",borderRadius:12,maxWidth:"96vw",
-              background:isW?"rgba(255,215,0,0.10)":"rgba(255,255,255,0.03)",
-              border:isW?"1px solid rgba(255,215,0,0.35)":"1px solid rgba(255,255,255,0.05)",
-              boxShadow:isW?"0 0 22px rgba(255,215,0,0.15)":"none"}}>
-              <div style={{display:"flex",alignItems:"center",gap:5}}>
-                {crownRank[id]&&<Crown rank={crownRank[id]} size={13}/>}
-                <span style={{color:isW?"#FFD700":"#ddd",fontSize:12,fontWeight:800}}>{rd.players[id]?.name}</span>
-                {isW&&<span style={{fontSize:9,color:"#FFD700",fontWeight:900,letterSpacing:1}}>👑 WINNER</span>}
-                {!isW&&<span style={{fontSize:9,color:"#889"}}>{h.length} left</span>}
-              </div>
-              <div style={{display:"flex",minHeight:60}}>
-                {h.length===0?<span style={{color:"#4CAF50",fontSize:12,fontWeight:800,alignSelf:"center"}}>Cleared! 🎉</span>
-                  :h.slice(0,14).map((c,ci)=><div key={c.id} style={{marginLeft:ci>0?step-48:0}}><Card card={c} sz="xs"/></div>)}
-              </div>
-            </div>);})}
-        </div>)}
-      {g.winner&&showWin&&(()=>{const win=g.winner===pid;return(<>
+      {g.winner&&(()=>{const win=g.winner===pid;const d=g.lastDeltas?.[pid];return(<>
         {win&&<ConfettiFX/>}
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.94)",zIndex:150,overflow:"hidden",
-          display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)"}}>
-          {win&&<div style={{position:"absolute",width:"150vmax",height:"150vmax",pointerEvents:"none",opacity:0.5,
-            background:"repeating-conic-gradient(from 0deg,rgba(255,215,0,0.10) 0deg 7deg,transparent 7deg 15deg)",
-            animation:"spinRays 16s linear infinite"}}/>}
-          <div style={{position:"absolute",width:"64vmin",height:"64vmin",borderRadius:"50%",pointerEvents:"none",
-            background:`radial-gradient(circle,${win?"rgba(255,215,0,0.28)":"rgba(120,130,150,0.14)"},transparent 70%)`}}/>
-          <div style={{fontSize:"min(96px,22vw)",marginBottom:2,zIndex:2,
-            filter:`drop-shadow(0 0 30px ${win?"rgba(255,215,0,0.7)":"rgba(150,160,180,0.4)"})`,
-            animation:"trophyPop 0.7s cubic-bezier(.34,1.7,.5,1) both"}}>{win?"🏆":"🎴"}</div>
-          <div style={{fontSize:"min(48px,12vw)",fontWeight:900,fontFamily:"'Chakra Petch',sans-serif",letterSpacing:5,zIndex:2,
-            color:win?"#FFD700":"#8892a6",textShadow:win?"0 0 44px rgba(255,215,0,0.6)":"none",
-            animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) 0.12s both"}}>{win?"VICTORY!":"DEFEAT"}</div>
-          <div style={{fontSize:20,fontWeight:800,color:"#eee",marginTop:6,marginBottom:6,zIndex:2,
-            animation:"fadeIn 0.5s 0.5s both"}}>{rd.players[g.winner]?.name} wins</div>
-          {(()=>{const d=g.lastDeltas?.[pid];
-            if(win)return(<div style={{fontSize:26,color:"#4CAF50",marginBottom:6,fontWeight:900,zIndex:2,
-              textShadow:"0 0 20px rgba(76,175,80,0.5)",animation:"slamIn 0.45s cubic-bezier(.2,1.5,.4,1) 0.7s both"}}>+{g.lastAward!=null?g.lastAward:(d||0)} points</div>);
-            if(d!=null&&d<0)return(<div style={{fontSize:26,color:"#EF5350",marginBottom:6,fontWeight:900,zIndex:2,
-              textShadow:"0 0 20px rgba(239,83,80,0.5)",animation:"slamIn 0.45s cubic-bezier(.2,1.5,.4,1) 0.7s both"}}>{d} points</div>);
-            return null;})()}
-          <div style={{marginTop:16,zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",animation:"fadeIn 0.5s 0.9s both"}}>
-          {isHost?(<>
-            <button onClick={restart} style={{...bst,maxWidth:260,background:"linear-gradient(135deg,#E53935,#C62828)",
-              boxShadow:"0 4px 25px rgba(229,57,53,0.5)"}}
-              onPointerEnter={e=>e.currentTarget.style.transform="scale(1.03)"}
-              onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>NEXT ROUND</button>
-            <button onClick={leave} style={{marginTop:12,background:"none",border:"none",color:"#889",fontSize:12,cursor:"pointer"}}>Close</button>
-          </>):<div style={{color:"#889",fontSize:12}}>Waiting for host...</div>}
+        {/* Compact win banner — the field with everyone's revealed cards stays visible behind it */}
+        <div style={{position:"absolute",top:"calc(env(safe-area-inset-top,0px) + 46px)",left:"50%",transform:"translateX(-50%)",zIndex:151,
+          display:"flex",flexDirection:"column",alignItems:"center",gap:8,pointerEvents:"none",width:"94%",maxWidth:440}}>
+          <div style={{display:"flex",alignItems:"center",gap:12,padding:"8px 18px",borderRadius:16,
+            background:"linear-gradient(135deg,rgba(18,24,28,0.94),rgba(8,12,14,0.94))",
+            border:`1px solid ${win?"rgba(255,215,0,0.45)":"rgba(150,160,180,0.25)"}`,backdropFilter:"blur(8px)",
+            boxShadow:win?"0 6px 34px rgba(255,215,0,0.22)":"0 6px 24px rgba(0,0,0,0.55)",animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) both"}}>
+            <span style={{fontSize:34,filter:`drop-shadow(0 0 14px ${win?"rgba(255,215,0,0.7)":"rgba(150,160,180,0.4)"})`}}>{win?"🏆":"🎴"}</span>
+            <div style={{display:"flex",flexDirection:"column",lineHeight:1.15}}>
+              <span style={{fontSize:18,fontWeight:900,color:win?"#FFD700":"#8892a6",fontFamily:"'Chakra Petch',sans-serif",letterSpacing:2}}>{win?"VICTORY!":"DEFEAT"}</span>
+              <span style={{fontSize:11,color:"#ccc",fontWeight:600}}>{rd.players[g.winner]?.name} wins</span>
+            </div>
+            {win&&<span style={{fontSize:20,fontWeight:900,color:"#4CAF50",textShadow:"0 0 14px rgba(76,175,80,0.5)"}}>+{g.lastAward!=null?g.lastAward:(d||0)}</span>}
+            {!win&&d!=null&&d<0&&<span style={{fontSize:18,fontWeight:900,color:"#EF5350"}}>{d}</span>}
           </div>
+          {topC&&<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,animation:"cardFlipIn 0.6s cubic-bezier(.34,1.2,.5,1) 0.35s both"}}>
+            <span style={{fontSize:8,color:"#FFD700",letterSpacing:2,fontWeight:800,textShadow:"0 0 8px rgba(255,215,0,0.4)"}}>WINNING CARD</span>
+            <Card card={topC} sz="sm"/>
+          </div>}
+        </div>
+        {/* Back to lobby */}
+        <div style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom,0px) + 16px)",left:"50%",transform:"translateX(-50%)",zIndex:151,
+          display:"flex",flexDirection:"column",alignItems:"center",gap:5,animation:"fadeIn 0.5s 0.6s both"}}>
+          <span style={{fontSize:9,color:"#99a",letterSpacing:1,textShadow:"0 1px 4px #000"}}>👀 Review everyone's cards, then</span>
+          <button onClick={backToLobby} style={{...bst,maxWidth:250,padding:"12px 30px",background:"linear-gradient(135deg,#2E7D32,#1B5E20)",
+            boxShadow:"0 4px 22px rgba(46,125,50,0.55)"}}
+            onPointerEnter={e=>e.currentTarget.style.transform="scale(1.03)"}
+            onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>BACK TO LOBBY</button>
         </div>
       </>);})()}
 
@@ -3390,6 +3410,11 @@ const globalCSS=`
     78%{transform:translate(0,-24px) rotate(360deg) scale(0.55);opacity:0.9}
     100%{transform:translate(0,-52px) rotate(720deg) scale(0);opacity:0}}
   @keyframes discardFade{0%{opacity:1}82%{opacity:1}100%{opacity:0;transform:scale(1.04)}}
+  @keyframes discardArc{0%{opacity:0;transform:translate(var(--sx),var(--sy)) rotate(var(--sr)) scale(0.65)}
+    14%{opacity:1;transform:translate(var(--sx),var(--sy)) rotate(var(--sr)) scale(1)}
+    50%{opacity:1;transform:translate(calc(var(--sx)*0.5 + var(--ax)),calc(var(--sy)*0.42 - 72px)) rotate(calc(var(--sr)*0.4)) scale(0.98)}
+    82%{opacity:1;transform:translate(0px,-26px) rotate(0deg) scale(0.72)}
+    100%{opacity:0;transform:translate(0px,-34px) rotate(0deg) scale(0.5)}}
   @keyframes deckPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
   @keyframes w4bg{0%{opacity:0;transform:scale(0.5)}100%{opacity:1;transform:scale(1)}}
   @keyframes w4ring{0%{transform:rotate(0deg) scale(0.5);opacity:0}20%{opacity:0.8}100%{transform:rotate(360deg) scale(1.5);opacity:0}}
