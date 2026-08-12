@@ -212,7 +212,7 @@ class AnimeSFX{
       case "cardSlide":this._noise(n,0.1,0.3);this._bend(200,400,"sine",n,0.08,0.08);break;
       case "stack":this._bend(240,780,"sawtooth",n,0.16,0.12);[0,0.1,0.2].forEach((d,i)=>{this._fNoise(n+0.12+d,0.05,2600+i*300,2.5,"bandpass",0.3-i*0.03);this._osc(150-i*12,"sine",n+0.12+d,0.12,0.22);});this._osc(60,"sine",n+0.12,0.4,0.16);this._shimmer(1200,n+0.32,0.25,0.06);break;
       case "discardAll":this._chime([523,659,784,1047,1319,1568],n,0.05,0.16);this._shimmer(1500,n+0.2,0.5,0.08);this._bend(400,2000,"sine",n,0.4,0.1);this._noise(n+0.1,0.08,0.2);break;
-      case "tick":this._fNoise(n,0.018,2600,4,"bandpass",0.34);this._osc(1500,"sine",n,0.014,0.16);this._osc(520,"sine",n+0.006,0.03,0.12);break;
+      case "tick":this._fNoise(n,0.02,2600,4,"bandpass",0.5);this._osc(1500,"sine",n,0.016,0.26);this._osc(520,"sine",n+0.006,0.035,0.2);break;
       case "timeout":this._bend(600,200,"sawtooth",n,0.25,0.2);this._bend(400,120,"square",n+0.12,0.2,0.15);break;
     }
   }catch(e){}}
@@ -1621,10 +1621,13 @@ export default function UnoGame(){
   useEffect(()=>{
     if(!g||!myTurn||g.winner)return;
     if(g.pendingChallenge&&g.pendingChallenge.target===pid){
-      setChallenge({playerId:g.pendingChallenge.player,
+      // If I can stack (have a +4/shadow), skip the challenge prompt so I can play it.
+      const canStack=myH.some(c=>c.value==="wild4"||c.value==="shadow");
+      if(!canStack)setChallenge({playerId:g.pendingChallenge.player,
         playerName:rd.players[g.pendingChallenge.player]?.name||"Player",
-        playerHadColor:g.pendingChallenge.hadMatchingColor});}
-  },[g?.pendingChallenge,myTurn,g?.winner,pid,rd?.players,g]);
+        playerHadColor:g.pendingChallenge.hadMatchingColor});
+      else setChallenge(null);}
+  },[g?.pendingChallenge,myTurn,g?.winner,pid,rd?.players,myH,g]);
 
   useEffect(()=>{const mkey=g?.message?g.message+"|"+g.turnTimestamp:null;if(!mkey||mkey===prevM.current)return;prevM.current=mkey;const m=g.message.toLowerCase();
     if(m.includes("challenge")&&m.includes("guilty")){setActFx("challenge");ps("challenge");trigShake();trigBurst("red");trigImpact("red");}
@@ -1685,7 +1688,7 @@ export default function UnoGame(){
     if(ndp.length<cnt){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
     const drawn=ndp.splice(0,Math.min(cnt,ndp.length));
     const nh={...g.hands};nh[victimId]=[...victimHand,...drawn];
-    const drawWrite={hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,
+    const drawWrite={hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,pendingChallenge:null,
       currentPlayer:nextPlayer,message:reasonBase+" Draws "+cnt+"!",turnTimestamp:Date.now()};
     const delay=type==="wild4"?SLASH_DELAY:DRAW2_DELAY;
     await wgs({pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:type||"draw2",count:cnt,ts:Date.now()}});
@@ -2617,7 +2620,7 @@ export default function UnoGame(){
                 <button onClick={()=>setDelFriendId(null)} style={{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:6,color:"#ddd",fontSize:9,fontWeight:800,padding:"5px 9px",cursor:"pointer"}}>NO</button>
               </>):(<>
                 {rc&&scr==="lobby"&&<button onClick={()=>inviteFriend(fid)} style={{background:"#1565C0",border:"none",borderRadius:7,color:"#fff",fontSize:9,fontWeight:800,padding:"5px 10px",cursor:"pointer"}}>INVITE</button>}
-                <button onClick={()=>setDelFriendId(fid)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",borderRadius:6,color:"#FF5252",fontSize:11,width:24,height:24,cursor:"pointer"}}>×</button>
+                <button onClick={()=>setDelFriendId(fid)} title="Remove friend" style={{background:"none",border:"1px solid rgba(255,82,82,0.25)",borderRadius:7,fontSize:12,padding:"4px 8px",cursor:"pointer"}}>🗑️</button>
               </>)}
             </div>);})}
         </div>
