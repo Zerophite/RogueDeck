@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { db } from "./firebase.js";
 import { ref, set, get, onValue, update, remove, off } from "firebase/database";
 
@@ -379,6 +379,20 @@ const AVATARS=[
   {id:"imp",    name:"Imp",     price:500,ring:"#E53935",skin:["#FF8A65","#E53935"],hair:"short",  hairC:"#4A0E0E",eye:"sharp", eyeC:"#FFEB3B",outfit:"#B71C1C",outfit2:"#7F0000",acc:"horns", mood:"smirk"},
   {id:"wizard", name:"Merlin",  price:650,ring:"#7E57C2",skin:["#FFE0B2","#E0A878"],hair:"none",   hairC:"#ECEFF1",eye:"round", eyeC:"#5E35B1",outfit:"#5E35B1",outfit2:"#4527A0",acc:"wizhat",beard:true},
   {id:"royal",  name:"Monarch", price:900,ring:"#FFD54F",skin:["#FFE0B2","#E0A878"],hair:"long",   hairC:"#3E2723",eye:"round", eyeC:"#4E342E",outfit:"#8E24AA",outfit2:"#FFD54F",acc:"crown", mood:"regal"},
+  /* ── Chibi image avatars (art from CHARAT). Square PNGs in public/avatars/. ── */
+  {id:"kaito",   name:"Kaito",   price:0,  ring:"#5C6BC0",img:"kaito.png"},
+  {id:"mina",    name:"Mina",    price:0,  ring:"#E6C88A",img:"mina.png"},
+  {id:"sakura",  name:"Sakura",  price:150,ring:"#F48FB1",img:"sakura.png"},
+  {id:"yuki",    name:"Yuki",    price:200,ring:"#8D6E63",img:"yuki.png"},
+  {id:"celeste", name:"Celeste", price:250,ring:"#29B6F6",img:"celeste.png"},
+  {id:"riko",    name:"Riko",    price:300,ring:"#FFB74D",img:"riko.png"},
+  {id:"ruby",    name:"Ruby",    price:350,ring:"#EF5350",img:"ruby.png"},
+  {id:"sylvie",  name:"Sylvie",  price:400,ring:"#9CCC65",img:"sylvie.png"},
+  {id:"kuro",    name:"Kuro",    price:450,ring:"#78909C",img:"kuro.png"},
+  {id:"valkyrie",name:"Valkyrie",price:550,ring:"#FF7043",img:"valkyrie.png"},
+  {id:"raven",   name:"Raven",   price:650,ring:"#7E57C2",img:"raven.png"},
+  {id:"akane",   name:"Akane",   price:750,ring:"#FB8C00",img:"akane.png"},
+  {id:"okami",   name:"Okami",   price:850,ring:"#455A64",img:"okami.png"},
 ];
 const AV_MAP=Object.fromEntries(AVATARS.map(a=>[a.id,a]));
 const avatarOf=id=>AV_MAP[id]||AVATARS[0];
@@ -392,6 +406,10 @@ const randAvatar=()=>AVATARS[Math.floor(Math.random()*AVATARS.length)].id;
    splat automatically, so items work with or without art. */
 const THROW_GIF_URL=import.meta.env.BASE_URL+"throwables/";
 const THROW_SFX_URL=import.meta.env.BASE_URL+"sfx/throw/";
+/* Custom image avatars: drop a square PNG in public/avatars/ and add an AVATARS
+   entry with `img:"<file>.png"`. The image fills the circle and inherits every
+   animation state (idle bob / hit shake+stars / celebrate bounce+sparkles / uno pulse). */
+const AVATAR_IMG_URL=import.meta.env.BASE_URL+"avatars/";
 const THROWABLES=[
   {id:"tomato",name:"Tomato",     price:0,  emoji:"🍅",splat:"#E53935",label:"SPLAT!", gif:true, sfx:true, vol:1.0},
   {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!", sfx:true, vol:1.0},
@@ -415,10 +433,38 @@ function getMyThrow(){return localStorage.getItem("uno_throw")||"tomato";}
 function getOwned(){try{const a=JSON.parse(localStorage.getItem("uno_owned")||"[]");
   return[...new Set([...DEFAULT_OWNED,...(Array.isArray(a)?a:[])])];}catch(e){return[...DEFAULT_OWNED];}}
 
-const Avatar=({id,state="idle",size=44,anim=true})=>{
+const Avatar=memo(({id,state="idle",size=44,anim=true})=>{
   const a=avatarOf(id);
   const uid=useMemo(()=>Math.random().toString(36).slice(2,8),[]);
   const gid=n=>uid+n;
+  /* ── custom image avatar: a supplied PNG fills the circle, effects overlay on top ── */
+  if(a.img){
+    const wa=!anim?"none":
+      state==="hit"?"avHit 0.26s ease-in-out infinite":
+      state==="celebrate"?"avCele 0.6s ease-in-out infinite":
+      state==="uno"?"avUno 0.5s ease-in-out infinite":
+      "avBob 3.6s ease-in-out infinite";
+    return(<svg width={size} height={size} viewBox="0 0 100 100" style={{display:"block",overflow:"visible"}}>
+      <defs>
+        <radialGradient id={gid("bg")} cx="50%" cy="34%" r="74%"><stop offset="0%" stopColor="#26324c"/><stop offset="100%" stopColor="#0d1420"/></radialGradient>
+        <clipPath id={gid("cl")}><circle cx="50" cy="50" r="47"/></clipPath>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill={`url(#${gid("bg")})`}/>
+      <g clipPath={`url(#${gid("cl")})`}>
+        <g style={{transformBox:"view-box",transformOrigin:"50px 54px",animation:wa}}>
+          <image href={AVATAR_IMG_URL+a.img} x="2" y="2" width="96" height="96" preserveAspectRatio="xMidYMid slice"/>
+        </g>
+      </g>
+      <circle cx="50" cy="50" r="47" fill="none" stroke={a.ring} strokeWidth="2.5" opacity="0.55"/>
+      {state==="hit"&&anim&&<g style={{transformBox:"view-box",transformOrigin:"50px 14px",animation:"avDizzy 1.1s linear infinite"}}>
+        {[0,120,240].map((d,i)=><g key={i} transform={`rotate(${d} 50 14)`}>
+          <path d="M50 2 l1.5 3.2 3.4 0.4 -2.5 2.3 0.6 3.4 -3-1.7 -3 1.7 0.6-3.4 -2.5-2.3 3.4-0.4 Z" fill="#FFD54F"/></g>)}</g>}
+      {state==="celebrate"&&anim&&[[14,20],[86,22],[18,60],[82,58]].map(([x,y],i)=>
+        <path key={i} d={`M${x} ${y-5} l1.4 3 3 0.4 -2.2 2.1 0.6 3 -2.8-1.5 -2.8 1.5 0.6-3 -2.2-2.1 3-0.4 Z`}
+          fill="#FFE082" style={{transformBox:"view-box",transformOrigin:`${x}px ${y}px`,animation:`avSpark 0.9s ease-in-out ${i*0.18}s infinite`}}/>)}
+      {state==="uno"&&<circle cx="50" cy="50" r="46" fill="none" stroke={a.ring} strokeWidth="3" opacity="0.9" style={{filter:`drop-shadow(0 0 5px ${a.ring})`}}/>}
+    </svg>);
+  }
   const[sk1,sk2]=a.skin;
   const oc=a.outfit,oc2=a.outfit2||a.outfit;
   const ey=43,eL=41,eR=59;            // big chibi eyes, set low on the face
@@ -571,7 +617,7 @@ const Avatar=({id,state="idle",size=44,anim=true})=>{
       <path key={i} d={`M${x} ${y-5} l1.4 3 3 0.4 -2.2 2.1 0.6 3 -2.8-1.5 -2.8 1.5 0.6-3 -2.2-2.1 3-0.4 Z`}
         fill="#FFE082" style={{transformBox:"view-box",transformOrigin:`${x}px ${y}px`,animation:`avSpark 0.9s ease-in-out ${i*0.18}s infinite`}}/>)}
   </svg>);
-};
+});
 
 /* ═══ STORE ═══ */
 const STORE_CATS=[
@@ -738,9 +784,9 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
       </div>}
       {msg&&<div style={{textAlign:"center",fontSize:10,fontWeight:800,color:/not enough/i.test(msg)?"#FF9800":"#4CAF50",
         marginBottom:8,padding:"5px 10px",borderRadius:8,background:/not enough/i.test(msg)?"rgba(255,152,0,0.1)":"rgba(76,175,80,0.1)"}}>{msg}</div>}
-      <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:8,alignContent:"start"}}>
+      <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gridAutoRows:landscape?150:164,gap:8,alignContent:"start"}}>
         {items.map(it=>{const own=owned.includes(it.id);const eq=it.id===equippedId;
-          return(<div key={it.id} onClick={()=>handleTile(it)} style={{aspectRatio:"0.82",borderRadius:12,cursor:"pointer",position:"relative",
+          return(<div key={it.id} onClick={()=>handleTile(it)} style={{borderRadius:12,cursor:"pointer",position:"relative",
             background:eq?"rgba(255,215,0,0.12)":"rgba(255,255,255,0.03)",
             border:eq?"2px solid #FFD700":own?"1px solid rgba(255,255,255,0.12)":"1px solid rgba(255,255,255,0.06)",
             display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:4,transition:"all 0.15s",overflow:"hidden"}}>
