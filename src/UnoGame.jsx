@@ -417,6 +417,33 @@ const GAME_BGS=["bg1.jpg","bg2.jpg","bg3.jpg"];
 const bgForRoom=rc=>{if(!rc)return GAME_BGS[0];let h=0;for(let i=0;i<rc.length;i++)h=(h*31+rc.charCodeAt(i))>>>0;
   return GAME_BGS[h%GAME_BGS.length];};
 const GAME_BG_URL=import.meta.env.BASE_URL+"backgrounds/";
+
+/* ── Country flags (players show up to 2 — dual citizens) ── */
+const flagEmoji=cc=>(cc||"").toUpperCase().replace(/[A-Z]/g,c=>String.fromCodePoint(0x1F1E6+c.charCodeAt(0)-65));
+const COUNTRIES=[["PH","Philippines"],["US","United States"],["CA","Canada"],["GB","United Kingdom"],["AU","Australia"],
+["JP","Japan"],["KR","South Korea"],["CN","China"],["IN","India"],["ID","Indonesia"],["MY","Malaysia"],["SG","Singapore"],
+["TH","Thailand"],["VN","Vietnam"],["MX","Mexico"],["BR","Brazil"],["AR","Argentina"],["FR","France"],["DE","Germany"],
+["ES","Spain"],["IT","Italy"],["PT","Portugal"],["NL","Netherlands"],["RU","Russia"],["UA","Ukraine"],["PL","Poland"],
+["SE","Sweden"],["NO","Norway"],["FI","Finland"],["DK","Denmark"],["IE","Ireland"],["CH","Switzerland"],["AT","Austria"],
+["BE","Belgium"],["GR","Greece"],["TR","Turkey"],["SA","Saudi Arabia"],["AE","UAE"],["IL","Israel"],["EG","Egypt"],
+["ZA","South Africa"],["NG","Nigeria"],["KE","Kenya"],["NZ","New Zealand"],["CL","Chile"],["CO","Colombia"],["PE","Peru"],
+["PK","Pakistan"],["BD","Bangladesh"],["LK","Sri Lanka"],["NP","Nepal"],["TW","Taiwan"],["HK","Hong Kong"],["CZ","Czechia"],
+["HU","Hungary"],["RO","Romania"],["IS","Iceland"],["MA","Morocco"],["QA","Qatar"],["KW","Kuwait"]];
+
+/* Turn a picked image file into a small square avatar data-URL (center-cropped,
+   200px, JPEG) — small enough to store on the player's profile node. */
+function fileToAvatarDataUrl(file,cb){
+  const img=new Image();const url=URL.createObjectURL(file);
+  img.onload=()=>{const S=200,c=document.createElement("canvas");c.width=S;c.height=S;
+    const ctx=c.getContext("2d");const m=Math.min(img.width,img.height);
+    ctx.drawImage(img,(img.width-m)/2,(img.height-m)/2,m,m,0,0,S,S);
+    URL.revokeObjectURL(url);try{cb(c.toDataURL("image/jpeg",0.72));}catch(e){cb(null);}};
+  img.onerror=()=>{URL.revokeObjectURL(url);cb(null);};
+  img.src=url;
+}
+function getMyPhoto(){return localStorage.getItem("uno_photo")||"";}
+function getMyFlags(){try{const a=JSON.parse(localStorage.getItem("uno_flags")||"[]");return Array.isArray(a)?a.slice(0,2):[];}catch(e){return[];}}
+
 const THROWABLES=[
   {id:"tomato",name:"Tomato",     price:0,  emoji:"🍅",splat:"#E53935",label:"SPLAT!", gif:true, sfx:true, vol:1.0},
   {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!", sfx:true, vol:1.0},
@@ -440,12 +467,15 @@ function getMyThrow(){return localStorage.getItem("uno_throw")||"tomato";}
 function getOwned(){try{const a=JSON.parse(localStorage.getItem("uno_owned")||"[]");
   return[...new Set([...DEFAULT_OWNED,...(Array.isArray(a)?a:[])])];}catch(e){return[...DEFAULT_OWNED];}}
 
-const Avatar=memo(({id,state="idle",size=44,anim=true})=>{
+const Avatar=memo(({id,state="idle",size=44,anim=true,photo})=>{
   const a=avatarOf(id);
   const uid=useMemo(()=>Math.random().toString(36).slice(2,8),[]);
   const gid=n=>uid+n;
-  /* ── custom image avatar: a supplied PNG fills the circle, effects overlay on top ── */
-  if(a.img){
+  /* ── custom image avatar OR the player's own uploaded photo (id==="photo") ── */
+  const usePhoto=id==="photo"&&photo;
+  if(a.img||usePhoto){
+    const imgSrc=usePhoto?photo:AVATAR_IMG_URL+a.img;
+    const ring=usePhoto?"#8AA0C0":a.ring;
     const wa=!anim?"none":
       state==="hit"?"avHit 0.26s ease-in-out infinite":
       state==="celebrate"?"avCele 0.6s ease-in-out infinite":
@@ -459,17 +489,17 @@ const Avatar=memo(({id,state="idle",size=44,anim=true})=>{
       <circle cx="50" cy="50" r="48" fill={`url(#${gid("bg")})`}/>
       <g clipPath={`url(#${gid("cl")})`}>
         <g style={{transformBox:"view-box",transformOrigin:"50px 54px",animation:wa}}>
-          <image href={AVATAR_IMG_URL+a.img} x="2" y="2" width="96" height="96" preserveAspectRatio="xMidYMid slice"/>
+          <image href={imgSrc} x="2" y="2" width="96" height="96" preserveAspectRatio="xMidYMid slice"/>
         </g>
       </g>
-      <circle cx="50" cy="50" r="47" fill="none" stroke={a.ring} strokeWidth="2.5" opacity="0.55"/>
+      <circle cx="50" cy="50" r="47" fill="none" stroke={ring} strokeWidth="2.5" opacity="0.55"/>
       {state==="hit"&&anim&&<g style={{transformBox:"view-box",transformOrigin:"50px 14px",animation:"avDizzy 1.1s linear infinite"}}>
         {[0,120,240].map((d,i)=><g key={i} transform={`rotate(${d} 50 14)`}>
           <path d="M50 2 l1.5 3.2 3.4 0.4 -2.5 2.3 0.6 3.4 -3-1.7 -3 1.7 0.6-3.4 -2.5-2.3 3.4-0.4 Z" fill="#FFD54F"/></g>)}</g>}
       {state==="celebrate"&&anim&&[[14,20],[86,22],[18,60],[82,58]].map(([x,y],i)=>
         <path key={i} d={`M${x} ${y-5} l1.4 3 3 0.4 -2.2 2.1 0.6 3 -2.8-1.5 -2.8 1.5 0.6-3 -2.2-2.1 3-0.4 Z`}
           fill="#FFE082" style={{transformBox:"view-box",transformOrigin:`${x}px ${y}px`,animation:`avSpark 0.9s ease-in-out ${i*0.18}s infinite`}}/>)}
-      {state==="uno"&&<circle cx="50" cy="50" r="46" fill="none" stroke={a.ring} strokeWidth="3" opacity="0.9" style={{filter:`drop-shadow(0 0 5px ${a.ring})`}}/>}
+      {state==="uno"&&<circle cx="50" cy="50" r="46" fill="none" stroke={ring} strokeWidth="3" opacity="0.9" style={{filter:`drop-shadow(0 0 5px ${ring})`}}/>}
     </svg>);
   }
   const[sk1,sk2]=a.skin;
@@ -741,11 +771,13 @@ const ThrowSplat=({item})=>{
     {label}
   </>);
 };
-const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEquipThrow,isAdm})=>{
+const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEquipThrow,isAdm,myPhoto,onPhoto})=>{
   const[catId,setCatId]=useState("avatar");
   const[preview,setPreview]=useState("celebrate");
   const[msg,setMsg]=useState("");
   const[detail,setDetail]=useState(null);   // avatar opened for preview/buy
+  const fileRef=useRef(null);
+  const onFile=e=>{const f=e.target.files?.[0];if(f)fileToAvatarDataUrl(f,url=>{if(url){onPhoto(url);flash("Photo set — you're using it now!");}else flash("Couldn't read that image.");});if(e.target)e.target.value="";};
   const landscape=useLandscape();
   const cols=landscape?5:3;
   const items=catId==="avatar"?AVATARS:THROWABLES;
@@ -783,10 +815,10 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
       {/* Preview of equipped avatar */}
       {catId==="avatar"&&<div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,padding:"10px 12px",
         background:"rgba(255,255,255,0.03)",borderRadius:14,border:"1px solid rgba(255,255,255,0.06)"}}>
-        <Avatar id={myAvatar} state={preview} size={64}/>
+        <Avatar id={myAvatar} state={preview} size={64} photo={myPhoto}/>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:2}}>EQUIPPED</div>
-          <div style={{fontSize:15,fontWeight:900,color:"#fff"}}>{avatarOf(myAvatar).name}</div>
+          <div style={{fontSize:15,fontWeight:900,color:"#fff"}}>{myAvatar==="photo"?"Your Photo":avatarOf(myAvatar).name}</div>
           <div style={{display:"flex",gap:4,marginTop:6,flexWrap:"wrap"}}>
             {[["idle","Idle"],["celebrate","Win"],["hit","Hit"],["uno","UNO"]].map(([s,l])=>
               <button key={s} onClick={()=>setPreview(s)} style={{padding:"3px 9px",borderRadius:7,border:"none",cursor:"pointer",fontSize:8,fontWeight:800,letterSpacing:1,
@@ -796,7 +828,22 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
       </div>}
       {msg&&<div style={{textAlign:"center",fontSize:10,fontWeight:800,color:/not enough/i.test(msg)?"#FF9800":"#4CAF50",
         marginBottom:8,padding:"5px 10px",borderRadius:8,background:/not enough/i.test(msg)?"rgba(255,152,0,0.1)":"rgba(76,175,80,0.1)"}}>{msg}</div>}
+      <input ref={fileRef} type="file" accept="image/*" onChange={onFile} style={{display:"none"}}/>
       <div style={{flex:1,overflowY:"auto",display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gridAutoRows:landscape?150:164,gap:8,alignContent:"start"}}>
+        {/* Your own photo — free custom avatar */}
+        {catId==="avatar"&&(()=>{const has=!!myPhoto;const eq=myAvatar==="photo";
+          return(<div onClick={()=>{if(has)setDetail({id:"photo",name:"Your Photo",_photo:true});else fileRef.current&&fileRef.current.click();}}
+            style={{borderRadius:12,cursor:"pointer",position:"relative",
+              background:eq?"rgba(255,215,0,0.12)":"rgba(255,255,255,0.03)",
+              border:eq?"2px solid #FFD700":"1px dashed rgba(126,200,227,0.4)",
+              display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,padding:4,overflow:"hidden"}}>
+            {has?<Avatar id="photo" photo={myPhoto} state={eq?"celebrate":"idle"} size={landscape?52:58} anim={eq}/>
+              :<div style={{width:landscape?52:58,height:landscape?52:58,borderRadius:"50%",background:"rgba(126,200,227,0.12)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26}}>📷</div>}
+            <span style={{fontSize:9,fontWeight:800,color:"#cfe",whiteSpace:"nowrap"}}>Your Photo</span>
+            {eq?<span style={{fontSize:7,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:5,padding:"1px 6px",letterSpacing:1}}>EQUIPPED</span>
+              :has?<span style={{fontSize:7,fontWeight:800,color:"#4CAF50",letterSpacing:1}}>TAP TO USE</span>
+              :<span style={{fontSize:7,fontWeight:900,color:"#7EC8E3",letterSpacing:1}}>FREE · UPLOAD</span>}
+          </div>);})()}
         {items.map(it=>{const own=owned.includes(it.id);const eq=it.id===equippedId;
           return(<div key={it.id} onClick={()=>handleTile(it)} style={{borderRadius:12,cursor:"pointer",position:"relative",
             background:eq?"rgba(255,215,0,0.12)":"rgba(255,255,255,0.03)",
@@ -823,14 +870,22 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
             borderRadius:18,padding:"22px 20px 20px",position:"relative",border:`1px solid ${detail.ring||"#FFD700"}66`,
             boxShadow:`0 20px 60px rgba(0,0,0,0.7),0 0 40px ${detail.ring||"#FFD700"}22`,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
             <button onClick={closeD} style={{position:"absolute",top:6,right:8,width:34,height:34,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer"}}>×</button>
-            <Avatar id={detail.id} state={preview} size={116}/>
+            <Avatar id={detail.id} state={preview} size={116} photo={detail._photo?myPhoto:undefined}/>
             <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}}>
               {[["idle","Idle"],["celebrate","Win"],["hit","Hit"],["uno","UNO"]].map(([s,l])=>
                 <button key={s} onClick={()=>setPreview(s)} style={{padding:"3px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:8,fontWeight:800,letterSpacing:1,
                   background:preview===s?"rgba(255,215,0,0.25)":"rgba(255,255,255,0.05)",color:preview===s?"#FFD700":"#889"}}>{l}</button>)}
             </div>
             <div style={{fontSize:19,fontWeight:900,color:"#fff",letterSpacing:1}}>{detail.name}</div>
-            {eq?<div style={{fontSize:11,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:9,padding:"9px 0",width:"100%",textAlign:"center",letterSpacing:1}}>✓ EQUIPPED</div>
+            {detail._photo?<div style={{width:"100%",display:"flex",flexDirection:"column",gap:8}}>
+              {eq?<div style={{fontSize:11,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:9,padding:"9px 0",textAlign:"center",letterSpacing:1}}>✓ EQUIPPED</div>
+                :<button onClick={()=>{onEquipAvatar("photo");closeD();}} style={{padding:"10px 0",borderRadius:10,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#4CAF50,#2E7D32)",color:"#fff",fontSize:13,fontWeight:900,letterSpacing:1}}>USE PHOTO</button>}
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>fileRef.current&&fileRef.current.click()} style={{flex:1,padding:"9px 0",borderRadius:10,border:"1px solid rgba(126,200,227,0.4)",cursor:"pointer",background:"rgba(126,200,227,0.1)",color:"#7EC8E3",fontSize:11,fontWeight:800,letterSpacing:1}}>CHANGE</button>
+                <button onClick={()=>{onPhoto("");closeD();flash("Photo removed.");}} style={{flex:1,padding:"9px 0",borderRadius:10,border:"1px solid rgba(244,67,54,0.3)",cursor:"pointer",background:"rgba(244,67,54,0.08)",color:"#EF5350",fontSize:11,fontWeight:800,letterSpacing:1}}>REMOVE</button>
+              </div>
+            </div>
+            :eq?<div style={{fontSize:11,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:9,padding:"9px 0",width:"100%",textAlign:"center",letterSpacing:1}}>✓ EQUIPPED</div>
               :own?<button onClick={()=>{onEquipAvatar(detail.id);closeD();}} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",cursor:"pointer",
                 background:"linear-gradient(135deg,#4CAF50,#2E7D32)",color:"#fff",fontSize:13,fontWeight:900,letterSpacing:1}}>EQUIP</button>
               :<button onClick={()=>{if(!afford){flash("Not enough coins — win games to earn more!");return;}onBuy(detail);}}
@@ -859,9 +914,11 @@ const PlayerStatsModal=({stats,isOwner,onClose})=>{
       border:`1px solid ${r.color}44`,boxShadow:`0 20px 60px rgba(0,0,0,0.7),0 0 40px ${r.color}22`}}>
       <button onClick={onClose} style={{position:"absolute",top:6,right:6,width:40,height:40,zIndex:5,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-        <div style={{flexShrink:0}}><Avatar id={stats.avatar} state="idle" size={58}/></div>
+        <div style={{flexShrink:0}}><Avatar id={stats.avatar} state="idle" size={58} photo={stats.photo}/></div>
         <div style={{minWidth:0}}>
-          <div style={{fontSize:18,fontWeight:900,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{stats.name||"Player"}</div>
+          <div style={{fontSize:18,fontWeight:900,color:"#fff",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{stats.name||"Player"}</span>
+            {Array.isArray(stats.flags)&&stats.flags.map(f=><span key={f} style={{fontSize:16}}>{flagEmoji(f)}</span>)}</div>
           <div style={{fontSize:11,fontWeight:800,color:r.color,letterSpacing:1}}>{r.icon} {r.name}{r.idx>=0?" • "+(stats.totalPoints||0)+" pts":""}</div>
         </div>
       </div>
@@ -1935,6 +1992,9 @@ export default function UnoGame(){
   const[owned,setOwned]=useState(getOwned);
   const[myAvatar,setMyAvatar]=useState(getMyAvatar);
   const[myThrow,setMyThrow]=useState(getMyThrow);
+  const[myPhoto,setMyPhotoState]=useState(getMyPhoto);   // uploaded profile photo (data URL)
+  const[myFlags,setMyFlagsState]=useState(getMyFlags);   // up to 2 country codes
+  const[flagEdit,setFlagEdit]=useState(false);const[flagSearch,setFlagSearch]=useState("");
   const[throwAnim,setThrowAnim]=useState(null);
   const[splatFx,setSplatFx]=useState(null);
   const[hitFx,setHitFx]=useState({});
@@ -1991,7 +2051,9 @@ export default function UnoGame(){
         // Merge server-side cosmetics (authoritative across devices) into local state.
         if(typeof me.coins==="number"){setCoins(me.coins);localStorage.setItem("uno_coins",String(me.coins));}
         if(Array.isArray(me.owned)){const merged=[...new Set([...DEFAULT_OWNED,...me.owned])];setOwned(merged);localStorage.setItem("uno_owned",JSON.stringify(merged));}
-        if(me.avatar&&AV_MAP[me.avatar]){setMyAvatar(me.avatar);localStorage.setItem("uno_avatar",me.avatar);}
+        if(me.avatar&&(AV_MAP[me.avatar]||me.avatar==="photo")){setMyAvatar(me.avatar);localStorage.setItem("uno_avatar",me.avatar);}
+        if(me.photo){setMyPhotoState(me.photo);localStorage.setItem("uno_photo",me.photo);}
+        if(Array.isArray(me.flags)){setMyFlagsState(me.flags.slice(0,2));localStorage.setItem("uno_flags",JSON.stringify(me.flags.slice(0,2)));}
       }});
     return()=>off(lbRef);
   },[pid]);
@@ -2023,11 +2085,26 @@ export default function UnoGame(){
     update(ref(db,"leaderboard/"+pid),{coins:nc,owned:no}).catch(()=>{});
   },[owned,coins,pid,isAdm]);
 
-  const equipAvatar=useCallback((id)=>{if(!owned.includes(id))return;setMyAvatar(id);
+  const equipAvatar=useCallback((id)=>{if(id!=="photo"&&!owned.includes(id))return;setMyAvatar(id);
     localStorage.setItem("uno_avatar",id);
     update(ref(db,"leaderboard/"+pid),{avatar:id}).catch(()=>{});
     if(rc)update(ref(db,"rooms/"+rc+"/players/"+pid),{avatar:id}).catch(()=>{});
   },[owned,pid,rc]);
+
+  /* Save an uploaded profile photo (also equips it as the avatar). Stored on the
+     leaderboard/room node so it shows to others; free. */
+  const setMyPhoto=useCallback((dataUrl)=>{setMyPhotoState(dataUrl||"");
+    if(dataUrl){localStorage.setItem("uno_photo",dataUrl);setMyAvatar("photo");localStorage.setItem("uno_avatar","photo");}
+    else localStorage.removeItem("uno_photo");
+    const patch=dataUrl?{photo:dataUrl,avatar:"photo"}:{photo:null};
+    update(ref(db,"leaderboard/"+pid),patch).catch(()=>{});
+    if(rc)update(ref(db,"rooms/"+rc+"/players/"+pid),patch).catch(()=>{});
+  },[pid,rc]);
+  const setMyFlags=useCallback((flags)=>{const f=(flags||[]).slice(0,2);setMyFlagsState(f);
+    localStorage.setItem("uno_flags",JSON.stringify(f));
+    update(ref(db,"leaderboard/"+pid),{flags:f}).catch(()=>{});
+    if(rc)update(ref(db,"rooms/"+rc+"/players/"+pid),{flags:f}).catch(()=>{});
+  },[pid,rc]);
 
   const equipThrow=useCallback((id)=>{if(!owned.includes(id))return;setMyThrow(id);localStorage.setItem("uno_throw",id);},[owned]);
 
@@ -2540,7 +2617,7 @@ export default function UnoGame(){
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:Date.now(),
-      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
+      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
     }catch(e){setErr("Check Firebase config.");console.error(e);}};
 
   const joinRoom=async(codeArg)=>{if(!pName.trim()){setErr("Enter name");return;}
@@ -2549,7 +2626,7 @@ export default function UnoGame(){
     try{const snap=await get(ref(db,"rooms/"+code));if(!snap.exists()){setErr("Not found");return;}
       const data=snap.val();if(data.status!=="waiting"){setErr("Already started");return;}
       const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=MAX_PLAYERS){setErr("Full");return;}
-      if(!data.players?.[pid])await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt,avatar:myAvatar});
+      if(!data.players?.[pid])await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt,avatar:myAvatar,photo:myPhoto||null,flags:myFlags});
       setRc(code);setErr("");setScr("lobby");ps("join");
     }catch(e){setErr("Failed.");console.error(e);}};
 
@@ -2568,13 +2645,13 @@ export default function UnoGame(){
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
     const code=grc();const now=Date.now();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
-      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true,avatar:randAvatar()}},
+      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true,avatar:randAvatar()}},
       scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
 
   const quickPlayFFA=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
-    const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0,avatar:myAvatar}};
+    const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags}};
     const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true,avatar:randAvatar()};}
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
       players,scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
@@ -2958,7 +3035,7 @@ export default function UnoGame(){
           <div onClick={()=>setStoreOpen(true)} title="Customize (Store)" style={{width:64,height:64,borderRadius:"50%",margin:"0 auto 12px",cursor:"pointer",
             background:"radial-gradient(circle at 50% 32%,#2a3550,#141d2e)",border:"2px solid rgba(255,215,0,0.25)",
             display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-            <Avatar id={myAvatar} state="idle" size={56}/>
+            <Avatar id={myAvatar} state="idle" size={56} photo={myPhoto}/>
             <div style={{position:"absolute",bottom:-2,right:-2,width:22,height:22,borderRadius:"50%",background:"#E040FB",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",border:"2px solid #0b1120"}}>+</div>
           </div>
@@ -3068,13 +3145,14 @@ export default function UnoGame(){
                 animation:`slideIn 0.3s ease-out ${Math.min(i*0.04,0.8)}s both`}}>
                 <div style={{width:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#556"}}>
                   {i<3?<Crown rank={i+1} size={20}/>:(i+1)}</div>
-                <div style={{width:28,height:28,borderRadius:7,background:r.bg,
-                  display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0,
-                  border:`1px solid ${r.color}44`}}>{r.icon}</div>
+                <div style={{flexShrink:0}}><Avatar id={p.avatar} photo={p.photo} size={30}/></div>
                 <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:11,fontWeight:700,color:isMe?"#FFD700":"#ccc",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                    {p.name}<span style={{fontSize:7,color:"#556",fontFamily:"monospace",marginLeft:3}}>{getTag(p.id)}</span>{isMe&&<span style={{fontSize:7,color:"#889"}}> (you)</span>}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:isMe?"#FFD700":"#ccc",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</span>
+                    {Array.isArray(p.flags)&&p.flags.map(f=><span key={f} style={{fontSize:12,flexShrink:0}}>{flagEmoji(f)}</span>)}
+                    <span style={{fontSize:7,color:"#556",fontFamily:"monospace",flexShrink:0}}>{getTag(p.id)}</span>{isMe&&<span style={{fontSize:7,color:"#889",flexShrink:0}}>(you)</span>}</div>
                   <div style={{display:"flex",alignItems:"center",gap:3}}>
+                    <span style={{fontSize:8}}>{r.icon}</span>
                     <span style={{fontSize:7,color:r.color,fontWeight:700,letterSpacing:1}}>{r.name.toUpperCase()}</span>
                     {r.stars>0&&<span style={{fontSize:7}}>{"⭐".repeat(r.stars)}</span>}
                   </div>
@@ -3099,7 +3177,8 @@ export default function UnoGame(){
 
       {statsView&&<PlayerStatsModal stats={statsView} isOwner={statsView.id===pid} onClose={()=>setStatsView(null)}/>}
       {storeOpen&&<StoreModal onClose={()=>setStoreOpen(false)} coins={coins} owned={owned}
-        myAvatar={myAvatar} myThrow={myThrow} onBuy={buyItem} onEquipAvatar={equipAvatar} onEquipThrow={equipThrow} isAdm={isAdm}/>}
+        myAvatar={myAvatar} myThrow={myThrow} onBuy={buyItem} onEquipAvatar={equipAvatar} onEquipThrow={equipThrow} isAdm={isAdm}
+        myPhoto={myPhoto} onPhoto={setMyPhoto}/>}
 
       {/* Account Modal */}
       {showFriends&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:200,
@@ -3187,6 +3266,35 @@ export default function UnoGame(){
           </div>
           <div style={{fontSize:8,color:"#667",marginBottom:16,lineHeight:1.5,padding:"0 2px"}}>
             Save this ID to recover your account on another device or browser. Your ranking, stats, and progress are tied to this ID.</div>
+
+          {/* Flags — up to 2 (dual citizens); shown on the global leaderboard */}
+          <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14,marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{fontSize:9,color:"#889",letterSpacing:2}}>YOUR FLAGS <span style={{color:"#667"}}>(pick up to 2)</span></div>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                {myFlags.length>0&&<span style={{fontSize:18}}>{myFlags.map(f=>flagEmoji(f)).join(" ")}</span>}
+                <button onClick={()=>{setFlagEdit(!flagEdit);setFlagSearch("");}} style={{padding:"4px 10px",borderRadius:8,border:"1px solid rgba(255,215,0,0.25)",
+                  background:"rgba(255,215,0,0.08)",color:"#FFD700",fontSize:9,fontWeight:800,cursor:"pointer",letterSpacing:1}}>{flagEdit?"DONE":(myFlags.length?"EDIT":"ADD")}</button>
+              </div>
+            </div>
+            {flagEdit&&<div>
+              <input value={flagSearch} onChange={e=>setFlagSearch(e.target.value)} placeholder="Search country…"
+                style={{...ist,marginBottom:8,fontSize:12}}/>
+              <div style={{maxHeight:190,overflowY:"auto",display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+                {COUNTRIES.filter(([cc,n])=>n.toLowerCase().includes(flagSearch.toLowerCase())||cc.toLowerCase().includes(flagSearch.toLowerCase())).map(([cc,n])=>{
+                  const on=myFlags.includes(cc);
+                  return(<button key={cc} onClick={()=>{
+                    if(on)setMyFlags(myFlags.filter(x=>x!==cc));
+                    else if(myFlags.length<2)setMyFlags([...myFlags,cc]);
+                    else setMyFlags([myFlags[1],cc]);
+                  }} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 8px",borderRadius:8,cursor:"pointer",textAlign:"left",
+                    background:on?"rgba(76,175,80,0.15)":"rgba(255,255,255,0.03)",border:`1px solid ${on?"rgba(76,175,80,0.4)":"rgba(255,255,255,0.06)"}`}}>
+                    <span style={{fontSize:16}}>{flagEmoji(cc)}</span>
+                    <span style={{fontSize:9,color:on?"#7CE38B":"#ccc",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{n}</span>
+                    {on&&<span style={{marginLeft:"auto",fontSize:10,color:"#4CAF50"}}>✓</span>}</button>);})}
+              </div>
+            </div>}
+          </div>
 
           <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14,marginBottom:14}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -3318,7 +3426,7 @@ export default function UnoGame(){
               background:id===pid?"rgba(255,215,0,0.06)":"transparent",borderRadius:12,marginBottom:4,
               transition:"all 0.3s",animation:`slideIn 0.4s ease-out ${i*0.08}s both`,
               border:id===pid?"1px solid rgba(255,215,0,0.1)":"1px solid transparent"}}>
-              <div style={{flexShrink:0}}><Avatar id={pd.avatar} state={pd.ready&&id!==rd?.host?"celebrate":"idle"} size={38}/></div>
+              <div style={{flexShrink:0}}><Avatar id={pd.avatar} state={pd.ready&&id!==rd?.host?"celebrate":"idle"} size={38} photo={pd.photo}/></div>
               <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
               <span style={{fontSize:11,color:"#778",fontWeight:600,fontFamily:"monospace"}}>{rd?.scores?.[id]||0}</span>
               {id===rd?.host&&!pd.reviewing&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
@@ -3461,7 +3569,7 @@ export default function UnoGame(){
       <div onClick={e=>{e.stopPropagation();if(!g.winner&&id!==pid)setThrowPick(id);}} title="Throw an item at them"
         style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0,cursor:"pointer"}}>
         <div style={{flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
-          <Avatar id={pd?.avatar} state={avState} size={30}/></div>
+          <Avatar id={pd?.avatar} state={avState} size={30} photo={pd?.photo}/></div>
         {crownRank[id]&&<Crown rank={crownRank[id]} size={14}/>}
         <span style={{fontSize:9,color:turn?"#fff":"#999",fontWeight:700,whiteSpace:"nowrap",
           textShadow:turn?`0 0 8px ${gcHex}66`:"none"}}>{pd?.name}</span>
