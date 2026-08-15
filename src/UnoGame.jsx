@@ -380,9 +380,10 @@ const AVATARS=[
   {id:"wizard", name:"Merlin",  price:400,ring:"#7E57C2",skin:["#FFE0B2","#E0A878"],hair:"none",   hairC:"#ECEFF1",eye:"round", eyeC:"#5E35B1",outfit:"#5E35B1",outfit2:"#4527A0",acc:"wizhat",beard:true},
   {id:"royal",  name:"Monarch", price:500,ring:"#FFD54F",skin:["#FFE0B2","#E0A878"],hair:"long",   hairC:"#3E2723",eye:"round", eyeC:"#4E342E",outfit:"#8E24AA",outfit2:"#FFD54F",acc:"crown", mood:"regal"},
   /* ── Chibi image avatars (art from CHARAT). Square PNGs in public/avatars/. ── */
-  {id:"kaito",   name:"Kaito",   price:950, ring:"#5C6BC0",img:"kaito.png"},
-  {id:"mina",    name:"Mina",    price:1050,ring:"#E6C88A",img:"mina.png"},
-  {id:"sakura",  name:"Sakura",  price:1200,ring:"#F48FB1",img:"sakura.png"},
+  {id:"rex",     name:"Rex",     price:1000,ring:"#66BB6A",img:"dino.png"},
+  {id:"kaito",   name:"Kaito",   price:1100,ring:"#5C6BC0",img:"kaito.png"},
+  {id:"mina",    name:"Mina",    price:1200,ring:"#E6C88A",img:"mina.png"},
+  {id:"sakura",  name:"Sakura",  price:1300,ring:"#F48FB1",img:"sakura.png"},
   {id:"yuki",    name:"Yuki",    price:1350,ring:"#8D6E63",img:"yuki.png"},
   {id:"celeste", name:"Celeste", price:1500,ring:"#29B6F6",img:"celeste.png"},
   {id:"riko",    name:"Riko",    price:1650,ring:"#FFB74D",img:"riko.png"},
@@ -723,14 +724,14 @@ const ThrowSplat=({item})=>{
   const label=<span style={{position:"relative",marginTop:-6,fontSize:12,fontWeight:900,color:item.splat,letterSpacing:1,
     textShadow:`0 1px 4px #000,0 0 10px ${item.splat}`}}>{item.label}</span>;
   if(mode==="gif")return(<>
-    <div style={{position:"absolute",left:"50%",top:"50%",width:96,height:96,borderRadius:"50%",transform:"translate(-50%,-50%)",
+    <div style={{position:"absolute",left:"50%",top:"50%",width:120,height:120,borderRadius:"50%",transform:"translate(-50%,-50%)",
       background:`radial-gradient(circle,${item.splat}cc,${item.splat}00 68%)`}}/>
     <img src={THROW_GIF_URL+item.id+".gif"} alt="" onError={()=>{throwGifCache[item.id]=false;setMode("art");}}
-      style={{width:104,height:104,objectFit:"contain",position:"relative",filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.6))"}}/>
+      style={{width:132,height:132,objectFit:"contain",position:"relative",filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.6))"}}/>
     {label}
   </>);
   return(<>
-    <svg width="118" height="118" viewBox="0 0 120 120" style={{position:"relative",overflow:"visible",filter:"drop-shadow(0 3px 7px rgba(0,0,0,0.4))"}}>{splatArt(item)}</svg>
+    <svg width="86" height="86" viewBox="0 0 120 120" style={{position:"relative",overflow:"visible",filter:"drop-shadow(0 3px 7px rgba(0,0,0,0.4))"}}>{splatArt(item)}</svg>
     {label}
   </>);
 };
@@ -738,6 +739,7 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
   const[catId,setCatId]=useState("avatar");
   const[preview,setPreview]=useState("celebrate");
   const[msg,setMsg]=useState("");
+  const[detail,setDetail]=useState(null);   // avatar opened for preview/buy
   const landscape=useLandscape();
   const cols=landscape?5:3;
   const items=catId==="avatar"?AVATARS:THROWABLES;
@@ -745,8 +747,10 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
     background:on?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.05)",color:on?"#1a1200":"#99a",transition:"all 0.2s"});
   const flash=m=>{setMsg(m);setTimeout(()=>setMsg(""),1600);};
   const handleTile=(it)=>{
+    // Avatars open a preview card first (check it out, then buy/equip or close).
+    if(catId==="avatar"){setPreview("celebrate");setDetail(it);return;}
     const own=owned.includes(it.id);
-    if(own){if(catId==="avatar"){onEquipAvatar(it.id);flash(it.name+" equipped!");}else{onEquipThrow(it.id);flash(it.name+" selected!");}return;}
+    if(own){onEquipThrow(it.id);flash(it.name+" selected!");return;}
     if(!isAdm&&coins<it.price){flash("Not enough coins — win games to earn more!");return;}
     onBuy(it);flash("Unlocked "+it.name+"!");
   };
@@ -800,7 +804,34 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
           </div>);})}
       </div>
       <div style={{textAlign:"center",color:"#667",fontSize:8,letterSpacing:1,marginTop:10}}>
-        {catId==="avatar"?"🪙 Earn coins by winning games. Tap an owned avatar to equip.":"🍅 In a game, tap an opponent to throw your selected item at them!"}</div>
+        {catId==="avatar"?"🪙 Earn coins by winning games. Tap an avatar to preview it.":"🍅 In a game, tap an opponent to throw your selected item at them!"}</div>
+
+      {/* Avatar preview / buy card */}
+      {detail&&(()=>{const own=owned.includes(detail.id);const eq=detail.id===myAvatar;const afford=isAdm||coins>=detail.price;
+        const closeD=()=>setDetail(null);
+        return(<div onClick={closeD} style={{position:"absolute",inset:0,zIndex:20,background:"rgba(4,8,16,0.8)",
+          backdropFilter:"blur(6px)",borderRadius:18,display:"flex",alignItems:"center",justifyContent:"center",padding:16,animation:"fadeIn 0.15s ease-out"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:300,background:"linear-gradient(160deg,#1c2740,#0c1322)",
+            borderRadius:18,padding:"22px 20px 20px",position:"relative",border:`1px solid ${detail.ring||"#FFD700"}66`,
+            boxShadow:`0 20px 60px rgba(0,0,0,0.7),0 0 40px ${detail.ring||"#FFD700"}22`,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+            <button onClick={closeD} style={{position:"absolute",top:6,right:8,width:34,height:34,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer"}}>×</button>
+            <Avatar id={detail.id} state={preview} size={116}/>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}}>
+              {[["idle","Idle"],["celebrate","Win"],["hit","Hit"],["uno","UNO"]].map(([s,l])=>
+                <button key={s} onClick={()=>setPreview(s)} style={{padding:"3px 10px",borderRadius:7,border:"none",cursor:"pointer",fontSize:8,fontWeight:800,letterSpacing:1,
+                  background:preview===s?"rgba(255,215,0,0.25)":"rgba(255,255,255,0.05)",color:preview===s?"#FFD700":"#889"}}>{l}</button>)}
+            </div>
+            <div style={{fontSize:19,fontWeight:900,color:"#fff",letterSpacing:1}}>{detail.name}</div>
+            {eq?<div style={{fontSize:11,fontWeight:900,color:"#1a1200",background:"#FFD700",borderRadius:9,padding:"9px 0",width:"100%",textAlign:"center",letterSpacing:1}}>✓ EQUIPPED</div>
+              :own?<button onClick={()=>{onEquipAvatar(detail.id);closeD();}} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",cursor:"pointer",
+                background:"linear-gradient(135deg,#4CAF50,#2E7D32)",color:"#fff",fontSize:13,fontWeight:900,letterSpacing:1}}>EQUIP</button>
+              :<button onClick={()=>{if(!afford){flash("Not enough coins — win games to earn more!");return;}onBuy(detail);}}
+                disabled={!afford} style={{width:"100%",padding:"10px 0",borderRadius:10,border:"none",cursor:afford?"pointer":"not-allowed",
+                background:afford?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.08)",color:afford?"#1a1200":"#667",fontSize:13,fontWeight:900,letterSpacing:1,
+                display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>{isAdm?"UNLOCK (FREE)":<>🪙 {detail.price}{!afford&&" — need more"}</>}</button>}
+            <button onClick={closeD} style={{background:"none",border:"none",color:"#889",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",padding:2}}>CLOSE</button>
+          </div>
+        </div>);})()}
     </div>
   </div>);
 };
@@ -2729,6 +2760,14 @@ export default function UnoGame(){
         calledUno:{...cu,[targetId]:true}});}
   },[g,ps,wgs,rd,trigShake,rc]);
 
+  /* Tapping an opponent: catching a forgotten UNO (they hold 1 card and never
+     called it) always takes priority over throwing an item at them. */
+  const onOppTap=useCallback((id)=>{
+    const h=g?.hands?.[id]||[];const cu=g?.calledUno||{};
+    if(!g?.winner&&h.length===1&&!cu[id])catchUno(id);
+    else throwAt(id);
+  },[g,catchUno,throwAt]);
+
   const snatchPick=useCallback(async(cardIdx)=>{if(!snatchModal||snatchModal.phase!=="pick"||!g)return;
     const nh={...g.hands};const oppHand=[...(nh[snatchModal.fromId]||[])];
     if(cardIdx>=oppHand.length){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
@@ -3401,7 +3440,7 @@ export default function UnoGame(){
       boxShadow:turn?`0 0 20px ${gcHex}22,0 0 40px ${gcHex}08`:"none",
       transition:"all 0.4s",cursor:"pointer",position:"relative",
       backdropFilter:"blur(6px)",animation:turn?"neonPulse 2s ease-in-out infinite":"none"}}
-      onClick={canCatch?()=>catchUno(id):()=>throwAt(id)}>
+      onClick={()=>onOppTap(id)}>
       <div style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0}}>
         <div style={{flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
           <Avatar id={pd?.avatar} state={avState} size={30}/></div>
@@ -3719,13 +3758,13 @@ export default function UnoGame(){
               </div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
-              <div onClick={handleDeckTap}
-                style={{cursor:(pickDr&&isAdm)||(myTurn&&!drawnCard&&!challenge)?"pointer":"default",transition:"transform 0.3s",position:"relative",
+              <div onPointerUp={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;handleDeckTap();}}
+                style={{cursor:(pickDr&&isAdm)||(myTurn&&!drawnCard&&!challenge)?"pointer":"default",transition:"transform 0.3s",position:"relative",touchAction:"manipulation",
                   animation:drawStack>0&&myTurn?"dangerPulse 0.8s infinite":(myTurn&&!drawnCard&&!challenge?"deckIdle 3s ease-in-out infinite":"none"),
                   border:drawStack>0&&myTurn?"2px solid #FF5252":"2px solid transparent",borderRadius:12,
                   boxShadow:drawStack>0&&myTurn?"0 0 20px rgba(255,82,82,0.4)":"none"}}
-                onPointerEnter={e=>{if(myTurn&&!drawnCard&&!challenge)e.currentTarget.style.transform="scale(1.1) rotate(-3deg)";}}
-                onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
+                onPointerEnter={e=>{if(e.pointerType==="mouse"&&myTurn&&!drawnCard&&!challenge)e.currentTarget.style.transform="scale(1.1) rotate(-3deg)";}}
+                onPointerLeave={e=>{if(e.pointerType==="mouse")e.currentTarget.style.transform="scale(1)";}}>
                 <Card card={{color:"wild",value:"wild",type:"wild"}} sz={isLandscape?"sm":"md"} faceDown/>
                 {drawStack>0&&myTurn&&<div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",
                   fontSize:11,fontWeight:900,color:"#fff",background:"#E53935",borderRadius:8,padding:"2px 8px",
