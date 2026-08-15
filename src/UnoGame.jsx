@@ -411,6 +411,12 @@ const THROW_SFX_URL=import.meta.env.BASE_URL+"sfx/throw/";
    entry with `img:"<file>.png"`. The image fills the circle and inherits every
    animation state (idle bob / hit shake+stars / celebrate bounce+sparkles / uno pulse). */
 const AVATAR_IMG_URL=import.meta.env.BASE_URL+"avatars/";
+/* Random cartoon game backgrounds (public/backgrounds/bg1..N.jpg). One is picked
+   per room (hashed from the room code) so every player in a match sees the same. */
+const GAME_BGS=["bg1.jpg","bg2.jpg","bg3.jpg"];
+const bgForRoom=rc=>{if(!rc)return GAME_BGS[0];let h=0;for(let i=0;i<rc.length;i++)h=(h*31+rc.charCodeAt(i))>>>0;
+  return GAME_BGS[h%GAME_BGS.length];};
+const GAME_BG_URL=import.meta.env.BASE_URL+"backgrounds/";
 const THROWABLES=[
   {id:"tomato",name:"Tomato",     price:0,  emoji:"🍅",splat:"#E53935",label:"SPLAT!", gif:true, sfx:true, vol:1.0},
   {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!", sfx:true, vol:1.0},
@@ -755,11 +761,13 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
     onBuy(it);flash("Unlocked "+it.name+"!");
   };
   const equippedId=catId==="avatar"?myAvatar:myThrow;
-  return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:300,
-    display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.2s ease-out",
+  const storeBg=GAME_BG_URL+GAME_BGS[1];
+  return(<div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.55)",zIndex:300,
+    display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(8px)",animation:"fadeIn 0.2s ease-out",
     padding:"calc(12px + env(safe-area-inset-top,0px)) 12px calc(12px + env(safe-area-inset-bottom,0px))"}}>
     <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:landscape?"96vw":420,height:landscape?"94vh":"90vh",maxHeight:"100%",display:"flex",flexDirection:"column",
-      background:"linear-gradient(160deg,#1a2338,#0b1120)",borderRadius:18,padding:16,position:"relative",
+      background:`linear-gradient(160deg,rgba(24,33,54,0.9),rgba(9,14,28,0.95)),url(${storeBg})`,backgroundSize:"cover",backgroundPosition:"center",
+      borderRadius:18,padding:16,position:"relative",
       border:"1px solid rgba(255,215,0,0.2)",boxShadow:"0 20px 60px rgba(0,0,0,0.7)"}}>
       <button onClick={onClose} style={{position:"absolute",top:6,right:6,width:40,height:40,zIndex:5,background:"none",border:"none",color:"#889",fontSize:26,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>×</button>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,paddingRight:36}}>
@@ -1398,9 +1406,9 @@ const Card=({card,onClick,sz="md",faceDown,highlighted,lifted,style,animate})=>{
     <div onClick={onClick} style={{width:dm.w,height:dm.h,borderRadius:dm.r,position:"relative",flexShrink:0,
       cursor:onClick?"pointer":"default",
       transition:"transform 0.35s cubic-bezier(.34,1.56,.64,1),box-shadow 0.35s ease",
-      boxShadow:lifted?`0 20px 50px rgba(0,0,0,0.95),0 0 0 2px ${gc},0 0 40px ${gc}66`
-        :highlighted?`0 4px 22px ${gc}66,0 0 0 2px ${gc}55`
-        :"0 4px 18px rgba(0,0,0,0.65),0 1px 4px rgba(0,0,0,0.3)",
+      boxShadow:lifted?`0 20px 50px rgba(0,0,0,0.95),0 0 0 2.5px rgba(0,0,0,0.75),0 0 0 4.5px ${gc},0 0 40px ${gc}88`
+        :highlighted?`0 0 0 2.5px rgba(0,0,0,0.7),0 0 0 4.5px ${gc},0 4px 20px ${gc}99,0 0 16px ${gc}66`
+        :"0 0 0 2.6px rgba(0,0,0,0.72),0 4px 14px rgba(0,0,0,0.72),0 1px 4px rgba(0,0,0,0.45)",
       animation:animate||"none",...style}}
       onPointerEnter={e=>{if(onClick&&isLg){e.currentTarget.style.transform=(style?.transform||"")+" translateY(-24px) scale(1.14)";sfx.p("cardSlide");}}}
       onPointerLeave={e=>{if(!lifted)e.currentTarget.style.transform=style?.transform||"none";}}>
@@ -1795,32 +1803,31 @@ const SkipFX=({color,onDone})=>{
 
 
 const ChallengeModal=({playerName,onChallenge,onAccept})=>(
-  <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at 50% 38%,rgba(70,20,95,0.6),rgba(0,0,0,0.95))",zIndex:90,
-    display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,
-    backdropFilter:"blur(14px)",animation:"fadeIn 0.3s ease-out",padding:16}}>
-    <div style={{position:"relative",animation:"apop 0.5s cubic-bezier(.34,1.7,.5,1)"}}>
-      <div style={{width:72,height:108,borderRadius:12,background:"conic-gradient(from 40deg,#ED1C24,#FFDE00,#00A651,#0956BF,#ED1C24)",
-        display:"flex",alignItems:"center",justifyContent:"center",border:"3px solid #fff",
-        boxShadow:"0 0 44px rgba(156,39,176,0.75),0 8px 30px rgba(0,0,0,0.6)"}}>
-        <div style={{background:"rgba(0,0,0,0.58)",borderRadius:9,padding:"7px 11px"}}>
-          <span style={{fontSize:30,fontWeight:900,color:"#fff",fontFamily:"Arial Black,sans-serif"}}>+4</span></div>
+  <div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:90,display:"flex",justifyContent:"center",
+    padding:"0 8px 12px",pointerEvents:"none"}}>
+    <div style={{pointerEvents:"auto",width:"100%",maxWidth:440,animation:"slideUp 0.25s ease-out",
+      background:"linear-gradient(160deg,rgba(44,18,64,0.96),rgba(12,10,26,0.96))",borderRadius:16,padding:"12px 14px",
+      border:"1px solid rgba(156,39,176,0.6)",boxShadow:"0 -8px 34px rgba(142,36,170,0.35),0 8px 30px rgba(0,0,0,0.5)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+        <div style={{flexShrink:0,width:40,height:58,borderRadius:9,background:"conic-gradient(from 40deg,#ED1C24,#FFDE00,#00A651,#0956BF,#ED1C24)",
+          display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid #fff",boxShadow:"0 0 20px rgba(156,39,176,0.6)"}}>
+          <div style={{background:"rgba(0,0,0,0.58)",borderRadius:6,padding:"4px 6px"}}>
+            <span style={{fontSize:17,fontWeight:900,color:"#fff",fontFamily:"Arial Black,sans-serif"}}>+4</span></div></div>
+        <div style={{minWidth:0}}>
+          <div style={{color:"#fff",fontSize:14,fontWeight:800,lineHeight:1.25}}><span style={{color:"#E040FB"}}>{playerName}</span> hit you with a Wild +4!</div>
+          <div style={{color:"#aab",fontSize:10,lineHeight:1.4,marginTop:2}}>Fair only if they held <b style={{color:"#eee"}}>no {""}current-color</b> card. Bluff? Call it.</div>
+        </div>
       </div>
-    </div>
-    <div style={{color:"#fff",fontSize:17,fontWeight:800,textAlign:"center",maxWidth:320,lineHeight:1.3}}>
-      <span style={{color:"#E040FB"}}>{playerName}</span> hit you with a Wild +4!</div>
-    <div style={{color:"#aab",fontSize:11,textAlign:"center",maxWidth:300,lineHeight:1.55}}>
-      A +4 is only fair if they held <b style={{color:"#eee"}}>no card of the current color</b>. Think they bluffed? Call it.</div>
-    <div style={{display:"flex",gap:12,marginTop:4,flexWrap:"wrap",justifyContent:"center"}}>
-      <button onClick={onChallenge} style={{...MBTN,padding:"11px 20px",background:"linear-gradient(135deg,#9C27B0,#5E1770)",
-        boxShadow:"0 4px 24px rgba(142,36,170,0.5)",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:138,animation:"pulse 1.4s infinite"}}
-        onPointerEnter={e=>e.currentTarget.style.transform="scale(1.05)"} onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-        <span style={{fontSize:15,letterSpacing:1}}>⚖️ CHALLENGE</span>
-        <span style={{fontSize:8,opacity:0.9,fontWeight:600,letterSpacing:0,textTransform:"none"}}>bluffed → they draw 4 · fair → you draw 6</span></button>
-      <button onClick={onAccept} style={{...MBTN,padding:"11px 20px",background:"rgba(255,255,255,0.07)",
-        border:"1px solid rgba(255,255,255,0.14)",color:"#ccc",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:138}}
-        onPointerEnter={e=>e.currentTarget.style.transform="scale(1.05)"} onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-        <span style={{fontSize:15,letterSpacing:1}}>🃏 ACCEPT</span>
-        <span style={{fontSize:8,opacity:0.75,fontWeight:600,letterSpacing:0,textTransform:"none"}}>just take the 4 cards</span></button>
+      <div style={{display:"flex",gap:10}}>
+        <button onClick={onChallenge} style={{...MBTN,flex:1,padding:"10px 8px",background:"linear-gradient(135deg,#9C27B0,#5E1770)",
+          boxShadow:"0 4px 18px rgba(142,36,170,0.45)",display:"flex",flexDirection:"column",alignItems:"center",gap:1,animation:"pulse 1.4s infinite"}}>
+          <span style={{fontSize:13,letterSpacing:1}}>⚖️ CHALLENGE</span>
+          <span style={{fontSize:7.5,opacity:0.9,fontWeight:600,letterSpacing:0,textTransform:"none"}}>bluffed → they +4 · fair → you +6</span></button>
+        <button onClick={onAccept} style={{...MBTN,flex:1,padding:"10px 8px",background:"rgba(255,255,255,0.07)",
+          border:"1px solid rgba(255,255,255,0.14)",color:"#ccc",display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
+          <span style={{fontSize:13,letterSpacing:1}}>🃏 ACCEPT</span>
+          <span style={{fontSize:7.5,opacity:0.75,fontWeight:600,letterSpacing:0,textTransform:"none"}}>take the 4 cards</span></button>
+      </div>
     </div>
   </div>);
 
@@ -1898,6 +1905,8 @@ export default function UnoGame(){
   const admTap=useRef({n:0,t:0});
   const logoTap=()=>{const now=Date.now();const s=admTap.current;s.n=(now-s.t<1500)?s.n+1:1;s.t=now;if(s.n>=5){s.n=0;setShowAdm(true);}};
   const[peek,setPeek]=useState(false);const[pickDr,setPickDr]=useState(false);
+  const[throwPick,setThrowPick]=useState(null); // opponent id whose throwable-picker is open
+  const menuBg=useMemo(()=>GAME_BGS[Math.floor(Math.random()*GAME_BGS.length)],[]); // vibrant menu backdrop, random each visit
   const[swap,setSwap]=useState(false);const[swpC,setSwpC]=useState(null);const[showDk,setShowDk]=useState(false);
   const isLandscape=useLandscape();
   const[rd,setRd]=useState(null);const[pickCol,setPickCol]=useState(false);const[pendW,setPendW]=useState(null);
@@ -2024,14 +2033,16 @@ export default function UnoGame(){
 
   /* ── THROW ITEMS: tap an opponent → fling your equipped item at them. Broadcast
      via the room game node so every client plays the same arc + hit reaction. ── */
-  const throwAt=useCallback((targetId)=>{
+  const throwAt=useCallback((targetId,itemId)=>{
     if(!targetId||targetId===pid)return;const now=Date.now();
     if(now<throwCD.current)return;throwCD.current=now+1400;ua();
-    update(ref(db,"rooms/"+rc+"/game"),{throw:{from:pid,to:targetId,item:myThrow,ts:now}}).catch(()=>{});
+    update(ref(db,"rooms/"+rc+"/game"),{throw:{from:pid,to:targetId,item:itemId||myThrow,ts:now}}).catch(()=>{});
   },[rc,pid,myThrow]);
   const runThrow=useCallback((t)=>{
+    // Self has no opponent-card element; land the splat in the open zone above the
+    // hand (not on top of the player's cards).
     const anchor=id=>{const el=oppRefs.current[id];if(el){const r=el.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2];}
-      return[window.innerWidth/2,window.innerHeight-90];};
+      return[window.innerWidth/2,Math.round(window.innerHeight*0.66)];};
     const[sx,sy]=anchor(t.from);const[tx,ty]=anchor(t.to);const item=throwOf(t.item);
     setThrowAnim({item,sx,sy,tx,ty,key:t.ts});
     setTimeout(()=>{
@@ -2760,13 +2771,15 @@ export default function UnoGame(){
         calledUno:{...cu,[targetId]:true}});}
   },[g,ps,wgs,rd,trigShake,rc]);
 
-  /* Tapping an opponent: catching a forgotten UNO (they hold 1 card and never
-     called it) always takes priority over throwing an item at them. */
-  const onOppTap=useCallback((id)=>{
+  /* Two distinct opponent taps:
+       - tapping their CARDS only catches a forgotten UNO (1 card, never called);
+       - tapping their PROFILE (avatar/name) opens a picker to throw an item.  */
+  const tapOppCards=useCallback((id)=>{
+    if(g?.winner)return;
     const h=g?.hands?.[id]||[];const cu=g?.calledUno||{};
-    if(!g?.winner&&h.length===1&&!cu[id])catchUno(id);
-    else throwAt(id);
-  },[g,catchUno,throwAt]);
+    if(h.length===1&&!cu[id])catchUno(id);
+  },[g,catchUno]);
+  const throwChosen=useCallback((targetId,itemId)=>{throwAt(targetId,itemId);setThrowPick(null);},[throwAt]);
 
   const snatchPick=useCallback(async(cardIdx)=>{if(!snatchModal||snatchModal.phase!=="pick"||!g)return;
     const nh={...g.hands};const oppHand=[...(nh[snatchModal.fromId]||[])];
@@ -2844,8 +2857,8 @@ export default function UnoGame(){
     </div>
   );
   const audioModal=showAudio&&(
-    <div onClick={()=>setShowAudio(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:400,
-      display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(5px)",animation:"fadeIn 0.2s"}}>
+    <div onClick={()=>setShowAudio(false)} style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.5)",zIndex:400,
+      display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)",animation:"fadeIn 0.2s"}}>
       <div onClick={e=>e.stopPropagation()} style={{...GLASS,width:"min(88vw,330px)",padding:"22px 22px 24px",position:"relative"}}>
         <button onClick={()=>setShowAudio(false)} style={{position:"absolute",top:8,right:12,background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer",lineHeight:1}}>×</button>
         <div style={{color:"#FFD700",fontWeight:800,fontSize:14,letterSpacing:3,marginBottom:20,fontFamily:"'Chakra Petch',sans-serif"}}>AUDIO</div>
@@ -2861,10 +2874,14 @@ export default function UnoGame(){
   const menuCards=useMemo(()=>COLORS.map((c,i)=>({color:c,angle:-15+i*10,x:-60+i*40,delay:i*0.15})),[]);
 
   if(scr==="menu")return(
-    <div style={{height:"100%",background:"radial-gradient(ellipse at 50% 15%,#1a2826 0%,#121e1c 20%,#0c1614 40%,#080f0d 65%,#040807 100%)",
+    <div style={{height:"100%",background:"#060e0c",
       display:"flex",flexDirection:"column",alignItems:"center",padding:0,
       fontFamily:"'Segoe UI',system-ui,sans-serif",position:"relative",overflow:"hidden"}}
       onClick={()=>{ua();if(!bgm.playing&&!musUserOff.current)startMusic();}}>
+      <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",
+        backgroundImage:`url(${GAME_BG_URL+menuBg})`,backgroundSize:"cover",backgroundPosition:"center"}}/>
+      <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",
+        background:"radial-gradient(ellipse at 50% 12%,rgba(10,18,22,0.55) 0%,transparent 42%),linear-gradient(180deg,rgba(6,10,16,0.72) 0%,rgba(6,10,16,0.34) 24%,rgba(6,10,16,0.24) 50%,rgba(6,10,16,0.5) 78%,rgba(4,8,12,0.86) 100%)"}}/>
       <CanvasBG screen="menu"/>
 
       {/* Incoming game invites banner */}
@@ -3031,7 +3048,7 @@ export default function UnoGame(){
       {audioModal}
 
       {/* Global Leaderboard Modal */}
-      {showGlobalLB&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
+      {showGlobalLB&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:200,
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
         backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}} onClick={()=>setShowGlobalLB(false)}>
         <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:0,width:"92%",maxWidth:400,maxHeight:"85vh",
@@ -3085,7 +3102,7 @@ export default function UnoGame(){
         myAvatar={myAvatar} myThrow={myThrow} onBuy={buyItem} onEquipAvatar={equipAvatar} onEquipThrow={equipThrow} isAdm={isAdm}/>}
 
       {/* Account Modal */}
-      {showFriends&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
+      {showFriends&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:200,
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
         backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}} onClick={()=>{setShowFriends(false);setFriendMsg("");}}>
         <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:"20px 18px",width:"92%",maxWidth:400,maxHeight:"88vh",overflow:"auto",position:"relative"}}>
@@ -3151,7 +3168,7 @@ export default function UnoGame(){
             </div>);})}
         </div>
       </div>)}
-      {showAccount&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.95)",zIndex:200,
+      {showAccount&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:200,
         display:"flex",alignItems:"center",justifyContent:"center",
         backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}} onClick={()=>{setShowAccount(false);setRestoreMsg("");}}>
         <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:20,width:"92%",maxWidth:360}}>
@@ -3438,10 +3455,11 @@ export default function UnoGame(){
       background:turn?"rgba(0,0,0,0.45)":"rgba(0,0,0,0.25)",borderRadius:10,padding:isV?"5px 4px":"4px 7px",
       border:turn?`1px solid ${gcHex}55`:"1px solid rgba(255,215,0,0.04)",
       boxShadow:turn?`0 0 20px ${gcHex}22,0 0 40px ${gcHex}08`:"none",
-      transition:"all 0.4s",cursor:"pointer",position:"relative",
-      backdropFilter:"blur(6px)",animation:turn?"neonPulse 2s ease-in-out infinite":"none"}}
-      onClick={()=>onOppTap(id)}>
-      <div style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0}}>
+      transition:"all 0.4s",position:"relative",
+      backdropFilter:"blur(6px)",animation:turn?"neonPulse 2s ease-in-out infinite":"none"}}>
+      {/* PROFILE (avatar + name + count) → open the throwable picker */}
+      <div onClick={e=>{e.stopPropagation();if(!g.winner&&id!==pid)setThrowPick(id);}} title="Throw an item at them"
+        style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0,cursor:"pointer"}}>
         <div style={{flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
           <Avatar id={pd?.avatar} state={avState} size={30}/></div>
         {crownRank[id]&&<Crown rank={crownRank[id]} size={14}/>}
@@ -3451,7 +3469,8 @@ export default function UnoGame(){
           color:turn?"#fff":"#888",fontWeight:800,fontFamily:"monospace"}}>{h.length}</span>
         {hasUno&&<span style={{fontSize:8,color:"#E53935",fontWeight:900,animation:"pulse 0.4s infinite"}}>UNO!</span>}
       </div>
-      <div style={{display:"flex",flexDirection:isV?"column":"row"}}>
+      {/* CARDS → catch a forgotten UNO (only does anything when they're catchable) */}
+      <div onClick={e=>{e.stopPropagation();tapOppCards(id);}} style={{display:"flex",flexDirection:isV?"column":"row",cursor:canCatch?"pointer":"default"}}>
         {(()=>{const cards=h.slice(0,40);const n=cards.length;const dim=isV?72:48;
           const maxS=isV?230:(isLandscape?165:300);
           const step=Math.max(3,Math.min(isV?20:16,(maxS-dim)/Math.max(n-1,1)));const ov=step-dim;
@@ -3474,13 +3493,17 @@ export default function UnoGame(){
     </div>);};
 
   return(
-    <div style={{height:"100%",
-      background:`radial-gradient(ellipse at 50% 40%,${gcHex}18 0%,#0f1f1c 25%,#0a1614 55%,#060e0c 100%)`,
+    <div style={{height:"100%",background:"#060e0c",
       fontFamily:"'Segoe UI',system-ui,sans-serif",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative",
       transition:"background 1s ease",
       boxShadow:myTurn&&!g.winner?`inset 0 0 30px ${gcHex}30,inset 0 0 80px ${gcHex}10`:"none",
       borderTop:myTurn&&!g.winner?`3px solid ${gcHex}66`:"3px solid transparent",
       ...shakeStyle}} onClick={()=>{ua();if(mus&&!bgm.playing)bgm.start("game");}}>
+      {/* Random cartoon scene for this room + a dark scrim so cards stay readable */}
+      <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",
+        backgroundImage:`url(${GAME_BG_URL+bgForRoom(rc)})`,backgroundSize:"cover",backgroundPosition:"center"}}/>
+      <div style={{position:"absolute",inset:0,zIndex:0,pointerEvents:"none",transition:"background 1s ease",
+        background:`radial-gradient(ellipse at 50% 42%,${gcHex}1f 0%,transparent 48%),linear-gradient(180deg,rgba(6,10,16,0.62) 0%,rgba(6,10,16,0.15) 18%,rgba(6,10,16,0.02) 42%,rgba(6,10,16,0.06) 56%,rgba(6,10,16,0.3) 70%,rgba(4,8,12,0.82) 81%,rgba(4,7,12,0.97) 100%)`}}/>
       <CanvasBG screen="game" currentColor={g.currentColor}/>
       {lightningColor&&<LightningFX color={lightningColor} onDone={()=>setLightningColor(null)}/>}
       {impactColor&&<AnimeImpact color={impactColor} onDone={()=>setImpactColor(null)}/>}
@@ -3653,6 +3676,28 @@ export default function UnoGame(){
         animation:"splatPop 1.4s ease-out forwards"}}>
         <ThrowSplat item={splatFx.item}/>
       </div>)}
+
+      {/* Throwable picker — compact bottom sheet; game stays visible behind it */}
+      {throwPick&&(()=>{const mine=THROWABLES.filter(t=>owned.includes(t.id));const tgt=rd?.players?.[throwPick];
+        return(<div onClick={()=>setThrowPick(null)} style={{position:"fixed",inset:0,zIndex:402,
+          display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0 8px 12px"}}>
+          <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxWidth:420,background:"rgba(16,24,40,0.95)",
+            borderRadius:16,padding:"10px 12px 12px",position:"relative",border:"1px solid rgba(255,215,0,0.3)",
+            boxShadow:"0 -8px 30px rgba(0,0,0,0.55)",animation:"slideUp 0.2s ease-out"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:900,color:"#FFD700",letterSpacing:1}}>🍅 Throw at <span style={{color:"#fff"}}>{tgt?.name||"Opponent"}</span></div>
+              <button onClick={()=>setThrowPick(null)} style={{width:28,height:28,background:"none",border:"none",color:"#889",fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+            </div>
+            {mine.length===0?<div style={{textAlign:"center",color:"#889",fontSize:10,padding:"8px 0"}}>No throwables yet — buy some in the Store.</div>
+              :<div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:2}}>
+              {mine.map(t=><button key={t.id} onClick={()=>throwChosen(throwPick,t.id)}
+                style={{flex:"0 0 auto",display:"flex",flexDirection:"column",alignItems:"center",gap:2,padding:"8px 12px",borderRadius:12,cursor:"pointer",
+                  background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)"}}>
+                <span style={{fontSize:30,lineHeight:1}}>{t.emoji}</span>
+                <span style={{fontSize:8,fontWeight:800,color:"#bcd",whiteSpace:"nowrap"}}>{t.name}</span></button>)}
+            </div>}
+          </div>
+        </div>);})()}
 
       {showLB&&(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:160,
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)"}}
@@ -3910,6 +3955,7 @@ const globalCSS=`
   @keyframes apop{0%{transform:scale(0) rotate(-15deg)}40%{transform:scale(1.3) rotate(5deg)}70%{transform:scale(0.9)}100%{transform:scale(1) rotate(0)}}
   @keyframes aslide{0%{transform:translateY(20px) scale(0.8);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
   @keyframes fadeIn{0%{opacity:0;transform:translateY(8px) scale(0.98)}40%{opacity:0.8}100%{opacity:1;transform:translateY(0) scale(1)}}
+  @keyframes slideUp{0%{opacity:0;transform:translateY(24px)}100%{opacity:1;transform:translateY(0)}}
   @keyframes slideIn{0%{opacity:0;transform:translateX(-15px) scale(0.96)}60%{opacity:0.9}100%{opacity:1;transform:translateX(0) scale(1)}}
   @keyframes cardReveal{0%{transform:scale(0.15) rotateY(90deg);opacity:0;filter:blur(4px)}
     50%{transform:scale(1.08) rotateY(-6deg);opacity:1;filter:blur(0)}
