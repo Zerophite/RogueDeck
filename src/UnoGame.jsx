@@ -19,8 +19,14 @@ const VALS=["0","1","2","3","4","5","6","7","8","9","skip","reverse","draw2"];
 const ADMIN_PASS="admin123";
 const TURN_TIME=15;
 const ROUND_TIME=180;
-const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:4};
+const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:4,teamMode:false,autoSplit:true};
 const MAX_PLAYERS=4;
+/* Team vs team mode: Chaos (fire/red) vs Order (ice/blue). A team wins the moment any
+   of its members empties their hand. */
+const TEAMS={
+  chaos:{name:"Chaos",color:"#FF5252",glow:"rgba(255,82,82,0.55)",grad:"linear-gradient(135deg,#B71C1C,#FF5252)",icon:"🔥"},
+  order:{name:"Order",color:"#40C4FF",glow:"rgba(64,196,255,0.55)",grad:"linear-gradient(135deg,#0D47A1,#40C4FF)",icon:"❄️"},
+};
 const EMOTE_URL=import.meta.env.BASE_URL+"emotes/";
 const EMOTES=[
   {id:"angry",gif:"angry.gif",sound:"angry.mp3",label:"Angry",vol:5.0},
@@ -245,18 +251,47 @@ const BOT_NAMES=["Marco","Jenny","Kyle23","Riza","Andrei","Sofia_M","Miguel","Ha
 const randBotName=(used=[])=>{const avail=BOT_NAMES.filter(n=>!used.includes(n));const pool=avail.length?avail:BOT_NAMES;return pool[Math.floor(Math.random()*pool.length)];};
 const isBot=id=>id?.startsWith("bot_");
 
-/* ═══ TOP-3 CROWNS — premium rank emblems (crown1/2/3.png) for global top 3 ═══ */
+/* ═══ TOP-5 CROWNS — premium rank emblems (crown1..5.png) for global top 5 ═══ */
 const CROWN_IMG_URL=import.meta.env.BASE_URL+"crowns/";
-const Crown=({rank,size=24})=>{if(!rank||rank>3)return null;
-  return(<img src={CROWN_IMG_URL+"crown"+rank+".png"} width={size} height={size} alt={"#"+rank}
-    style={{display:"block",objectFit:"contain",
-      filter:"drop-shadow(0 1px 1.5px rgba(0,0,0,0.75))",
-      animation:"crownFloat 2.4s ease-in-out infinite"}}/>);};
-/* In-game head marker: a crown for the global top 3, a small "#N" pill for everyone
+const CROWN_FX_URL=import.meta.env.BASE_URL+"crowns/fx/";
+/* Per-rank glow + glitter tint (matched to each crown's palette) + which animated effect
+   sits behind it (public/crowns/fx/fx<efx>.webp, bg keyed to transparent). Effect assets:
+   fx1=gold lightning, fx2=purple energy, fx3=snow, fx4=fire ring, fx5=magenta aura.
+   efx = effect file for this rank (1&2 swapped per request); eop = effect opacity;
+   esc = effect size multiplier vs the crown (rank 3 narrowed). */
+const CROWN_FX={
+  1:{glow:"rgba(255,120,110,0.45)",glit:"#FFE6C4",efx:2,eop:0.9, esc:1.7},
+  2:{glow:"rgba(180,110,255,0.45)",glit:"#FFDD96",efx:1,eop:1.0, esc:1.9},
+  3:{glow:"rgba(110,175,255,0.50)",glit:"#D2EAFF",efx:3,eop:0.5, esc:1.3},
+  4:{glow:"rgba(255,110,80,0.45)", glit:"#FFD08C",efx:4,eop:0.6, esc:1.7},
+  5:{glow:"rgba(170,110,255,0.50)",glit:"#E6C8FF",efx:5,eop:0.9, esc:1.7},
+};
+/* Glittering sparkles that drift upward off the crown. */
+const GLIT_PARTS=[{l:20,d:0,u:2.2},{l:35,d:0.7,u:2.7},{l:50,d:1.2,u:2.1},{l:64,d:0.35,u:2.9},{l:78,d:0.95,u:2.4},{l:44,d:1.7,u:2.5}];
+const RisingGlitter=({size,color})=>{const dot=Math.max(1.4,size*0.09),rise=(size*0.8)+"px";
+  return(<span aria-hidden style={{position:"absolute",inset:0,pointerEvents:"none",overflow:"visible"}}>
+    {GLIT_PARTS.map((p,i)=>(<span key={i} style={{position:"absolute",left:p.l+"%",bottom:"20%",width:dot,height:dot,borderRadius:"50%",
+      background:`radial-gradient(circle,${color},${color}00 70%)`,boxShadow:`0 0 ${dot*1.7}px ${color}`,
+      "--rise":rise,animation:`glitterRise ${p.u}s ease-in ${p.d}s infinite`}}/>))}
+  </span>);};
+const Crown=({rank,size=24})=>{if(!rank||rank>5)return null;const fx=CROWN_FX[rank]||CROWN_FX[5];const fxpx=Math.round(size*(fx.esc||1.7));
+  return(<span style={{position:"relative",display:"inline-block",width:size,height:size,lineHeight:0}}>
+    <span aria-hidden style={{position:"absolute",inset:"-22%",borderRadius:"50%",pointerEvents:"none",
+      background:`radial-gradient(circle,${fx.glow},transparent 62%)`,animation:"shimmerGlow 2.4s ease-in-out infinite"}}/>
+    <img src={CROWN_FX_URL+"fx"+(fx.efx||rank)+".webp"} alt="" aria-hidden onError={e=>{e.currentTarget.style.display="none";}}
+      style={{position:"absolute",left:"50%",top:"50%",width:fxpx,height:fxpx,transform:"translate(-50%,-52%)",
+        objectFit:"contain",pointerEvents:"none",opacity:fx.eop??0.9}}/>
+    <img src={CROWN_IMG_URL+"crown"+rank+".png"} width={size} height={size} alt={"#"+rank}
+      style={{display:"block",objectFit:"contain",position:"relative",
+        filter:"drop-shadow(0 1px 1.5px rgba(0,0,0,0.75))",
+        animation:"crownFloat 2.4s ease-in-out infinite"}}/>
+    <RisingGlitter size={size} color={fx.glit}/>
+  </span>);};
+/* In-game head marker: a crown for the global top 5, a small "#N" pill for everyone
    else who is ranked. Rendered floating just above a player's avatar. */
 const RankMark=({rank,size=15})=>{
   if(!rank)return null;
-  if(rank<=3)return <Crown rank={rank} size={size+9}/>;
+  if(rank<=5)return <Crown rank={rank} size={size+9}/>;
   return(<span style={{display:"inline-block",fontSize:8,fontWeight:900,color:"#E8EEF6",lineHeight:1,
     background:"linear-gradient(180deg,rgba(40,48,64,0.96),rgba(18,22,32,0.96))",
     border:"1px solid rgba(255,255,255,0.22)",borderRadius:7,padding:"2px 5px",whiteSpace:"nowrap",
@@ -317,7 +352,11 @@ const RANK_TIERS=[
   {name:"Gold",min:1500,starGap:300,color:"#FFD700",bg:"linear-gradient(135deg,#FFD700,#DAA520)",icon:"🥇",idx:2},
   {name:"Platinum",min:3000,starGap:600,color:"#E5E4E2",bg:"linear-gradient(135deg,#E5E4E2,#A0C4FF,#E5E4E2)",icon:"💎",idx:3},
   {name:"Diamond",min:6000,starGap:800,color:"#B9F2FF",bg:"linear-gradient(135deg,#B9F2FF,#00BCD4,#E1F5FE)",icon:"💠",idx:4},
-  {name:"Grand Master",min:10000,starGap:2000,color:"#FF4500",bg:"linear-gradient(135deg,#FF4500,#FFD700,#FF4500)",icon:"👑",idx:5},
+  {name:"Master",min:10000,starGap:1500,color:"#00E5FF",bg:"linear-gradient(135deg,#00E5FF,#0091EA,#00E5FF)",icon:"⚔️",idx:5},
+  {name:"Grandmaster",min:15000,starGap:2000,color:"#FF6D00",bg:"linear-gradient(135deg,#FF6D00,#FFD700,#FF6D00)",icon:"👑",idx:6},
+  {name:"Legend",min:22000,starGap:2500,color:"#B388FF",bg:"linear-gradient(135deg,#B388FF,#7C4DFF,#B388FF)",icon:"🏆",idx:7},
+  {name:"Mythic",min:32000,starGap:3500,color:"#FF4EC7",bg:"linear-gradient(135deg,#FF4EC7,#C724B1,#FF4EC7)",icon:"🔮",idx:8},
+  {name:"Monarch",min:45000,starGap:5000,color:"#FFE55C",bg:"linear-gradient(135deg,#FFD700,#FF6EC7,#7C4DFF,#00E5FF,#FFD700)",icon:"🐉",idx:9},
 ];
 const UNRANKED={name:"Unranked",stars:0,color:"#666",bg:"linear-gradient(135deg,#444,#333)",icon:"—",idx:-1,starProgress:0};
 function getRank(pts,games){
@@ -350,12 +389,12 @@ const ACHIEVEMENTS=[
   {id:"silver",icon:"🥈",name:"Silver",desc:"Reach Silver tier"},
   {id:"gold",icon:"🥇",name:"Gold",desc:"Reach Gold tier"},
   {id:"diamond",icon:"💠",name:"Diamond",desc:"Reach Diamond tier"},
-  {id:"gm",icon:"🌟",name:"Grand Master",desc:"Reach Grand Master"},
+  {id:"gm",icon:"🌟",name:"Grandmaster",desc:"Reach Grandmaster"},
   {id:"sharp",icon:"📈",name:"Sharpshooter",desc:"60%+ win rate (20+ games)"},
 ];
 function earnedAch(s){const g=s.gamesPlayed||0,w=s.wins||0,ri=getRank(s.totalPoints||0,g).idx,wr=g?w/g:0;
   return{first_win:w>=1,wins_10:w>=10,wins_50:w>=50,wins_100:w>=100,games_10:g>=10,games_100:g>=100,
-    silver:ri>=1,gold:ri>=2,diamond:ri>=4,gm:ri>=5,sharp:g>=20&&wr>=0.6};}
+    silver:ri>=1,gold:ri>=2,diamond:ri>=4,gm:ri>=6,sharp:g>=20&&wr>=0.6};}
 function fmtSince(ts){if(!ts)return"—";return new Date(ts).toLocaleString("en-US",{month:"short",year:"numeric"});}
 function fmtLast(ts){if(!ts)return"—";const s=Math.floor((Date.now()-ts)/1000);
   if(s<60)return"just now";if(s<3600)return Math.floor(s/60)+"m ago";if(s<86400)return Math.floor(s/3600)+"h ago";
@@ -2615,6 +2654,13 @@ export default function UnoGame(){
       players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags}},scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");
     }catch(e){setErr("Check Firebase config.");console.error(e);}};
 
+  const createTeamRoom=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("join");
+    const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
+    const code=grc();
+    try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:Date.now(),
+      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags}},scores:{},settings:{...DEF_SETTINGS,teamMode:true}});setRc(code);setErr("");setScr("lobby");
+    }catch(e){setErr("Check Firebase config.");console.error(e);}};
+
   const joinRoom=async(codeArg)=>{if(!pName.trim()){setErr("Enter name");return;}
     const code=(typeof codeArg==="string"?codeArg:jc).trim().toUpperCase();if(code.length!==4){setErr("4-letter code");return;}ua();
     const cl=await claimName(pName,pid);if(!cl.ok){setErr(cl.msg);return;}
@@ -2653,11 +2699,27 @@ export default function UnoGame(){
     }catch(e){setErr("Check Firebase config.");}};
 
   const startGame=async()=>{if(!isHost||pls.length<2)return;lbUpdated.current=false;setRoundTimer(settings.roundTime||ROUND_TIME);setTurnTimer(TURN_TIME);ps("gameOn");startMusic();
+    // Team mode: split into Chaos/Order (auto-balance any unassigned) and interleave the
+    // seating so teammates never sit consecutively. Non-team mode keeps the join order.
+    let op=pls,teamAssign=null;
+    if(settings.teamMode){
+      let chaos=[],order=[];
+      if(settings.autoSplit){pls.forEach(([id],i)=>(i%2===0?chaos:order).push(id));}
+      else{
+        pls.forEach(([id,pd])=>{if(pd.team==="chaos")chaos.push(id);else if(pd.team==="order")order.push(id);});
+        pls.forEach(([id,pd])=>{if(pd.team!=="chaos"&&pd.team!=="order")(chaos.length<=order.length?chaos:order).push(id);});
+      }
+      teamAssign={};chaos.forEach(id=>teamAssign[id]="chaos");order.forEach(id=>teamAssign[id]="order");
+      const seq=[],mx=Math.max(chaos.length,order.length);
+      for(let i=0;i<mx;i++){if(i<chaos.length)seq.push(chaos[i]);if(i<order.length)seq.push(order[i]);}
+      const byId=Object.fromEntries(pls);op=seq.map(id=>[id,byId[id]]);
+    }
+    const opo=op.map(([id])=>id);
     let deck=sh(mkD());
     if(!settings.specialCards)deck=deck.filter(c=>c.value!=="shadow"&&c.value!=="snatch"&&c.value!=="discardAll");
-    const hands={};for(const[p]of pls)hands[p]=deck.splice(0,settings.startCards);
+    const hands={};for(const[p]of op)hands[p]=deck.splice(0,settings.startCards);
     /* High chance each player starts with a Discard-All card */
-    if(settings.specialCards)for(const[p]of pls){
+    if(settings.specialCards)for(const[p]of op){
       if(Math.random()<0.8&&!hands[p].some(c=>c.value==="discardAll")){
         const di=deck.findIndex(c=>c.value==="discardAll");
         if(di>=0){const dc=deck.splice(di,1)[0];const ri=Math.floor(Math.random()*hands[p].length);
@@ -2665,15 +2727,19 @@ export default function UnoGame(){
     const badFirst=v=>v==="wild4"||v==="discardAll"||v==="shadow"||v==="snatch"||v==="draw2";
     let fc;while(true){let fi=deck.findIndex(c=>!badFirst(c.value));
       if(fi===-1){deck=sh(deck);fi=0;}fc=deck.splice(fi,1)[0];if(!badFirst(fc.value))break;deck.push(fc);deck=sh(deck);}
-    let firstPlayer=po[0];let direction=1;let currentColor=fc.color;let m="Game started!";let drawPile=[...deck];
-    if(fc.value==="skip"){firstPlayer=po[1%po.length];m="Game started! First player skipped!";}
+    let firstPlayer=opo[0];let direction=1;let currentColor=fc.color;let m="Game started!";let drawPile=[...deck];
+    if(fc.value==="skip"){firstPlayer=opo[1%opo.length];m="Game started! First player skipped!";}
     else if(fc.value==="reverse"){direction=-1;
-      if(po.length===2)firstPlayer=po[0];else firstPlayer=po[po.length-1];m="Game started! Direction reversed!";}
+      if(opo.length===2)firstPlayer=opo[0];else firstPlayer=opo[opo.length-1];m="Game started! Direction reversed!";}
     else if(fc.type==="wild"){currentColor=COLORS[Math.floor(Math.random()*4)];m="Game started! Color is "+currentColor.toUpperCase()+"!";}
-    await update(ref(db,"rooms/"+rc),{status:"playing",game:{
+    const upd={status:"playing",game:{
       hands,drawPile,discardPile:[fc],currentPlayer:firstPlayer,direction,
-      currentColor,winner:null,message:m,calledUno:{},unoGrace:null,turnTimestamp:Date.now(),pendingChallenge:null,drawStack:0,drawStackType:null}});
+      currentColor,winner:null,message:m,calledUno:{},unoGrace:null,turnTimestamp:Date.now(),pendingChallenge:null,drawStack:0,drawStackType:null,
+      teamMode:!!settings.teamMode}};
+    if(teamAssign)op.forEach(([id],i)=>{upd["players/"+id+"/order"]=i;upd["players/"+id+"/team"]=teamAssign[id];});
+    await update(ref(db,"rooms/"+rc),upd);
     setScr("game");goFS();goLand();};
+  const setTeam=(id,team)=>{if(rc)update(ref(db,"rooms/"+rc+"/players/"+id),{team}).catch(()=>{});};
 
   useEffect(()=>{if(autoStart&&isHost&&pls.length>=2&&scr==="lobby"){setAutoStart(false);startGame();}},[autoStart,isHost,pls.length,scr]);
 
@@ -3060,6 +3126,8 @@ export default function UnoGame(){
             background:"radial-gradient(circle at 50% 32%,#2a3550,#141d2e)",border:"2px solid rgba(255,215,0,0.25)",
             display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
             <Avatar id={myAvatar} state="idle" size={56} photo={myPhoto}/>
+            {rankOf[pid]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-6,zIndex:6,pointerEvents:"none"}}>
+              <RankMark rank={rankOf[pid]} size={rankOf[pid]<=5?18:15}/></div>}
             <div style={{position:"absolute",bottom:-2,right:-2,width:22,height:22,borderRadius:"50%",background:"#E040FB",
               display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:900,color:"#fff",border:"2px solid #0b1120"}}>+</div>
           </div>
@@ -3077,6 +3145,14 @@ export default function UnoGame(){
             onPointerEnter={e=>{e.currentTarget.style.transform="translateY(-2px) scale(1.01)";e.currentTarget.style.boxShadow="0 10px 40px rgba(229,57,53,0.7)";}}
             onPointerLeave={e=>{e.currentTarget.style.transform="translateY(0) scale(1)";e.currentTarget.style.boxShadow="0 6px 30px rgba(229,57,53,0.5)";}}>
             CREATE ROOM</button>
+
+          <button onClick={createTeamRoom} style={{width:"100%",padding:"11px 0",borderRadius:13,border:"none",
+              background:"linear-gradient(135deg,#B71C1C,#6A1B9A,#0D47A1)",color:"#fff",
+              fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:3,
+              boxShadow:"0 5px 24px rgba(106,27,154,0.45)",transition:"all 0.25s",marginBottom:6}}
+              onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px) scale(1.01)"}
+              onPointerLeave={e=>e.currentTarget.style.transform="translateY(0) scale(1)"}>
+              ⚔️ TEAM MODE</button>
 
           <button onClick={quickPlayFFA} style={{width:"100%",padding:"10px 0",borderRadius:12,border:"none",
               background:"linear-gradient(135deg,#2E7D32,#1B5E20)",color:"#fff",
@@ -3167,8 +3243,9 @@ export default function UnoGame(){
                 background:isMe?"rgba(255,215,0,0.06)":i<3?"rgba(255,255,255,0.02)":"transparent",
                 border:isMe?"1px solid rgba(255,215,0,0.12)":i===0?"1px solid rgba(255,215,0,0.08)":"1px solid transparent",
                 animation:`slideIn 0.3s ease-out ${Math.min(i*0.04,0.8)}s both`}}>
-                <div style={{width:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#556"}}>
-                  {i<3?<Crown rank={i+1} size={30}/>:(i+1)}</div>
+                <div style={{width:34,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#556",
+                  borderRadius:8,...(i<5?{background:`radial-gradient(circle at 50% 45%,${["rgba(255,150,140,0.28)","rgba(190,140,255,0.26)","rgba(150,205,255,0.28)","rgba(255,140,90,0.26)","rgba(190,140,255,0.26)"][i]},rgba(255,255,255,0) 70%)`}:{})}}>
+                  {i<5?<Crown rank={i+1} size={32}/>:(i+1)}</div>
                 <div style={{flexShrink:0}}><Avatar id={p.avatar} photo={p.photo} size={30}/></div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:11,fontWeight:700,color:isMe?"#FFD700":"#ccc",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
@@ -3444,6 +3521,42 @@ export default function UnoGame(){
           textShadow:"0 0 45px rgba(255,215,0,0.5),0 0 90px rgba(255,215,0,0.2)",marginBottom:20,fontFamily:"Arial Black",
           animation:"codeGlow 2s ease-in-out infinite"}}>{rc}</div>
         <div style={{...GLASS,padding:20,width:"100%",maxWidth:380,marginBottom:18}}>
+          {settings.teamMode?(()=>{
+            const withTeam=pls.map(([id,pd],i)=>({id,pd,team:settings.autoSplit?(i%2===0?"chaos":"order"):(pd.team||null)}));
+            const un=withTeam.filter(x=>!x.team);
+            const chip=(x)=>(<div key={x.id} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 5px",borderRadius:8,marginBottom:3,background:x.id===pid?"rgba(255,215,0,0.08)":"rgba(0,0,0,0.25)"}}>
+              <Avatar id={x.pd.avatar} size={22} photo={x.pd.photo}/>
+              <span style={{flex:1,minWidth:0,fontSize:10,color:"#ddd",fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.pd.name}{x.id===pid?" (you)":""}</span>
+              {isHost&&x.pd.isBot&&<button onClick={e=>{e.stopPropagation();removeBot(x.id);}} style={{background:"none",border:"1px solid rgba(255,82,82,0.25)",color:"#FF5252",width:18,height:18,borderRadius:5,fontSize:11,cursor:"pointer",lineHeight:1,flexShrink:0}}>×</button>}
+            </div>);
+            return(<>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <span style={{color:"#889",fontSize:9,letterSpacing:3}}>TEAMS ({pls.length}/{settings.maxPlayers||MAX_PLAYERS})</span>
+                <div onClick={()=>{if(!isHost)return;const na=!settings.autoSplit;if(!na)pls.forEach(([id],i)=>setTeam(id,i%2===0?"chaos":"order"));saveSetting("autoSplit",na);}}
+                  style={{display:"flex",alignItems:"center",gap:6,cursor:isHost?"pointer":"default"}}>
+                  <span style={{fontSize:8,fontWeight:800,letterSpacing:1,color:"#aaa"}}>AUTO-SHUFFLE</span>
+                  <div style={{width:32,height:18,borderRadius:9,background:settings.autoSplit?"rgba(46,125,50,0.6)":"rgba(255,255,255,0.08)",position:"relative",transition:"all 0.3s"}}>
+                    <div style={{width:12,height:12,borderRadius:"50%",background:settings.autoSplit?"#4CAF50":"#555",position:"absolute",top:3,left:settings.autoSplit?17:3,transition:"all 0.3s"}}/></div>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,marginBottom:(!settings.autoSplit&&un.length)?8:0}}>
+                {["chaos","order"].map(tk=>{const T=TEAMS[tk];const mem=withTeam.filter(x=>x.team===tk);const canJoin=!settings.autoSplit&&rd?.players?.[pid]?.team!==tk;
+                  return(<div key={tk} onClick={()=>{if(canJoin)setTeam(pid,tk);}} style={{flex:1,minWidth:0,borderRadius:12,padding:"8px 7px",
+                    background:`linear-gradient(180deg,${T.color}22,${T.color}08)`,border:`1px solid ${T.color}66`,cursor:canJoin?"pointer":"default"}}>
+                    <div style={{textAlign:"center",fontSize:11,fontWeight:900,color:T.color,letterSpacing:1,marginBottom:6,textShadow:`0 0 8px ${T.glow}`}}>{T.icon} {T.name.toUpperCase()}</div>
+                    {mem.length===0?<div style={{textAlign:"center",fontSize:8,color:"#667",padding:"10px 0"}}>{settings.autoSplit?"auto-filled":"tap to join"}</div>:mem.map(chip)}
+                  </div>);})}
+              </div>
+              {!settings.autoSplit&&un.length>0&&<div>
+                <div style={{fontSize:8,color:"#778",letterSpacing:2,margin:"2px 0 4px"}}>UNASSIGNED — pick a team</div>
+                {un.map(x=>(<div key={x.id} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",borderRadius:8,marginBottom:3,background:"rgba(255,255,255,0.03)"}}>
+                  <Avatar id={x.pd.avatar} size={22} photo={x.pd.photo}/>
+                  <span style={{flex:1,minWidth:0,fontSize:10,color:"#ccc",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{x.pd.name}{x.id===pid?" (you)":""}</span>
+                  {(isHost||x.id===pid)&&["chaos","order"].map(tk=>(<button key={tk} onClick={()=>setTeam(x.id,tk)} style={{fontSize:9,fontWeight:800,padding:"3px 7px",borderRadius:6,border:`1px solid ${TEAMS[tk].color}`,background:`${TEAMS[tk].color}22`,color:TEAMS[tk].color,cursor:"pointer"}}>{TEAMS[tk].icon}</button>))}
+                </div>))}
+              </div>}
+            </>);
+          })():(<>
           <div style={{color:"#889",fontSize:9,marginBottom:12,letterSpacing:3}}>PLAYERS ({pls.length}/{settings.maxPlayers||MAX_PLAYERS})</div>
           {pls.map(([id,pd],i)=>(
             <div key={id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
@@ -3459,11 +3572,18 @@ export default function UnoGame(){
                 :id!==rd?.host&&<span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 8px",borderRadius:6,
                 color:pd.ready?"#4CAF50":"#889",background:pd.ready?"rgba(76,175,80,0.12)":"rgba(255,255,255,0.04)",
                 border:pd.ready?"1px solid rgba(76,175,80,0.3)":"1px solid rgba(255,255,255,0.06)"}}>{pd.ready?"✓ READY":"NOT READY"}</span>}
+              {settings.teamMode&&(()=>{const cur=pd.team&&TEAMS[pd.team];const editable=(isHost||id===pid)&&!settings.autoSplit;
+                if(settings.autoSplit)return <span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 7px",borderRadius:6,color:"#889",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)"}}>AUTO</span>;
+                return <div onClick={()=>editable&&setTeam(id,pd.team==="chaos"?"order":"chaos")} title={editable?"Tap to switch team":""}
+                  style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"3px 8px",borderRadius:6,cursor:editable?"pointer":"default",whiteSpace:"nowrap",
+                    color:cur?"#fff":"#889",background:cur?cur.grad:"rgba(255,255,255,0.05)",
+                    border:`1px solid ${cur?cur.color:"rgba(255,255,255,0.12)"}`,boxShadow:cur?`0 0 8px ${cur.glow}`:"none"}}>
+                  {cur?cur.icon+" "+cur.name.toUpperCase():"PICK TEAM"}</div>;})()}
               {isHost&&pd.isBot&&<button onClick={()=>removeBot(id)} style={{background:"none",border:"1px solid rgba(255,82,82,0.2)",
                 color:"#FF5252",width:22,height:22,borderRadius:6,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",
                 transition:"all 0.2s"}} onPointerEnter={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.5)"}
                 onPointerLeave={e=>e.currentTarget.style.borderColor="rgba(255,82,82,0.2)"}>×</button>}
-            </div>))}
+            </div>))}</>)}
           {isHost&&pls.length<(settings.maxPlayers||MAX_PLAYERS)&&<button onClick={addBot} style={{width:"100%",padding:"8px 0",borderRadius:10,
             border:"1px dashed rgba(76,175,80,0.3)",background:"rgba(76,175,80,0.06)",color:"#4CAF50",
             fontSize:11,fontWeight:700,cursor:"pointer",letterSpacing:3,transition:"all 0.2s",marginTop:4}}
@@ -3594,6 +3714,7 @@ export default function UnoGame(){
         style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0,cursor:"pointer"}}>
         <div style={{position:"relative",flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
           <Avatar id={pd?.avatar} state={avState} size={30} photo={pd?.photo}/>
+          {g.teamMode&&pd?.team&&TEAMS[pd.team]&&<div style={{position:"absolute",inset:-3,borderRadius:"50%",border:`2px solid ${TEAMS[pd.team].color}`,boxShadow:`0 0 7px ${TEAMS[pd.team].glow}`,pointerEvents:"none"}}/>}
           {rankOf[id]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-4,zIndex:5,pointerEvents:"none"}}>
             <RankMark rank={rankOf[id]}/></div>}</div>
         <span style={{fontSize:9,color:turn?"#fff":"#999",fontWeight:700,whiteSpace:"nowrap",
@@ -3752,7 +3873,8 @@ export default function UnoGame(){
           style={{marginTop:12,padding:"8px 24px",borderRadius:10,border:"none",background:"#333",color:"#aaa",fontSize:11,cursor:"pointer"}}>Cancel</button>
       </div>)}
 
-      {g.winner&&(()=>{const win=g.winner===pid;const d=g.lastDeltas?.[pid];return(<>
+      {g.winner&&(()=>{const wTeam=g.teamMode?rd.players?.[g.winner]?.team:null;const mTeam=g.teamMode?rd.players?.[pid]?.team:null;
+        const win=g.teamMode?(!!wTeam&&mTeam===wTeam):(g.winner===pid);const d=g.lastDeltas?.[pid];return(<>
         {win&&<ConfettiFX/>}
         {/* Centered win banner that celebrates, then fades out so the deck/pile & all cards are reviewable */}
         <div style={{position:"absolute",top:"46%",left:"50%",zIndex:151,
@@ -3764,8 +3886,8 @@ export default function UnoGame(){
             boxShadow:win?"0 6px 34px rgba(255,215,0,0.25)":"0 6px 24px rgba(0,0,0,0.55)",animation:"slamIn 0.5s cubic-bezier(.2,1.5,.4,1) both"}}>
             <span style={{fontSize:38,filter:`drop-shadow(0 0 14px ${win?"rgba(255,215,0,0.7)":"rgba(239,83,80,0.35)"})`}}>{win?"🏆":"💀"}</span>
             <div style={{display:"flex",flexDirection:"column",lineHeight:1.2}}>
-              <span style={{fontSize:20,fontWeight:900,color:win?"#FFD700":"#EF5350",fontFamily:"'Chakra Petch',sans-serif",letterSpacing:2}}>{win?"VICTORY!":"DEFEAT"}</span>
-              <span style={{fontSize:11,color:"#ccc",fontWeight:600}}>{rd.players[g.winner]?.name} wins</span>
+              <span style={{fontSize:20,fontWeight:900,color:win?"#FFD700":"#EF5350",fontFamily:"'Chakra Petch',sans-serif",letterSpacing:2}}>{g.teamMode&&wTeam?TEAMS[wTeam].name.toUpperCase()+" WINS!":win?"VICTORY!":"DEFEAT"}</span>
+              <span style={{fontSize:11,color:"#ccc",fontWeight:600}}>{g.teamMode&&wTeam?`${TEAMS[wTeam].icon} ${rd.players[g.winner]?.name} went out`:`${rd.players[g.winner]?.name} wins`}</span>
             </div>
             {(()=>{const pts=win?(g.lastAward!=null?g.lastAward:(d||0)):(d||0);
               if(win)return<span style={{fontSize:26,fontWeight:900,color:"#4CAF50",textShadow:"0 0 14px rgba(76,175,80,0.5)"}}>+{pts}</span>;
@@ -4007,6 +4129,7 @@ export default function UnoGame(){
               <div style={{position:"relative",filter:`drop-shadow(0 2px 8px ${gcHex}55)`}}>
                 <Avatar id={myAvatar} photo={myPhoto} size={34}
                   state={hitFx[pid]?"hit":(g.winner===pid)?"celebrate":myH.length===1?"uno":"idle"}/>
+                {g.teamMode&&rd.players?.[pid]?.team&&TEAMS[rd.players[pid].team]&&<div style={{position:"absolute",inset:-3,borderRadius:"50%",border:`2px solid ${TEAMS[rd.players[pid].team].color}`,boxShadow:`0 0 8px ${TEAMS[rd.players[pid].team].glow}`,pointerEvents:"none"}}/>}
                 {rankOf[pid]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-4,zIndex:5,pointerEvents:"none"}}>
                   <RankMark rank={rankOf[pid]}/></div>}
               </div>
@@ -4153,6 +4276,9 @@ const globalCSS=`
   @keyframes ringExpand{0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(3);opacity:0}}
   @keyframes bgPulse{0%{opacity:0}30%{opacity:1}100%{opacity:0.3}}
   @keyframes crownFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1.5px) scale(1.05)}}
+  @keyframes elecFlash{0%,100%{opacity:0}6%{opacity:1}13%{opacity:0.15}22%{opacity:0.95}30%{opacity:0}}
+  @keyframes shimmerGlow{0%,100%{opacity:0.3;transform:scale(0.85)}50%{opacity:0.8;transform:scale(1.08)}}
+  @keyframes glitterRise{0%{opacity:0;transform:translateY(0) scale(0.4)}20%{opacity:1;transform:translateY(calc(var(--rise) * -0.2)) scale(1)}75%{opacity:0.7}100%{opacity:0;transform:translateY(calc(var(--rise) * -1)) scale(0.65)}}
   @keyframes winBannerAway{0%{opacity:0;transform:translate(-50%,-50%) scale(0.9)}8%{opacity:1;transform:translate(-50%,-50%) scale(1)}70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-64%) scale(0.85);visibility:hidden}}
   @keyframes emotePopIn{0%{opacity:0;transform:translateX(-50%) scale(0.2) translateY(30px)}
     50%{opacity:1;transform:translateX(-50%) scale(1.12) translateY(-6px)}
