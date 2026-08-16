@@ -245,29 +245,23 @@ const BOT_NAMES=["Marco","Jenny","Kyle23","Riza","Andrei","Sofia_M","Miguel","Ha
 const randBotName=(used=[])=>{const avail=BOT_NAMES.filter(n=>!used.includes(n));const pool=avail.length?avail:BOT_NAMES;return pool[Math.floor(Math.random()*pool.length)];};
 const isBot=id=>id?.startsWith("bot_");
 
-/* ═══ TOP-3 CROWNS (1=gold/shiny, 2=silver, 3=bronze) ═══ */
-const CROWN_C={
-  1:{a:"#FFF6B0",b:"#FFCF2E",c:"#B8860B",gem:"#FF4D6D",glow:"rgba(255,207,46,0.9)"},
-  2:{a:"#FBFBFE",b:"#C7CFDB",c:"#7A8290",gem:"#7EC8E3",glow:"rgba(199,207,219,0.7)"},
-  3:{a:"#F2B98C",b:"#CE834B",c:"#8B4A2F",gem:"#7BD88F",glow:"rgba(206,131,75,0.7)"}};
-const Crown=({rank,size=18})=>{const c=CROWN_C[rank];if(!c)return null;const id="cr"+rank;
-  return(<svg width={size} height={size} viewBox="0 0 24 26" style={{display:"block",overflow:"visible",
-    filter:`drop-shadow(0 1px 1.5px rgba(0,0,0,0.55))${rank===1?` drop-shadow(0 0 4px ${c.glow})`:""}`}}>
-    <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stopColor={c.a}/><stop offset="50%" stopColor={c.b}/><stop offset="100%" stopColor={c.c}/></linearGradient></defs>
-    <path d="M2.5 8 L7 13.5 L12 5.5 L17 13.5 L21.5 8 L20 19 L4 19 Z" fill={`url(#${id})`} stroke={c.c} strokeWidth="0.9" strokeLinejoin="round"/>
-    <rect x="4" y="18.4" width="16" height="3" rx="1.2" fill={`url(#${id})`} stroke={c.c} strokeWidth="0.7"/>
-    <circle cx="2.5" cy="8" r="1.6" fill={c.gem} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4"/>
-    <circle cx="12" cy="5.5" r="2" fill={c.gem} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4"/>
-    <circle cx="21.5" cy="8" r="1.6" fill={c.gem} stroke="rgba(0,0,0,0.25)" strokeWidth="0.4"/>
-    <path d="M5 15 Q12 16.5 19 15" fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="0.7"/>
-    <text x="12" y="17.4" textAnchor="middle" fontSize="9.5" fontWeight="900"
-      fontFamily="'Arial Black',Arial,sans-serif" fill={c.c} stroke="#fff" strokeWidth="0.5"
-      style={{paintOrder:"stroke"}}>{rank}</text>
-    {rank===1&&<g style={{transformOrigin:"18px 4px",animation:"crownShine 1.8s ease-in-out infinite"}}>
-      <path d="M18 1 L18.7 3 L20.5 3.4 L18.7 3.8 L18 6 L17.3 3.8 L15.5 3.4 L17.3 3 Z" fill="#FFFDF0"/>
-    </g>}
-  </svg>);};
+/* ═══ TOP-3 CROWNS — premium rank emblems (crown1/2/3.png) for global top 3 ═══ */
+const CROWN_IMG_URL=import.meta.env.BASE_URL+"crowns/";
+const Crown=({rank,size=24})=>{if(!rank||rank>3)return null;
+  return(<img src={CROWN_IMG_URL+"crown"+rank+".png"} width={size} height={size} alt={"#"+rank}
+    style={{display:"block",objectFit:"contain",
+      filter:"drop-shadow(0 1px 1.5px rgba(0,0,0,0.75))",
+      animation:"crownFloat 2.4s ease-in-out infinite"}}/>);};
+/* In-game head marker: a crown for the global top 3, a small "#N" pill for everyone
+   else who is ranked. Rendered floating just above a player's avatar. */
+const RankMark=({rank,size=15})=>{
+  if(!rank)return null;
+  if(rank<=3)return <Crown rank={rank} size={size+9}/>;
+  return(<span style={{display:"inline-block",fontSize:8,fontWeight:900,color:"#E8EEF6",lineHeight:1,
+    background:"linear-gradient(180deg,rgba(40,48,64,0.96),rgba(18,22,32,0.96))",
+    border:"1px solid rgba(255,255,255,0.22)",borderRadius:7,padding:"2px 5px",whiteSpace:"nowrap",
+    boxShadow:"0 1px 4px rgba(0,0,0,0.55)",textShadow:"0 1px 2px rgba(0,0,0,0.7)"}}>#{rank}</span>);
+};
 function botPickColor(hand){const cnt={red:0,blue:0,green:0,yellow:0};hand.forEach(c=>{if(c.color!=="wild"&&cnt[c.color]!==undefined)cnt[c.color]++;});const best=Object.entries(cnt).sort((a,b)=>b[1]-a[1]);return best[0][1]>0?best[0][0]:COLORS[Math.floor(Math.random()*4)];}
 function botChooseCard(playable,hand,curColor,intel,nextOppHL){if(intel===0)return playable[Math.floor(Math.random()*playable.length)];const scored=playable.map(c=>{let s=0;if(c.type!=="wild")s+=3;if(c.value==="discardAll")s+=8;if(c.value==="draw2")s+=5;if(c.value==="skip"||c.value==="reverse")s+=4;if(c.value==="snatch")s+=2;if(c.color===curColor)s+=2;if(intel>=2&&nextOppHL<=2){if(c.value==="draw2"||c.value==="wild4")s+=10;if(c.value==="skip")s+=6;}if(c.value==="wild4")s-=2;return{card:c,s};});scored.sort((a,b)=>b.s-a.s);if(intel<=1&&scored.length>1&&Math.random()>0.6)return scored[Math.min(1,scored.length-1)].card;return scored[0].card;}
 function gpid(){let i=localStorage.getItem("uno_pid");if(!i){i=gid();localStorage.setItem("uno_pid",i);}return i;}
@@ -418,6 +412,10 @@ const bgForRoom=rc=>{if(!rc)return GAME_BGS[0];let h=0;for(let i=0;i<rc.length;i
   return GAME_BGS[h%GAME_BGS.length];};
 const GAME_BG_URL=import.meta.env.BASE_URL+"backgrounds/";
 
+/* Grace window (ms) a player gets to tap UNO after playing down to one card before
+   the system auto-penalizes them. Opponents can catch them during this window too. */
+const UNO_GRACE_MS=2000;
+
 /* ── Country flags (players show up to 2 — dual citizens) ── */
 const flagEmoji=cc=>(cc||"").toUpperCase().replace(/[A-Z]/g,c=>String.fromCodePoint(0x1F1E6+c.charCodeAt(0)-65));
 const COUNTRIES=[["PH","Philippines"],["US","United States"],["CA","Canada"],["GB","United Kingdom"],["AU","Australia"],
@@ -446,13 +444,13 @@ function getMyFlags(){try{const a=JSON.parse(localStorage.getItem("uno_flags")||
 
 const THROWABLES=[
   {id:"tomato",name:"Tomato",     price:0,  emoji:"🍅",splat:"#E53935",label:"SPLAT!", gif:true, sfx:true, vol:1.0},
-  {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!", sfx:true, vol:1.0},
+  {id:"egg",   name:"Egg",        price:0,  emoji:"🥚",splat:"#FFC107",label:"CRACK!", gif:true, sfx:true, vol:1.0},
   {id:"snow",  name:"Snowball",   price:60, emoji:"⚪",splat:"#81D4FA",label:"BRR!",   sfx:true, vol:1.0},
-  {id:"pie",   name:"Cream Pie",  price:120,emoji:"🥧",splat:"#FFECB3",label:"SPLAT!", sfx:true, vol:1.0},
-  {id:"water", name:"Water Balloon",price:150,emoji:"💧",splat:"#4FC3F7",label:"SPLASH!",sfx:true, vol:1.0},
+  {id:"pie",   name:"Cream Pie",  price:120,emoji:"🥧",splat:"#FFECB3",label:"SPLAT!", gif:true, sfx:true, vol:1.0},
+  {id:"water", name:"Water Balloon",price:150,emoji:"💧",splat:"#4FC3F7",label:"SPLASH!",gif:true, sfx:true, vol:1.0},
   {id:"boot",  name:"Old Boot",   price:220,emoji:"🥾",splat:"#FFCA28",label:"BONK!",  sfx:true, vol:1.0},
-  {id:"poop",  name:"Stinker",    price:300,emoji:"💩",splat:"#8D6E63",label:"EWW!",   sfx:true, vol:1.0},
-  {id:"bomb",  name:"Bomb",       price:450,emoji:"💣",splat:"#FF7043",label:"BOOM!",  sfx:true, vol:1.0},
+  {id:"poop",  name:"Stinker",    price:300,emoji:"💩",splat:"#8D6E63",label:"EWW!",   gif:true, sfx:true, vol:1.0},
+  {id:"bomb",  name:"Bomb",       price:450,emoji:"💣",splat:"#FF7043",label:"BOOM!",  gif:true, sfx:true, vol:1.0},
 ];
 const THROW_MAP=Object.fromEntries(THROWABLES.map(t=>[t.id,t]));
 const throwOf=id=>THROW_MAP[id]||THROWABLES[0];
@@ -759,13 +757,10 @@ const ThrowSplat=({item})=>{
   const[mode,setMode]=useState(item.gif&&throwGifCache[item.id]!==false?"gif":"art");
   const label=<span style={{position:"relative",marginTop:-6,fontSize:12,fontWeight:900,color:item.splat,letterSpacing:1,
     textShadow:`0 1px 4px #000,0 0 10px ${item.splat}`}}>{item.label}</span>;
-  if(mode==="gif")return(<>
-    <div style={{position:"absolute",left:"50%",top:"50%",width:120,height:120,borderRadius:"50%",transform:"translate(-50%,-50%)",
-      background:`radial-gradient(circle,${item.splat}cc,${item.splat}00 68%)`}}/>
+  // GIF items: the gif IS the whole effect — no procedural halo/label on top of it.
+  if(mode==="gif")return(
     <img src={THROW_GIF_URL+item.id+".gif"} alt="" onError={()=>{throwGifCache[item.id]=false;setMode("art");}}
-      style={{width:132,height:132,objectFit:"contain",position:"relative",filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.6))"}}/>
-    {label}
-  </>);
+      style={{width:140,height:140,objectFit:"contain",position:"relative",filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.6))"}}/>);
   return(<>
     <svg width="86" height="86" viewBox="0 0 120 120" style={{position:"relative",overflow:"visible",filter:"drop-shadow(0 3px 7px rgba(0,0,0,0.4))"}}>{splatArt(item)}</svg>
     {label}
@@ -2677,7 +2672,7 @@ export default function UnoGame(){
     else if(fc.type==="wild"){currentColor=COLORS[Math.floor(Math.random()*4)];m="Game started! Color is "+currentColor.toUpperCase()+"!";}
     await update(ref(db,"rooms/"+rc),{status:"playing",game:{
       hands,drawPile,discardPile:[fc],currentPlayer:firstPlayer,direction,
-      currentColor,winner:null,message:m,calledUno:{},turnTimestamp:Date.now(),pendingChallenge:null,drawStack:0,drawStackType:null}});
+      currentColor,winner:null,message:m,calledUno:{},unoGrace:null,turnTimestamp:Date.now(),pendingChallenge:null,drawStack:0,drawStackType:null}});
     setScr("game");goFS();goLand();};
 
   useEffect(()=>{if(autoStart&&isHost&&pls.length>=2&&scr==="lobby"){setAutoStart(false);startGame();}},[autoStart,isHost,pls.length,scr]);
@@ -2737,15 +2732,17 @@ export default function UnoGame(){
     let winner=null;
     if(nh[pid].length===0){winner=pid;m=mn+" WINS!";}
     const cu=g.calledUno||{};
-    if(nh[pid].length===1&&!cu[pid]&&!winner){m+=" | Forgot UNO! +2 penalty!";
-      if(ndp2.length<2){const rs=sh(nd.slice(0,-1));ndp2=[...ndp2,...rs];}
-      nh[pid]=[...nh[pid],...ndp2.splice(0,2)];winner=null;}
+    /* Down to 1 card without pre-calling UNO: open a short grace window instead of an
+       instant penalty. During it the player must tap UNO (opponents may catch them,
+       or it auto-penalizes when the window closes — see the unoGrace effect). */
+    let unoGrace=null;
+    if(nh[pid].length===1&&!cu[pid]&&!winner)unoGrace={pid,until:Date.now()+UNO_GRACE_MS};
     let nextPlayer=winner?pid:nxt;
     if((card.value==="draw2"||card.value==="wild4")&&!winner)nextPlayer=np(pid,nDir,false);
     if(snatchHold&&!winner)nextPlayer=pid;
     await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,
       currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:(nh[pid].length===1&&cu[pid])?true:false},
-      turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
+      unoGrace,turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
       drawStack:winner?0:newDrawStack,drawStackType:winner?null:newDrawStackType});
   },[g,myTurn,myH,pid,po,np,wgs,rd,ps,rc,trigBurst,trigImpact]);
 
@@ -2845,7 +2842,7 @@ export default function UnoGame(){
       nh[targetId]=[...(nh[targetId]||[]),...ndp.splice(0,2)];
       setCardFlyFx({element:fg.currentColor||"yellow",count:2,toSelf:targetId===pid,dir:victimDir(targetId)});
       await wgs({hands:nh,drawPile:ndp,message:(rd.players[targetId]?.name)+" caught! UNO penalty +2!",
-        calledUno:{...cu,[targetId]:true}});}
+        calledUno:{...cu,[targetId]:true},unoGrace:null});}
   },[g,ps,wgs,rd,trigShake,rc]);
 
   /* Two distinct opponent taps:
@@ -2901,7 +2898,8 @@ export default function UnoGame(){
   const colCancel=()=>{setPickCol(false);setPendW(null);};
   const callUno=async()=>{if(!(g.calledUno||{})[pid]){
     ps("uno");unoSndRef.current=Date.now(); // immediate feedback on press
-    await wgs({calledUno:{...(g.calledUno||{}),[pid]:true},message:(rd.players[pid]?.name)+" called UNO!"});
+    const clearGrace=g.unoGrace&&g.unoGrace.pid===pid?{unoGrace:null}:{};
+    await wgs({calledUno:{...(g.calledUno||{}),[pid]:true},message:(rd.players[pid]?.name)+" called UNO!",...clearGrace});
     setLMsg("UNO!");setTimeout(()=>setLMsg(""),1200);}};
   const leave=async(e)=>{if(e&&e.stopPropagation)e.stopPropagation();
     bgm.stop();setMus(false);if(isHost)await remove(ref(db,"rooms/"+rc));
@@ -2915,8 +2913,34 @@ export default function UnoGame(){
 
   const shakeStyle=screenShake?{animation:"screenShake 0.4s ease-out"}:{};
   const gcHex=g?.currentColor?CH[g.currentColor]:"#FF6F00";
-  // Top-3 global players → crown rank (1/2/3) keyed by player id.
+  // Global standings → crown for top-3, plain rank number for everyone else, by player id.
   const crownRank=useMemo(()=>{const m={};globalLB.slice(0,3).forEach((p,i)=>{if(p.id)m[p.id]=i+1;});return m;},[globalLB]);
+  const rankOf=useMemo(()=>{const m={};globalLB.forEach((p,i)=>{if(p.id)m[p.id]=i+1;});return m;},[globalLB]);
+
+  /* UNO grace window: if I'm the one who forgot to call, run a self-timer. When it
+     expires, re-check the live state — if I still have one card and never called,
+     auto-penalize me +2. If an opponent already caught me or I tapped UNO in time,
+     the flag is gone and we just clear the marker. Only the forgetful player runs
+     this, so there's a single authority for the penalty. */
+  const graceUntil=g?.unoGrace?.until,gracePid=g?.unoGrace?.pid;
+  useEffect(()=>{
+    if(!graceUntil||gracePid!==pid)return;
+    const t=setTimeout(async()=>{
+      let fg=null;try{const snap=await get(ref(db,"rooms/"+rc+"/game"));if(snap.exists())fg=snap.val();}catch(e){}
+      if(!fg||!fg.unoGrace||fg.unoGrace.pid!==pid){return;}
+      if(fg.winner){update(ref(db,"rooms/"+rc+"/game"),{unoGrace:null}).catch(()=>{});return;}
+      const hand=fg.hands?.[pid]||[];const cu=fg.calledUno||{};
+      if(hand.length===1&&!cu[pid]){
+        ps("penalty");trigShake();
+        const nh={...fg.hands};let ndp=[...(fg.drawPile||[])];const nd=[...(fg.discardPile||[])];
+        if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];}
+        nh[pid]=[...(nh[pid]||[]),...ndp.splice(0,2)];
+        setCardFlyFx({element:fg.currentColor||"yellow",count:2,toSelf:true,dir:victimDir(pid)});
+        await wgs({hands:nh,drawPile:ndp,message:(rd.players[pid]?.name)+" forgot UNO! +2 penalty!",unoGrace:null});
+      }else{update(ref(db,"rooms/"+rc+"/game"),{unoGrace:null}).catch(()=>{});}
+    },Math.max(0,graceUntil-Date.now())+150);
+    return()=>clearTimeout(t);
+  },[graceUntil,gracePid,pid,rc,ps,wgs,rd,trigShake]);
 
   /* Audio settings panel — music + sound-fx toggles and volume sliders */
   const volRow=(icon,label,on,onToggle,vol,setVol,preview)=>(
@@ -3143,8 +3167,8 @@ export default function UnoGame(){
                 background:isMe?"rgba(255,215,0,0.06)":i<3?"rgba(255,255,255,0.02)":"transparent",
                 border:isMe?"1px solid rgba(255,215,0,0.12)":i===0?"1px solid rgba(255,215,0,0.08)":"1px solid transparent",
                 animation:`slideIn 0.3s ease-out ${Math.min(i*0.04,0.8)}s both`}}>
-                <div style={{width:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#556"}}>
-                  {i<3?<Crown rank={i+1} size={20}/>:(i+1)}</div>
+                <div style={{width:30,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,color:"#556"}}>
+                  {i<3?<Crown rank={i+1} size={30}/>:(i+1)}</div>
                 <div style={{flexShrink:0}}><Avatar id={p.avatar} photo={p.photo} size={30}/></div>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:11,fontWeight:700,color:isMe?"#FFD700":"#ccc",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:4}}>
@@ -3568,9 +3592,10 @@ export default function UnoGame(){
       {/* PROFILE (avatar + name + count) → open the throwable picker */}
       <div onClick={e=>{e.stopPropagation();if(!g.winner&&id!==pid)setThrowPick(id);}} title="Throw an item at them"
         style={{display:"flex",flexDirection:isV?"column":"row",alignItems:"center",gap:3,marginBottom:isV?0:2,marginRight:isV?3:0,cursor:"pointer"}}>
-        <div style={{flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
-          <Avatar id={pd?.avatar} state={avState} size={30} photo={pd?.photo}/></div>
-        {crownRank[id]&&<Crown rank={crownRank[id]} size={14}/>}
+        <div style={{position:"relative",flexShrink:0,filter:`drop-shadow(0 2px 8px ${CH[COLORS[opps.indexOf(id)%4]]}55)`}}>
+          <Avatar id={pd?.avatar} state={avState} size={30} photo={pd?.photo}/>
+          {rankOf[id]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-4,zIndex:5,pointerEvents:"none"}}>
+            <RankMark rank={rankOf[id]}/></div>}</div>
         <span style={{fontSize:9,color:turn?"#fff":"#999",fontWeight:700,whiteSpace:"nowrap",
           textShadow:turn?`0 0 8px ${gcHex}66`:"none"}}>{pd?.name}</span>
         <span style={{fontSize:9,background:"rgba(255,255,255,0.1)",borderRadius:5,padding:"1px 5px",
@@ -3770,8 +3795,9 @@ export default function UnoGame(){
         </div>
       </>);})()}
 
-      {/* Flying throwable projectile */}
-      {throwAnim&&(<div style={{position:"fixed",left:throwAnim.tx,top:throwAnim.ty,zIndex:400,pointerEvents:"none",
+      {/* Flying throwable projectile — skipped for gif items (their gif shows the
+          full arc/impact), kept for procedural items and known-broken gifs. */}
+      {throwAnim&&(!throwAnim.item.gif||throwGifCache[throwAnim.item.id]===false)&&(<div style={{position:"fixed",left:throwAnim.tx,top:throwAnim.ty,zIndex:400,pointerEvents:"none",
         fontSize:34,lineHeight:1,willChange:"transform",
         "--tsx":`${throwAnim.sx-throwAnim.tx}px`,"--tsy":`${throwAnim.sy-throwAnim.ty}px`,"--tax":"0px","--tay":"0px",
         animation:"throwArc 0.9s ease-in forwards"}}>
@@ -3975,10 +4001,16 @@ export default function UnoGame(){
                 animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
-            <div style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 20px)`,bottom:8,zIndex:7,
+            <div style={{position:"absolute",left:`calc(50% - ${clusterHalf}px - 30px)`,bottom:8,zIndex:7,
               display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"left 0.3s ease"}}>
-              {crownRank[pid]&&<Crown rank={crownRank[pid]} size={14}/>}
-              <span style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.55)",letterSpacing:1,
+              {/* your own avatar (mirrors how opponents see you) with your global rank on top */}
+              <div style={{position:"relative",filter:`drop-shadow(0 2px 8px ${gcHex}55)`}}>
+                <Avatar id={myAvatar} photo={myPhoto} size={34}
+                  state={hitFx[pid]?"hit":(g.winner===pid)?"celebrate":myH.length===1?"uno":"idle"}/>
+                {rankOf[pid]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-4,zIndex:5,pointerEvents:"none"}}>
+                  <RankMark rank={rankOf[pid]}/></div>}
+              </div>
+              <span style={{fontSize:9,fontWeight:800,color:"rgba(255,255,255,0.65)",letterSpacing:1,
                 writingMode:"vertical-rl",textOrientation:"mixed",
                 textShadow:"0 1px 4px rgba(0,0,0,0.8)",whiteSpace:"nowrap"}}>{pName||"You"}</span>
             </div>
@@ -4004,20 +4036,25 @@ export default function UnoGame(){
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
             </div>
-            {!g.winner&&!(g.calledUno||{})[pid]&&(
-              <div onClick={callUno} style={{position:"absolute",left:`calc(50% + ${clusterHalf}px + 6px)`,bottom:10,width:48,height:48,borderRadius:"50%",cursor:"pointer",zIndex:8,
-                background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${gcHex}18 40%,rgba(0,0,0,0.9) 75%)`,
-                border:`3px solid ${gcHex}`,
-                boxShadow:`0 0 22px ${gcHex}66,0 0 45px ${gcHex}28,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
-                animation:"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-                transition:"left 0.3s ease,border-color 0.5s,box-shadow 0.5s"}}
+            {!g.winner&&!(g.calledUno||{})[pid]&&(()=>{
+              const urgent=g?.unoGrace&&g.unoGrace.pid===pid; // I forgot — quick, tap it!
+              const bc=urgent?"#FF1744":gcHex;
+              return(<div onClick={callUno} style={{position:"absolute",left:`calc(50% + ${clusterHalf}px + 6px)`,bottom:10,width:urgent?56:48,height:urgent?56:48,borderRadius:"50%",cursor:"pointer",zIndex:8,
+                background:`radial-gradient(circle at 38% 32%,rgba(255,255,255,0.15),${bc}18 40%,rgba(0,0,0,0.9) 75%)`,
+                border:`3px solid ${bc}`,
+                boxShadow:`0 0 22px ${bc}88,0 0 45px ${bc}44,inset 0 -5px 12px rgba(0,0,0,0.6),inset 0 3px 8px rgba(255,255,255,0.1)`,
+                animation:urgent?"uP 0.4s infinite":"uP 0.8s infinite",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                transition:"left 0.3s ease,border-color 0.3s,box-shadow 0.3s,width 0.2s,height 0.2s"}}
                 onPointerEnter={e=>{e.currentTarget.style.transform="scale(1.15)";}}
                 onPointerLeave={e=>{e.currentTarget.style.transform="scale(1)";}}>
-                <span style={{fontSize:8,fontWeight:900,color:"#FFD600",letterSpacing:1,lineHeight:1,
-                  textShadow:`0 0 8px rgba(255,214,0,0.6)`}}>LAST</span>
+                {urgent&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:6,
+                  background:"#FF1744",color:"#fff",fontSize:10,fontWeight:900,letterSpacing:1,padding:"3px 8px",borderRadius:8,
+                  whiteSpace:"nowrap",boxShadow:"0 2px 10px rgba(255,23,68,0.6)",animation:"pulse 0.45s infinite"}}>SAY UNO!</div>}
+                <span style={{fontSize:8,fontWeight:900,color:urgent?"#fff":"#FFD600",letterSpacing:1,lineHeight:1,
+                  textShadow:`0 0 8px rgba(255,214,0,0.6)`}}>{urgent?"UNO":"LAST"}</span>
                 <span style={{fontSize:16,fontWeight:900,color:"#fff",lineHeight:1,
-                  textShadow:`0 0 14px ${gcHex},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
-              </div>)}
+                  textShadow:`0 0 14px ${bc},0 1px 4px rgba(0,0,0,0.9)`}}>!</span>
+              </div>);})()}
             </div>
           </div>
         </div>
@@ -4115,7 +4152,7 @@ const globalCSS=`
   @keyframes spark{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(0);opacity:0}}
   @keyframes ringExpand{0%{transform:scale(0.3);opacity:0.8}100%{transform:scale(3);opacity:0}}
   @keyframes bgPulse{0%{opacity:0}30%{opacity:1}100%{opacity:0.3}}
-  @keyframes crownShine{0%,100%{opacity:0.35;transform:scale(0.7) rotate(-8deg)}50%{opacity:1;transform:scale(1.2) rotate(8deg)}}
+  @keyframes crownFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1.5px) scale(1.05)}}
   @keyframes winBannerAway{0%{opacity:0;transform:translate(-50%,-50%) scale(0.9)}8%{opacity:1;transform:translate(-50%,-50%) scale(1)}70%{opacity:1;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-64%) scale(0.85);visibility:hidden}}
   @keyframes emotePopIn{0%{opacity:0;transform:translateX(-50%) scale(0.2) translateY(30px)}
     50%{opacity:1;transform:translateX(-50%) scale(1.12) translateY(-6px)}
