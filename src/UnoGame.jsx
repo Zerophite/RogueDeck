@@ -203,6 +203,14 @@ class AnimeSFX{
     try{const s=this.c.createBufferSource();s.buffer=this._fxBuf[id];
       const g=this.c.createGain();g.gain.value=f?.vol||1;
       s.connect(g);g.connect(this.master);s.start();return true;}catch(e){return false;}}
+  // The 5-second ticking clip is a long, STOPPABLE sound: keep its source so it can be
+  // cut the moment the turn ends (player drew/played) instead of ticking on.
+  _clockSrc=null;
+  playClock(){this.stopClock();if(!this.c||!this._fxBuf["clock5"])return;
+    try{const s=this.c.createBufferSource();s.buffer=this._fxBuf["clock5"];
+      const g=this.c.createGain();g.gain.value=1;s.connect(g);g.connect(this.master);s.start();
+      this._clockSrc=s;s.onended=()=>{if(this._clockSrc===s)this._clockSrc=null;};}catch(e){}}
+  stopClock(){if(this._clockSrc){try{this._clockSrc.stop();}catch(e){}this._clockSrc=null;}}
   _thrBuf={};_thrLoaded=false;
   loadThrowables(){if(!this.c||this._thrLoaded)return;this._thrLoaded=true;
     THROWABLES.filter(t=>t.sfx).forEach(t=>{fetch(THROW_SFX_URL+t.id+".mp3").then(r=>r.ok?r.arrayBuffer():Promise.reject()).then(ab=>this.c.decodeAudioData(ab)).then(buf=>{this._thrBuf[t.id]=buf;}).catch(()=>{});});}
@@ -2216,6 +2224,10 @@ export default function UnoGame(){
   const acceptInvite=async(fromId,code)=>{await remove(ref(db,"ginv/"+pid+"/"+fromId));setShowFriends(false);joinRoom(code);};
   const ps=useCallback(t=>{if(snd)sfx.p(t);},[snd]);
   const psE=useCallback(c=>{if(snd)sfx.pEl(c);},[snd]);
+  // Play a sound once per card, staggered — so penalty/draw sounds land WITH each card
+  // instead of one blip. Returns the timers so callers can clear them on cleanup.
+  const psSeq=useCallback((type,count,startMs,gapMs)=>{if(!snd)return[];const ts=[];
+    for(let i=0;i<Math.max(1,count);i++)ts.push(setTimeout(()=>sfx.p(type),startMs+i*gapMs));return ts;},[snd]);
   const trigShake=useCallback(()=>{setScreenShake(true);setTimeout(()=>setScreenShake(false),400);},[]);
   const trigBurst=useCallback(c=>{setBurstColor(c);setTimeout(()=>setBurstColor(null),1500);},[]);
   const trigImpact=useCallback(c=>{setImpactColor(c);setTimeout(()=>setImpactColor(null),600);},[]);
@@ -2296,6 +2308,7 @@ export default function UnoGame(){
       if(Date.now()-discardFxRef.current>1500){const dac=g?.currentColor||"yellow";
         const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
         ps(cnt>1?"discardAll":"draw");psE(dac); // ≥2 cards → discard-all sfx, single → regular draw sfx
+        if(cnt>1)psSeq("card",cnt,350,290); // per-card tick synced to the cards sweeping to the pile
         if(cnt>1){setActFx("discardAll");trigBurst(dac);
           const real=(g.discardPile||[]).slice(-cnt); // the just-discarded cards are the last N of the pile
           setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});}}}
@@ -2358,24 +2371,28 @@ export default function UnoGame(){
       slashRef.current=psl.ts;
       if(psl.type==="wild4"){
         const el=psl.element||"green";psE(el); // element sound plays once, with the cinematic
-        setChibiAttackFx({element:el,victimName:psl.name,count:psl.count||4,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        const t=setTimeout(()=>{trigShake();ps("penalty");},SLASH_DELAY);
-        return()=>clearTimeout(t);
+        const nC=Math.max(2,Math.min(psl.count||4,8));
+        setChibiAttackFx({element:el,victimName:psl.name,count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
+        // one penalty "thunk" per card, staggered to match the cards flinging into the hand
+        const seq=psSeq("penalty",nC,1750,290);
+        const t=setTimeout(()=>trigShake(),SLASH_DELAY);
+        return()=>{seq.forEach(clearTimeout);clearTimeout(t);};
       }else{
-        setCardFlyFx({element:psl.element||"yellow",count:psl.count||2,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        const t=setTimeout(()=>ps("penalty"),DRAW2_DELAY);
-        return()=>clearTimeout(t);
+        const nC=Math.max(1,Math.min(psl.count||2,8));
+        setCardFlyFx({element:psl.element||"yellow",count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
+        const seq=psSeq("penalty",nC,950,190);
+        return()=>{seq.forEach(clearTimeout);};
       }
     }
-  },[g?.pendingSlash,ps,psE,trigShake,pid]);
+  },[g?.pendingSlash,ps,psE,psSeq,trigShake,pid]);
 
   useEffect(()=>{if(!g||g.winner||!g.currentPlayer)return;
     setTurnTimer(settings.turnTime);
     const iv=setInterval(()=>{setTurnTimer(prev=>{
       if(prev<=1){clearInterval(iv);return 0;}
-      if(prev===6&&snd)sfx.p("clock5"); // ticking clock audio for the final 5 seconds
+      if(prev===6&&snd)sfx.playClock(); // stoppable ticking clip for the final 5 seconds
       return prev-1;});},1000);
-    return()=>clearInterval(iv);
+    return()=>{clearInterval(iv);sfx.stopClock();}; // turn ended (drew/played/timeout) → stop ticking
   },[g?.currentPlayer,g?.turnTimestamp,g?.winner]);
 
   const gameActive=!!g&&!g.winner;
@@ -2787,7 +2804,7 @@ export default function UnoGame(){
       // Trigger the fly-to-pile animation locally right away (fires even on a winning discard-all).
       // ≥2 cards discarded → discard-all sfx + big animation; single card → just the draw sfx.
       discardFxRef.current=Date.now();
-      if(dCount+1>1){ps("discardAll");setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
+      if(dCount+1>1){ps("discardAll");psSeq("card",dCount+1,350,290);setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
       else ps("draw");
     } else {
       nd.push(card);
