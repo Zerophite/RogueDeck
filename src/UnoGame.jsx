@@ -1632,7 +1632,7 @@ const CardFlyFX=({element,count,toSelf,dir,onDone})=>{
   const em=EM(element);const n=Math.min(count,8);
   const D=FLY_DIR[dir]||(toSelf?FLY_DIR.down:FLY_DIR.up);
   const cards=useMemo(()=>Array.from({length:n},(_,i)=>({id:i,
-    sx:n<=1?0:-84+i*(168/(n-1)),del:i*0.16,rot:-18+Math.random()*36})),[n]);
+    sx:n<=1?0:-84+i*(168/(n-1)),del:i*0.28,rot:-18+Math.random()*36})),[n]);
   return(<div style={{position:"fixed",inset:0,zIndex:96,pointerEvents:"none",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
     {/* count badge rising from center */}
     <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",zIndex:2,
@@ -2022,6 +2022,7 @@ export default function UnoGame(){
   const[pName,setPName]=useState(localStorage.getItem("uno_name")||"");
   const[rc,setRc]=useState("");const[jc,setJc]=useState("");const[err,setErr]=useState("");
   const[isAdm,setIsAdm]=useState(false);const[admP,setAdmP]=useState("");const[showAdm,setShowAdm]=useState(false);
+  const[admTgt,setAdmTgt]=useState("");const[admPts,setAdmPts]=useState("100");const[admMsg,setAdmMsg]=useState("");
   const admTap=useRef({n:0,t:0});
   const logoTap=()=>{const now=Date.now();const s=admTap.current;s.n=(now-s.t<1500)?s.n+1:1;s.t=now;if(s.n>=5){s.n=0;setShowAdm(true);}};
   const[peek,setPeek]=useState(false);const[pickDr,setPickDr]=useState(false);
@@ -2066,6 +2067,7 @@ export default function UnoGame(){
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
   const[cardFlyFx,setCardFlyFx]=useState(null);
+  const[dealFx,setDealFx]=useState(null);
   const[draw2Fx,setDraw2Fx]=useState(null);
   const[reverseFx,setReverseFx]=useState(null);
   const[skipFx,setSkipFx]=useState(null);
@@ -2230,6 +2232,19 @@ export default function UnoGame(){
   // instead of one blip. Returns the timers so callers can clear them on cleanup.
   const psSeq=useCallback((type,count,startMs,gapMs)=>{if(!snd)return[];const ts=[];
     for(let i=0;i<Math.max(1,count);i++)ts.push(setTimeout(()=>sfx.p(type),startMs+i*gapMs));return ts;},[snd]);
+  /* ADMIN: grant/deduct leaderboard points or coins for any account. Writes straight
+     to the leaderboard node; self-changes sync back through the leaderboard listener. */
+  const adminGrant=useCallback(async(targetId,field,delta)=>{
+    if(!isAdm||!targetId||!delta)return;
+    try{
+      const snap=await get(ref(db,"leaderboard/"+targetId));const v=snap.val()||{};
+      const next=Math.max(0,(v[field]||0)+delta);
+      await update(ref(db,"leaderboard/"+targetId),{[field]:next,name:v.name||rd?.players?.[targetId]?.name||"Player",since:v.since||Date.now()});
+      ps(delta>=0?"win":"error");
+      setAdmMsg(`${delta>=0?"+":""}${delta} ${field==="coins"?"coins":"pts"} → ${next}`);
+      setTimeout(()=>setAdmMsg(""),2200);
+    }catch(e){setAdmMsg("Failed");setTimeout(()=>setAdmMsg(""),2000);}
+  },[isAdm,rd,ps]);
   const trigShake=useCallback(()=>{setScreenShake(true);setTimeout(()=>setScreenShake(false),400);},[]);
   const trigBurst=useCallback(c=>{setBurstColor(c);setTimeout(()=>setBurstColor(null),1500);},[]);
   const trigImpact=useCallback(c=>{setImpactColor(c);setTimeout(()=>setImpactColor(null),600);},[]);
@@ -2259,13 +2274,35 @@ export default function UnoGame(){
   const newOrder=useMemo(()=>{const m={};let k=0;
     myH.forEach(c=>{if(!prevHandIds.current.has(c.id))m[c.id]=k++;});return m;},[myH]);
   useEffect(()=>{prevHandIds.current=new Set(myH.map(c=>c.id));},[myH]);
-  // Game-start deal: one card-sound per dealt card, paced to the cardDeal stagger (0.14s) so
+  // Game-start deal: one card-sound per dealt card, paced to the cardDeal stagger (0.28s) so
   // the audio tracks the cards fanning out. Fires once per game; resets when the hand empties.
   const dealtRef=useRef(false);
   useEffect(()=>{
-    if(initialDeal&&myH.length>1&&!dealtRef.current){dealtRef.current=true;const seq=psSeq("carddist",myH.length,320,140);return()=>seq.forEach(clearTimeout);}
+    if(initialDeal&&myH.length>1&&!dealtRef.current){dealtRef.current=true;const seq=psSeq("carddist",myH.length,300,280);return()=>seq.forEach(clearTimeout);}
     if(myH.length===0)dealtRef.current=false;
   },[initialDeal,myH.length,psSeq]);
+  /* Game-start deal-around: fly card-backs from the table center out to each opponent
+     seat, round-robin for `startCards` rounds (own hand fans in on its own). */
+  const dealAnimRef=useRef(false);
+  useEffect(()=>{
+    if(!g||g.winner){if(myH.length===0)dealAnimRef.current=false;return;}
+    if(!(initialDeal&&myH.length>1&&!dealAnimRef.current))return;
+    dealAnimRef.current=true;
+    const rounds=Math.max(1,Math.min(myH.length,10));
+    const t=setTimeout(()=>{
+      const W=window.innerWidth,H=window.innerHeight,ox=W/2,oy=Math.round(H*0.44);
+      const mi=po.indexOf(pid);
+      const seats=mi<0?po.filter(id=>id!==pid):[...po.slice(mi+1),...po.slice(0,mi)];
+      if(!seats.length)return;
+      const tgt=id=>{const el=oppRefs.current[id];if(el){const r=el.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2];}return[W/2,H*0.2];};
+      const cards=[];let k=0;
+      for(let r=0;r<rounds;r++)for(const s of seats){const[tx,ty]=tgt(s);
+        cards.push({key:k,dx:Math.round(tx-ox),dy:Math.round(ty-oy),delay:(k*0.085).toFixed(3),rot:(-16+Math.random()*32)|0});k++;}
+      setDealFx({ox:Math.round(ox),oy,cards});
+      setTimeout(()=>setDealFx(null),cards.length*85+700);
+    },60);
+    return()=>clearTimeout(t);
+  },[initialDeal,myH.length,g?.winner,po,pid]);
   const topC=g?.discardPile?g.discardPile[g.discardPile.length-1]:null;
   const myTurn=g?.currentPlayer===pid;const msg=g?.message||lMsg;
   const drawStack=g?.drawStack||0;
@@ -2285,14 +2322,16 @@ export default function UnoGame(){
   },[g?.emote,rd?.players,snd]);
 
   useEffect(()=>{
-    if(!g||!myTurn||g.winner)return;
-    if(g.pendingChallenge&&g.pendingChallenge.target===pid){
-      // If I can stack (have a +4/shadow), skip the challenge prompt so I can play it.
+    const pc=g?.pendingChallenge;
+    // Only keep the challenge modal up while there is genuinely a +4 challenge waiting
+    // for ME on MY turn. Any other state (turn passed, timed out, resolved by the host,
+    // I can stack) must clear it — otherwise a stuck `challenge` permanently blocks drawing.
+    if(g&&!g.winner&&myTurn&&pc&&pc.target===pid){
       const canStack=myH.some(c=>c.value==="wild4"||c.value==="shadow");
-      if(!canStack)setChallenge({playerId:g.pendingChallenge.player,
-        playerName:rd.players[g.pendingChallenge.player]?.name||"Player",
-        playerHadColor:g.pendingChallenge.hadMatchingColor});
-      else setChallenge(null);}
+      setChallenge(canStack?null:{playerId:pc.player,
+        playerName:rd.players[pc.player]?.name||"Player",
+        playerHadColor:pc.hadMatchingColor});
+    }else setChallenge(null);
   },[g?.pendingChallenge,myTurn,g?.winner,pid,rd?.players,myH,g]);
 
   useEffect(()=>{const mkey=g?.message?g.message+"|"+g.turnTimestamp:null;if(!mkey||mkey===prevM.current)return;prevM.current=mkey;const m=g.message.toLowerCase();
@@ -2366,7 +2405,8 @@ export default function UnoGame(){
      down=self (bottom hand), left/right=edge opponents, up=top opponents. */
   const victimDir=useCallback(vid=>{
     if(vid===pid)return "down";
-    const o=po.filter(id=>id!==pid);
+    const mi=po.indexOf(pid);
+    const o=mi<0?po.filter(id=>id!==pid):[...po.slice(mi+1),...po.slice(0,mi)];
     if(o.length>2){if(vid===o[0])return "left";if(vid===o[o.length-1])return "right";}
     return "up";
   },[po,pid]);
@@ -2389,8 +2429,8 @@ export default function UnoGame(){
       }else{
         const nC=Math.max(1,Math.min(psl.count||2,8));
         setCardFlyFx({element:psl.element||"yellow",count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        // +2 cardLand reaches the hand at 90% of 1.4s, card i starts at i*0.16 → land ≈ 1.26s + i*0.16.
-        const seq=psSeq("carddist",nC,1260,160);
+        // +2 cardLand reaches the hand at 90% of 1.4s, card i starts at i*0.28 → land ≈ 1.26s + i*0.28.
+        const seq=psSeq("carddist",nC,1260,280);
         return()=>{seq.forEach(clearTimeout);};
       }
     }
@@ -2430,6 +2470,10 @@ export default function UnoGame(){
     const key=g.winner+"_"+g.turnTimestamp;if(scoredRef.current===key)return;scoredRef.current=key;
     (async()=>{
       const winnerId=g.winner;const winnerBot=isBot(winnerId);const LOSE_COINS=8;
+      /* Team mode: the winner's whole team wins. Teammates are NOT penalized, and the
+         human winners split the point pool the losers give up (still zero-sum). */
+      const teamMode=!!g.teamMode;const winTeam=teamMode?rd.players?.[winnerId]?.team:null;
+      const onWinSide=(id)=>teamMode?(rd.players?.[id]?.team===winTeam):(id===winnerId);
       try{await update(ref(db,"rooms/"+rc+"/game"),{scored:true});}catch(e){}
       const baseScore=Math.max(20,calcScore(g.hands||{},winnerId));
       const coinGain=Math.min(60,20+Math.round(baseScore*0.4));
@@ -2445,7 +2489,7 @@ export default function UnoGame(){
          OR a bot won. Recording their delta is what lets the defeat banner show the
          points lost even in a bot game (previously bot wins recorded nothing). */
       for(const[oppId]of pls){
-        if(oppId===winnerId||isBot(oppId))continue;
+        if(onWinSide(oppId)||isBot(oppId))continue;
         const op=(await get(ref(db,"leaderboard/"+oppId))).val()||{totalPoints:0,gamesPlayed:0,wins:0};
         const oRank=getRank(op.totalPoints,op.gamesPlayed);
         const before=op.totalPoints||0;let loss;
@@ -2472,11 +2516,21 @@ export default function UnoGame(){
           gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now,
           coins:(op.coins||0)+LOSE_COINS});
       }
-      if(!winnerBot){
-        deltas[winnerId]=totalWin;
-        await update(ref(db,"leaderboard/"+winnerId),{name:rd.players[winnerId]?.name||"Player",
-          totalPoints:(prev.totalPoints||0)+totalWin,gamesPlayed:(prev.gamesPlayed||0)+1,wins:(prev.wins||0)+1,lastPlayed:now,since:prev.since||now,beat,
-          coins:(prev.coins||0)+coinGain});
+      /* Credit every HUMAN winner (the player who went out + any teammates), splitting
+         the zero-sum pool so allies gain instead of losing. beat/H2H stays on the
+         actual winner only. */
+      const humanWinners=(teamMode?pls.filter(([id])=>onWinSide(id)&&!isBot(id)).map(([id])=>id):[winnerId]).filter(id=>!isBot(id));
+      if(!winnerBot&&humanWinners.length){
+        const share=Math.max(1,Math.round(totalWin/humanWinners.length));
+        for(const wId of humanWinners){
+          const wp=wId===winnerId?prev:((await get(ref(db,"leaderboard/"+wId))).val()||{totalPoints:0,gamesPlayed:0,wins:0});
+          const upd={name:rd.players[wId]?.name||"Player",
+            totalPoints:(wp.totalPoints||0)+share,gamesPlayed:(wp.gamesPlayed||0)+1,wins:(wp.wins||0)+1,lastPlayed:now,since:wp.since||now,
+            coins:(wp.coins||0)+coinGain};
+          if(wId===winnerId)upd.beat=beat;
+          await update(ref(db,"leaderboard/"+wId),upd);
+          deltas[wId]=share;
+        }
       }else{totalWin=baseScore;}
       const curScores=(await get(ref(db,"rooms/"+rc+"/scores"))).val()||{};
       curScores[winnerId]=(curScores[winnerId]||0)+totalWin;
@@ -3556,6 +3610,28 @@ export default function UnoGame(){
               style={{flex:1,padding:"10px",borderRadius:10,border:"none",background:isAdm?"#2E7D32":"linear-gradient(135deg,#FFD700,#DAA520)",
                 color:isAdm?"#fff":"#1a1200",fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:1}}>{isAdm?"✓ ACTIVE":"UNLOCK"}</button>
           </div>
+          {isAdm&&(()=>{const tgt=admTgt||pid;const amt=parseInt(admPts,10)||0;
+            const others=globalLB.filter(p=>p.id!==pid);
+            const iBtn={flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:800,cursor:"pointer",letterSpacing:0.5};
+            return(<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid rgba(255,215,0,0.15)"}}>
+              <div style={{fontSize:10,fontWeight:900,color:"#FFD700",letterSpacing:2,marginBottom:8}}>⚡ GRANT POINTS / COINS</div>
+              <select value={tgt} onChange={e=>setAdmTgt(e.target.value)}
+                style={{width:"100%",padding:"9px 10px",borderRadius:9,border:"1px solid rgba(255,215,0,0.2)",background:"rgba(0,0,0,0.5)",color:"#fff",fontSize:11,outline:"none",marginBottom:8}}>
+                <option value={pid}>You — {pName||"Me"}</option>
+                {others.map(p=><option key={p.id} value={p.id}>{p.name||"Player"} · {p.totalPoints||0}pts · {p.coins||0}🪙</option>)}
+              </select>
+              <input value={admPts} onChange={e=>setAdmPts(e.target.value.replace(/[^0-9]/g,""))} inputMode="numeric" placeholder="amount"
+                style={{width:"100%",padding:"9px 12px",borderRadius:9,border:"1px solid rgba(255,215,0,0.2)",background:"rgba(0,0,0,0.4)",color:"#fff",fontSize:13,outline:"none",marginBottom:8,textAlign:"center",letterSpacing:1}}/>
+              <div style={{display:"flex",gap:6,marginBottom:6}}>
+                <button onClick={()=>adminGrant(tgt,"totalPoints",amt)} style={{...iBtn,border:"none",background:"linear-gradient(135deg,#43A047,#2E7D32)",color:"#fff"}}>+ POINTS</button>
+                <button onClick={()=>adminGrant(tgt,"totalPoints",-amt)} style={{...iBtn,border:"1px solid rgba(244,67,54,0.35)",background:"rgba(244,67,54,0.1)",color:"#EF5350"}}>− POINTS</button>
+              </div>
+              <div style={{display:"flex",gap:6}}>
+                <button onClick={()=>adminGrant(tgt,"coins",amt)} style={{...iBtn,border:"none",background:"linear-gradient(135deg,#FFB300,#DAA520)",color:"#1a1200"}}>+ COINS</button>
+                <button onClick={()=>adminGrant(tgt,"coins",-amt)} style={{...iBtn,border:"1px solid rgba(255,179,0,0.35)",background:"rgba(255,179,0,0.08)",color:"#FFB300"}}>− COINS</button>
+              </div>
+              {admMsg&&<div style={{textAlign:"center",color:"#4CAF50",fontSize:10,fontWeight:800,marginTop:8}}>{admMsg}</div>}
+            </div>);})()}
           {isAdm&&<button onClick={()=>{setIsAdm(false);setShowAdm(false);}} style={{width:"100%",marginTop:8,padding:"8px",borderRadius:10,
             border:"1px solid rgba(244,67,54,0.25)",background:"rgba(244,67,54,0.08)",color:"#EF5350",fontSize:10,fontWeight:700,cursor:"pointer"}}>LOG OUT ADMIN</button>}
         </div>
@@ -3748,7 +3824,11 @@ export default function UnoGame(){
 
   /* ═══ GAME ═══ */
   if(!g)return<div style={{height:"100%",background:"#060e0c",display:"flex",alignItems:"center",justifyContent:"center",color:"#889"}}><style>{globalCSS}</style>Loading...</div>;
-  const opps=po.filter(id=>id!==pid);
+  const myIdx=po.indexOf(pid);
+  // Self-relative seating: everyone sees the table going around from their own seat
+  // (next player after me first). Teammates end up across from each other consistently,
+  // and turn flows right→left (me → next opp on the left → across → right).
+  const opps=myIdx<0?po.filter(id=>id!==pid):[...po.slice(myIdx+1),...po.slice(0,myIdx)];
   const n=myH.length;const spread=Math.min(n*3,32);const st2=-spread/2;
   const cardSpacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));
   const clusterHalf=((n-1)/2)*cardSpacing+(isLandscape?35:44);
@@ -3787,9 +3867,10 @@ export default function UnoGame(){
           const maxS=isV?230:(isLandscape?165:300);
           const step=Math.max(3,Math.min(isV?20:16,(maxS-dim)/Math.max(n-1,1)));const ov=step-dim;
           const reveal=!!g.winner; // flip everyone's cards face-up when the round is over
+          const allyReveal=g.teamMode&&pd?.team&&rd.players[pid]?.team===pd.team; // teammates see each other's hands
           return cards.map((c,ci)=><div key={c.id} style={{...(isV?{marginTop:ci>0?ov:0}:{marginLeft:ci>0?ov:0}),
             animation:reveal?`cardFlipIn 0.55s cubic-bezier(.34,1.2,.5,1) ${ci*0.06}s both`:"none"}}>
-            <Card card={c} sz="xs" faceDown={reveal?false:(!peek||!isAdm)}/></div>);})()}
+            <Card card={c} sz="xs" faceDown={(reveal||allyReveal)?false:(!peek||!isAdm)}/></div>);})()}
       </div>
       {canCatch&&<div style={{position:"absolute",bottom:isV?"auto":-12,right:isV?-8:"auto",left:isV?"auto":"auto",
         fontSize:7,color:"#FF9800",fontWeight:800,
@@ -3825,6 +3906,14 @@ export default function UnoGame(){
       {wild4Fx&&<ElementalW4FX color={wild4Fx} onDone={()=>setWild4Fx(null)}/>}
       {chibiAttackFx&&<ChibiAttackFX element={chibiAttackFx.element} victimName={chibiAttackFx.victimName} count={chibiAttackFx.count} toSelf={chibiAttackFx.toSelf} dir={chibiAttackFx.dir} onDone={()=>setChibiAttackFx(null)}/>}
       {cardFlyFx&&<CardFlyFX element={cardFlyFx.element} count={cardFlyFx.count} toSelf={cardFlyFx.toSelf} dir={cardFlyFx.dir} onDone={()=>setCardFlyFx(null)}/>}
+      {dealFx&&<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",overflow:"hidden"}}>
+        {dealFx.cards.map(c=><div key={c.key} style={{position:"fixed",left:dealFx.ox,top:dealFx.oy,width:30,height:44,marginLeft:-15,marginTop:-22,
+          borderRadius:6,background:"linear-gradient(135deg,#141428,#0f3a44)",border:"2px solid rgba(255,255,255,0.85)",
+          boxShadow:"0 4px 12px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",
+          "--dx":c.dx+"px","--dy":c.dy+"px","--r":c.rot+"deg",
+          animation:`dealSweep 0.5s cubic-bezier(.4,0,.3,1) ${c.delay}s both`}}>
+          <div style={{width:16,height:16,borderRadius:"50%",background:"#E53935",transform:"rotate(-20deg)",boxShadow:"0 0 4px rgba(0,0,0,0.4)"}}/></div>)}
+      </div>}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
       {reverseFx&&<ReverseFX color={reverseFx} onDone={()=>setReverseFx(null)}/>}
       {skipFx&&<SkipFX color={skipFx} onDone={()=>setSkipFx(null)}/>}
@@ -4201,8 +4290,8 @@ export default function UnoGame(){
                 const spacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));const xOff=(i-(n-1)/2)*spacing;
                 const no=newOrder[card.id];const isNew=no!==undefined;
                 const anim=isNew?(initialDeal
-                  ?`cardDeal 0.55s cubic-bezier(.22,1,.36,1) ${i*0.14}s both`
-                  :`cardReceive 1s cubic-bezier(.34,1.25,.5,1) ${no*0.42}s both`):"none";
+                  ?`cardDeal 0.55s cubic-bezier(.22,1,.36,1) ${i*0.28}s both`
+                  :`cardReceive 1s cubic-bezier(.34,1.25,.5,1) ${no*0.28}s both`):"none";
                 return(<div key={card.id} onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,touchAction:"manipulation",
@@ -4252,6 +4341,10 @@ const globalCSS=`
   @keyframes spinRays{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
   @keyframes trophyPop{0%{opacity:0;transform:scale(0) translateY(30px) rotate(-18deg)}55%{opacity:1;transform:scale(1.25) translateY(0) rotate(6deg)}75%{transform:scale(0.92) rotate(-3deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
   @keyframes slamIn{0%{opacity:0;transform:scale(2.4);filter:blur(6px)}60%{opacity:1;transform:scale(0.92);filter:blur(0)}100%{opacity:1;transform:scale(1)}}
+  @keyframes dealSweep{0%{opacity:0;transform:translate(0,0) scale(0.4) rotate(0deg)}
+    14%{opacity:1;transform:translate(calc(var(--dx)*0.12),calc(var(--dy)*0.12)) scale(0.92) rotate(calc(var(--r)*0.3))}
+    82%{opacity:1}
+    100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(1) rotate(var(--r))}}
   @keyframes cardDeal{0%{transform:translateY(-40px) scale(0.6) rotateY(90deg);opacity:0}
     40%{transform:translateY(5px) scale(1.05) rotateY(-10deg);opacity:1}
     70%{transform:translateY(-2px) scale(0.98) rotateY(3deg)}100%{transform:translateY(0) scale(1) rotateY(0)}}
