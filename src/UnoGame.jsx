@@ -1778,13 +1778,13 @@ const Draw2FX=({color,onDone})=>{
 
 const DiscardAllFX=({color,count,cards:realCards,onDone})=>{
   const nCards=Math.min(realCards?.length||Math.max(count,3),12);
-  const total=1000+nCards*240+900;
+  const total=1100+nCards*340+1000;
   useEffect(()=>{const t=setTimeout(onDone,total);return()=>clearTimeout(t);},[onDone,total]);
   const gc=CH[color]||"#E040FB";
   // Cards start down at the player's hand and sweep up into the discard pile (screen center).
   const anim=useMemo(()=>Array.from({length:nCards},(_,i)=>({
     id:i,startX:-100+Math.random()*200,startY:250+Math.random()*90,
-    rot:-30+Math.random()*60,delay:i*0.19,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards]);
+    rot:-30+Math.random()*60,delay:i*0.28,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards]);
   return(<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",
     display:"flex",alignItems:"center",justifyContent:"center",animation:`discardFade ${(total/1000).toFixed(2)}s forwards`}}>
     <div style={{position:"absolute",inset:0,
@@ -1794,7 +1794,7 @@ const DiscardAllFX=({color,count,cards:realCards,onDone})=>{
       <div key={c.id} style={{position:"absolute",
         "--sx":`${c.startX}px`,"--sy":`${c.startY}px`,"--sr":`${c.rot}deg`,"--ax":`${c.arc}px`,
         filter:`drop-shadow(0 4px 16px ${gc}aa)`,
-        animation:`discardArc 1.15s cubic-bezier(.45,0,.35,1) ${c.delay}s forwards`}}>
+        animation:`discardArc 1.4s cubic-bezier(.45,0,.35,1) ${c.delay}s forwards`}}>
         {rc?<Card card={rc} sz="sm"/>
           :<div style={{width:44,height:66,borderRadius:7,background:CG[color],border:"2px solid rgba(255,255,255,0.6)",
             display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -4109,14 +4109,15 @@ export default function UnoGame(){
                   background:CG[g.currentColor],border:"2px solid rgba(255,255,255,0.7)",
                   boxShadow:`0 0 18px ${gcHex}aa,0 0 35px ${gcHex}44`,transition:"all 0.5s"}}/>
                 {!g.winner&&(()=>{const low=turnTimer<=5;return(<div style={{position:"absolute",left:"calc(100% + 12px)",top:"50%",transform:"translateY(-50%)",
-                  width:46,height:46,pointerEvents:"none",zIndex:15,transformOrigin:"50% 20%",
-                  animation:low?"clockShake 0.35s ease-in-out infinite":"none"}}>
-                  <img src={UI_URL+"clock.png"} width={46} height={46} alt="" style={{display:"block",objectFit:"contain",
+                  width:46,height:46,pointerEvents:"none",zIndex:15}}>
+                  {/* only the clock IMAGE wobbles; the number stays centered in the face so it's always readable */}
+                  <img src={UI_URL+"clock.png"} width={46} height={46} alt="" style={{position:"absolute",inset:0,display:"block",objectFit:"contain",transformOrigin:"50% 22%",
+                    animation:low?"clockImgShake 0.35s ease-in-out infinite":"none",
                     filter:low?"drop-shadow(0 0 7px rgba(255,60,60,0.9))":"drop-shadow(0 2px 3px rgba(0,0,0,0.5))"}}/>
-                  <div style={{position:"absolute",left:"50%",top:"55%",transform:"translate(-50%,-50%)",
+                  <div style={{position:"absolute",left:"50%",top:"54%",transform:"translate(-50%,-50%)",zIndex:1,
                     fontSize:15,fontWeight:900,fontFamily:"'Arial Black',sans-serif",
                     color:low?"#D32029":"#A83228",textShadow:"0 1px 1px rgba(255,255,255,0.7)",
-                    animation:low?"dangerPulse 0.5s infinite":"none"}}>{turnTimer}</div>
+                    animation:low?"numPulse 0.5s infinite":"none"}}>{turnTimer}</div>
                 </div>);})()}
               </div>
             </div>
@@ -4175,7 +4176,7 @@ export default function UnoGame(){
                 const no=newOrder[card.id];const isNew=no!==undefined;
                 const anim=isNew?(initialDeal
                   ?`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`
-                  :`cardReceive 0.9s cubic-bezier(.34,1.25,.5,1) ${no*0.26}s both`):"none";
+                  :`cardReceive 1s cubic-bezier(.34,1.25,.5,1) ${no*0.42}s both`):"none";
                 return(<div key={card.id} onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,touchAction:"manipulation",
@@ -4300,7 +4301,8 @@ const globalCSS=`
   @keyframes crownFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-1.5px) scale(1.05)}}
   @keyframes elecFlash{0%,100%{opacity:0}6%{opacity:1}13%{opacity:0.15}22%{opacity:0.95}30%{opacity:0}}
   @keyframes shimmerGlow{0%,100%{opacity:0.3;transform:scale(0.85)}50%{opacity:0.8;transform:scale(1.08)}}
-  @keyframes clockShake{0%,100%{transform:translateY(-50%) rotate(-8deg)}25%{transform:translateY(-50%) rotate(8deg)}50%{transform:translateY(-50%) rotate(-6deg)}75%{transform:translateY(-50%) rotate(6deg)}}
+  @keyframes clockImgShake{0%,100%{transform:rotate(-8deg)}25%{transform:rotate(8deg)}50%{transform:rotate(-6deg)}75%{transform:rotate(6deg)}}
+  @keyframes numPulse{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.22)}}
   @keyframes unoIdle{0%,100%{transform:scale(1) rotate(0deg)}50%{transform:scale(1.08) rotate(-3deg)}}
   @keyframes unoUrgent{0%,100%{transform:scale(1.05) rotate(-6deg)}50%{transform:scale(1.2) rotate(6deg)}}
   @keyframes glitterRise{0%{opacity:0;transform:translateY(0) scale(0.4)}20%{opacity:1;transform:translateY(calc(var(--rise) * -0.2)) scale(1)}75%{opacity:0.7}100%{opacity:0;transform:translateY(calc(var(--rise) * -1)) scale(0.65)}}
