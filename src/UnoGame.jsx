@@ -2292,14 +2292,18 @@ export default function UnoGame(){
     const t=setTimeout(()=>{
       const W=window.innerWidth,H=window.innerHeight,ox=W/2,oy=Math.round(H*0.44);
       const mi=po.indexOf(pid);
-      const seats=mi<0?po.filter(id=>id!==pid):[...po.slice(mi+1),...po.slice(0,mi)];
+      const opp=mi<0?po.filter(id=>id!==pid):[...po.slice(mi+1),...po.slice(0,mi)];
+      // Deal to every seat INCLUDING yourself (cards visibly fly down to your hand too).
+      const seats=[...opp,pid];
       if(!seats.length)return;
-      const tgt=id=>{const el=oppRefs.current[id];if(el){const r=el.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2];}return[W/2,H*0.2];};
+      const tgt=id=>{if(id===pid)return[W/2,Math.round(H*0.9)];
+        const el=oppRefs.current[id];if(el){const r=el.getBoundingClientRect();return[r.left+r.width/2,r.top+r.height/2];}return[W/2,H*0.2];};
+      const GAP=0.055; // per-card stagger (s) — snappier sweep
       const cards=[];let k=0;
       for(let r=0;r<rounds;r++)for(const s of seats){const[tx,ty]=tgt(s);
-        cards.push({key:k,dx:Math.round(tx-ox),dy:Math.round(ty-oy),delay:(k*0.085).toFixed(3),rot:(-16+Math.random()*32)|0});k++;}
+        cards.push({key:k,dx:Math.round(tx-ox),dy:Math.round(ty-oy),self:s===pid,delay:(k*GAP).toFixed(3),rot:(-16+Math.random()*32)|0});k++;}
       setDealFx({ox:Math.round(ox),oy,cards});
-      setTimeout(()=>setDealFx(null),cards.length*85+700);
+      setTimeout(()=>setDealFx(null),cards.length*GAP*1000+650);
     },60);
     return()=>clearTimeout(t);
   },[initialDeal,myH.length,g?.winner,po,pid]);
@@ -3911,7 +3915,7 @@ export default function UnoGame(){
           borderRadius:6,background:"linear-gradient(135deg,#141428,#0f3a44)",border:"2px solid rgba(255,255,255,0.85)",
           boxShadow:"0 4px 12px rgba(0,0,0,0.55)",display:"flex",alignItems:"center",justifyContent:"center",
           "--dx":c.dx+"px","--dy":c.dy+"px","--r":c.rot+"deg",
-          animation:`dealSweep 0.5s cubic-bezier(.4,0,.3,1) ${c.delay}s both`}}>
+          animation:`dealSweep 0.42s cubic-bezier(.4,0,.3,1) ${c.delay}s both`}}>
           <div style={{width:16,height:16,borderRadius:"50%",background:"#E53935",transform:"rotate(-20deg)",boxShadow:"0 0 4px rgba(0,0,0,0.4)"}}/></div>)}
       </div>}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
@@ -4201,8 +4205,15 @@ export default function UnoGame(){
               background:`radial-gradient(circle,rgba(20,40,35,0.6),rgba(10,22,20,0.3) 60%,transparent 80%)`,
               boxShadow:`0 0 80px rgba(0,0,0,0.4) inset,0 0 40px ${gcHex}06`,transition:"all 1s",
               animation:"tableGlow 4s ease-in-out infinite"}}>
-              <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <div style={{fontSize:"min(30px, 6vw)",color:`${gcHex}10`,animation:g.direction===1?"sCW 5s linear infinite":"sCCW 5s linear infinite"}}>{g.direction===1?"⟳":"⟲"}</div>
+              {/* Turn-direction emblem: element from the current pile color, and the
+                 mirrored `rotation2` art (+ reversed spin) when a reverse flips direction. */}
+              <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+                width:"min(880px,135vw)",height:"min(880px,135vw)",pointerEvents:"none",
+                display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <img src={UI_URL+"rot/"+({red:"fire",blue:"ice",yellow:"lightning",green:"wind"}[g.currentColor]||"fire")+(g.direction===1?"":"2")+".png"}
+                  alt="" style={{width:"100%",height:"100%",flexShrink:0,maxWidth:"none",objectFit:"contain",opacity:0.38,
+                  filter:`drop-shadow(0 0 18px ${gcHex}77)`,
+                  animation:g.direction===1?"sCW 11s linear infinite":"sCCW 11s linear infinite"}}/>
               </div>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
