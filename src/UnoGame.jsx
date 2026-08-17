@@ -2308,7 +2308,7 @@ export default function UnoGame(){
       if(Date.now()-discardFxRef.current>1500){const dac=g?.currentColor||"yellow";
         const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
         ps(cnt>1?"discardAll":"draw");psE(dac); // ≥2 cards → discard-all sfx, single → regular draw sfx
-        if(cnt>1)psSeq("card",cnt,350,290); // per-card tick synced to the cards sweeping to the pile
+        if(cnt>1)psSeq("card",cnt,1350,280); // per-card tick synced to the cards sweeping to the pile
         if(cnt>1){setActFx("discardAll");trigBurst(dac);
           const real=(g.discardPile||[]).slice(-cnt); // the just-discarded cards are the last N of the pile
           setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});}}}
@@ -2373,14 +2373,16 @@ export default function UnoGame(){
         const el=psl.element||"green";psE(el); // element sound plays once, with the cinematic
         const nC=Math.max(2,Math.min(psl.count||4,8));
         setChibiAttackFx({element:el,victimName:psl.name,count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        // one penalty "thunk" per card, staggered to match the cards flinging into the hand
-        const seq=psSeq("penalty",nC,1750,290);
+        // one penalty "thunk" per card, timed to when each card actually LANDS in the hand
+        // (+4 fling: 0.2 + i*0.28 start + 1.9s travel ≈ 2.1s + i*0.28) so sound matches the slow cards
+        const seq=psSeq("penalty",nC,2150,280);
         const t=setTimeout(()=>trigShake(),SLASH_DELAY);
         return()=>{seq.forEach(clearTimeout);clearTimeout(t);};
       }else{
         const nC=Math.max(1,Math.min(psl.count||2,8));
         setCardFlyFx({element:psl.element||"yellow",count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        const seq=psSeq("penalty",nC,950,190);
+        // +2 cardLand: 1.4s travel + i*0.16 stagger → land at ~1.4s + i*0.16
+        const seq=psSeq("penalty",nC,1450,170);
         return()=>{seq.forEach(clearTimeout);};
       }
     }
@@ -2804,7 +2806,7 @@ export default function UnoGame(){
       // Trigger the fly-to-pile animation locally right away (fires even on a winning discard-all).
       // ≥2 cards discarded → discard-all sfx + big animation; single card → just the draw sfx.
       discardFxRef.current=Date.now();
-      if(dCount+1>1){ps("discardAll");psSeq("card",dCount+1,350,290);setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
+      if(dCount+1>1){ps("discardAll");psSeq("card",dCount+1,1350,280);setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
       else ps("draw");
     } else {
       nd.push(card);
