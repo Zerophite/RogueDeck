@@ -50,6 +50,7 @@ const SFX_FILES=[
   {id:"defeat",file:"defeat.mp3",vol:1.0},
   {id:"join",file:"join.mp3",vol:1.0},
   {id:"click",file:"click.mp3",vol:0.8},
+  {id:"carddist",file:"carddist.mp3",vol:1.0},
 ];
 
 /* ══ BACKGROUND MUSIC (streamed MP3 tracks: menu + two gameplay tracks) ══ */
@@ -255,6 +256,7 @@ class AnimeSFX{
       case "defeat":if(this.pFile("defeat"))break;this._bend(400,140,"sawtooth",n,0.5,0.16);this._bend(300,100,"sine",n+0.2,0.5,0.12);break;
       case "click":if(this.pFile("click"))break;this._fNoise(n,0.02,2400,3,"bandpass",0.3);this._osc(1200,"sine",n,0.02,0.14);break;
       case "clock5":if(this.pFile("clock5"))break;this._fNoise(n,0.02,2600,4,"bandpass",0.5);break;
+      case "carddist":if(this.pFile("carddist"))break;this._fNoise(n,0.09,1700,2.6,"bandpass",0.3);break;
     }
   }catch(e){}}
 }
@@ -2257,6 +2259,13 @@ export default function UnoGame(){
   const newOrder=useMemo(()=>{const m={};let k=0;
     myH.forEach(c=>{if(!prevHandIds.current.has(c.id))m[c.id]=k++;});return m;},[myH]);
   useEffect(()=>{prevHandIds.current=new Set(myH.map(c=>c.id));},[myH]);
+  // Game-start deal: one card-sound per dealt card, paced to the cardDeal stagger (0.14s) so
+  // the audio tracks the cards fanning out. Fires once per game; resets when the hand empties.
+  const dealtRef=useRef(false);
+  useEffect(()=>{
+    if(initialDeal&&myH.length>1&&!dealtRef.current){dealtRef.current=true;const seq=psSeq("carddist",myH.length,320,140);return()=>seq.forEach(clearTimeout);}
+    if(myH.length===0)dealtRef.current=false;
+  },[initialDeal,myH.length,psSeq]);
   const topC=g?.discardPile?g.discardPile[g.discardPile.length-1]:null;
   const myTurn=g?.currentPlayer===pid;const msg=g?.message||lMsg;
   const drawStack=g?.drawStack||0;
@@ -2291,11 +2300,11 @@ export default function UnoGame(){
     else if(m.includes("challenge")&&m.includes("innocent")){setActFx("challenge");ps("challenge");trigBurst("blue");trigImpact("blue");}
     else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);}
     else if(m.includes("called uno")){setUnoCallFx(g?.currentColor||"red");if(Date.now()-unoSndRef.current>1500)ps("uno");trigShake();}
-    else if(m.includes("forgot uno")||m.includes("caught!")){ps("penalty");trigShake();
+    else if(m.includes("forgot uno")||m.includes("caught!")){psSeq("carddist",2,650,170);trigShake(); // +2 penalty cards → carddist per card
       const fm=g.message.match(/^(.*?)\s+played\s/i);const cm=g.message.match(/^(.*?)\s+caught!/i);
       setUnoPenaltyFx((cm&&cm[1])||(fm&&fm[1])||"");}
     else if(/has no counter! draws|timed out! draws|accepts\. draws|draws \d+ cards!/i.test(m)){
-      ps("penalty");
+      // sound handled by the pendingSlash carddist sequence (per card) — no extra blip here
       if(lastStackTypeRef.current!=="wild4")trigShake();
     }
     else if(m.includes("reverse")&&!m.includes("started")){const rc2=g?.currentColor||"blue";setReverseFx(rc2);ps("reverse");psE(rc2);trigBurst(rc2);}
@@ -2307,8 +2316,7 @@ export default function UnoGame(){
     else if(m.includes("discard all")){
       if(Date.now()-discardFxRef.current>1500){const dac=g?.currentColor||"yellow";
         const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
-        ps(cnt>1?"discardAll":"draw");psE(dac); // ≥2 cards → discard-all sfx, single → regular draw sfx
-        if(cnt>1)psSeq("card",cnt,1350,280); // per-card tick synced to the cards sweeping to the pile
+        psE(dac);psSeq("carddist",cnt,cnt>1?1150:0,280); // one card-sound per discarded card (replaces old discard-all sfx)
         if(cnt>1){setActFx("discardAll");trigBurst(dac);
           const real=(g.discardPile||[]).slice(-cnt); // the just-discarded cards are the last N of the pile
           setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});}}}
@@ -2373,16 +2381,16 @@ export default function UnoGame(){
         const el=psl.element||"green";psE(el); // element sound plays once, with the cinematic
         const nC=Math.max(2,Math.min(psl.count||4,8));
         setChibiAttackFx({element:el,victimName:psl.name,count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        // one penalty "thunk" per card, timed to when each card actually LANDS in the hand
-        // (+4 fling: 0.2 + i*0.28 start + 1.9s travel ≈ 2.1s + i*0.28) so sound matches the slow cards
-        const seq=psSeq("penalty",nC,2150,280);
+        // one card-sound per card, timed to the exact LAND moment: penaltyFling reaches the
+        // hand at 92% of 1.9s, and card i starts at 0.2 + i*0.28 → land ≈ 1.95s + i*0.28.
+        const seq=psSeq("carddist",nC,1950,280);
         const t=setTimeout(()=>trigShake(),SLASH_DELAY);
         return()=>{seq.forEach(clearTimeout);clearTimeout(t);};
       }else{
         const nC=Math.max(1,Math.min(psl.count||2,8));
         setCardFlyFx({element:psl.element||"yellow",count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        // +2 cardLand: 1.4s travel + i*0.16 stagger → land at ~1.4s + i*0.16
-        const seq=psSeq("penalty",nC,1450,170);
+        // +2 cardLand reaches the hand at 90% of 1.4s, card i starts at i*0.16 → land ≈ 1.26s + i*0.16.
+        const seq=psSeq("carddist",nC,1260,160);
         return()=>{seq.forEach(clearTimeout);};
       }
     }
@@ -2522,7 +2530,6 @@ export default function UnoGame(){
     if(!hasCounter){
       autoDrawRef.current=true;
       const timer=setTimeout(()=>{
-        ps("penalty");
         applyStackDraw(pid,myH,(rd.players[pid]?.name)+" has no counter!",np(pid,g.direction));
       },1200);
       return()=>clearTimeout(timer);
@@ -2806,8 +2813,8 @@ export default function UnoGame(){
       // Trigger the fly-to-pile animation locally right away (fires even on a winning discard-all).
       // ≥2 cards discarded → discard-all sfx + big animation; single card → just the draw sfx.
       discardFxRef.current=Date.now();
-      if(dCount+1>1){ps("discardAll");psSeq("card",dCount+1,1350,280);setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
-      else ps("draw");
+      if(dCount+1>1){psSeq("carddist",dCount+1,1150,280);setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
+      else psSeq("carddist",1,0,0);
     } else {
       nd.push(card);
     }
@@ -3045,7 +3052,7 @@ export default function UnoGame(){
       if(fg.winner){update(ref(db,"rooms/"+rc+"/game"),{unoGrace:null}).catch(()=>{});return;}
       const hand=fg.hands?.[pid]||[];const cu=fg.calledUno||{};
       if(hand.length===1&&!cu[pid]){
-        ps("penalty");trigShake();
+        trigShake(); // sound handled by the "forgot uno" carddist in the message watcher
         const nh={...fg.hands};let ndp=[...(fg.drawPile||[])];const nd=[...(fg.discardPile||[])];
         if(ndp.length<2){const rs=sh(nd.slice(0,-1));ndp=[...ndp,...rs];}
         nh[pid]=[...(nh[pid]||[]),...ndp.splice(0,2)];
@@ -4194,7 +4201,7 @@ export default function UnoGame(){
                 const spacing=Math.min(isLandscape?42:55,(isLandscape?320:380)/Math.max(n,1));const xOff=(i-(n-1)/2)*spacing;
                 const no=newOrder[card.id];const isNew=no!==undefined;
                 const anim=isNew?(initialDeal
-                  ?`cardDeal 0.5s cubic-bezier(.22,1,.36,1) ${i*0.04}s both`
+                  ?`cardDeal 0.55s cubic-bezier(.22,1,.36,1) ${i*0.14}s both`
                   :`cardReceive 1s cubic-bezier(.34,1.25,.5,1) ${no*0.42}s both`):"none";
                 return(<div key={card.id} onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
