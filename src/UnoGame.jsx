@@ -4208,7 +4208,7 @@ export default function UnoGame(){
               {/* Turn-direction emblem: element from the current pile color, and the
                  mirrored `rotation2` art (+ reversed spin) when a reverse flips direction. */}
               <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-                width:"min(880px,135vw)",height:"min(880px,135vw)",pointerEvents:"none",
+                width:"min(820px,125vw,72vh)",height:"min(820px,125vw,72vh)",pointerEvents:"none",
                 display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <img src={UI_URL+"rot/"+({red:"fire",blue:"ice",yellow:"lightning",green:"wind"}[g.currentColor]||"fire")+(g.direction===1?"":"2")+".png"}
                   alt="" style={{width:"100%",height:"100%",flexShrink:0,maxWidth:"none",objectFit:"contain",opacity:0.38,
