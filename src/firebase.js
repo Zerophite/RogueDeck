@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 
 // ============================================================
@@ -6,14 +6,15 @@ import { getDatabase } from 'firebase/database';
 //  Get it from: Firebase Console → Project Settings → Your Apps
 // ============================================================
 const firebaseConfig = {
-  apiKey: "AIzaSyDjQdT2t7FoYsrnVIuhFNc30sb7kJF195U",
-  authDomain: "Yuno-game-675a4.firebaseapp.com",
-  databaseURL: "https://uno-game-675a4-default-rtdb.firebaseio.com",
-  projectId: "uno-game-675a4",
-  storageBucket: "uno-game-675a4.firebasestorage.app",
-  messagingSenderId: "876070837163",
-  appId: "1:876070837163:web:67c21f9c60c19276b2d0ee"
+  apiKey: "AIzaSyCI7vPpsVfLamQ1NdPiarlWCGEJTNJJQOM",
+  authDomain: "rogue-deck-5e92f.firebaseapp.com",
+  databaseURL: "https://rogue-deck-5e92f-default-rtdb.firebaseio.com",
+  projectId: "rogue-deck-5e92f",
+  storageBucket: "rogue-deck-5e92f.firebasestorage.app",
+  messagingSenderId: "770940948605",
+  appId: "1:770940948605:web:676147d17a2de27c6c6114"
 };
 
-const app = initializeApp(firebaseConfig);
+// Reuse an existing app if one is already initialized (prevents duplicate-app on hot reload).
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const db = getDatabase(app);
