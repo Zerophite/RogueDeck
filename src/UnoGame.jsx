@@ -389,6 +389,7 @@ const RANK_TIERS=[
 ];
 const UNRANKED={name:"Unranked",stars:0,color:"#666",bg:"linear-gradient(135deg,#444,#333)",icon:"—",idx:-1,starProgress:0};
 function getRank(pts,games){
+  pts=+pts||0;games=+games||0;
   if(games<10)return{...UNRANKED,totalStarPts:0};
   let tier=RANK_TIERS[0];for(const t of RANK_TIERS){if(pts>=t.min)tier=t;}
   const inTier=pts-tier.min;const stars=Math.min(5,Math.floor(inTier/tier.starGap)+1);
@@ -396,6 +397,7 @@ function getRank(pts,games){
   const starProgress=stars>=5?1:(pts-curStarBase)/(nextStarAt-curStarBase);
   return{...tier,stars,starProgress};}
 function getNextRank(pts,games){
+  pts=+pts||0;games=+games||0;
   if(games<10)return{type:"games",need:10-games,name:"Bronze"};
   const r=getRank(pts,games);
   if(r.stars<5){const nextStarAt=r.min+(r.stars)*r.starGap;return{type:"star",need:nextStarAt-pts,name:r.name,nextStar:r.stars+1};}
@@ -2050,6 +2052,7 @@ export default function UnoGame(){
   const[globalLB,setGlobalLB]=useState([]);
   const[myStats,setMyStats]=useState(null);
   const[showGlobalLB,setShowGlobalLB]=useState(false);
+  const[placed,setPlaced]=useState(null);const placedRef=useRef(null);
   const[statsView,setStatsView]=useState(null);
   const[storeOpen,setStoreOpen]=useState(false);
   const[coins,setCoins]=useState(getCoins);
@@ -2122,6 +2125,15 @@ export default function UnoGame(){
       }});
     return()=>off(lbRef);
   },[pid]);
+
+  /* Calibration reveal: fire once when a player crosses their 10th game (placement done),
+     showing the rank they've been calibrated into. Ignores the initial load. */
+  useEffect(()=>{
+    if(!myStats)return;const g=myStats.gamesPlayed||0;
+    if(placedRef.current===null){placedRef.current=g;return;}
+    if(placedRef.current<10&&g>=10){setPlaced(getRank(myStats.totalPoints||0,g));}
+    placedRef.current=g;
+  },[myStats?.gamesPlayed,myStats?.totalPoints]);
 
   /* Ensure this account has a leaderboard node carrying cosmetics (so avatar shows
      to others and coins/unlocks survive across devices). Runs once name is known. */
@@ -2478,6 +2490,15 @@ export default function UnoGame(){
          human winners split the point pool the losers give up (still zero-sum). */
       const teamMode=!!g.teamMode;const winTeam=teamMode?rd.players?.[winnerId]?.team:null;
       const onWinSide=(id)=>teamMode?(rd.players?.[id]?.team===winTeam):(id===winnerId);
+      /* CALIBRATION — a per-game performance score (0-100): fewer cards left = better play,
+         winning is best. It nudges points on TOP of the win/loss delta so good play matters
+         even in a loss. The nudge is AMPLIFIED during a player's first 10 (placement) games so
+         those "calibration" games seed skilled players into a higher starting rank, then it
+         shrinks to a small ongoing skill reward. Bounded so it never distorts the ladder. */
+      const perfScore=(id)=>{const h=(g.hands&&g.hands[id])||[];const cards=Array.isArray(h)?h.length:0;
+        return Math.max(0,Math.min(100,100-cards*8+(onWinSide(id)?15:0)));};
+      const perfBonus=(id,gamesBefore)=>{const B=(gamesBefore<10)?45:12;
+        return Math.round((perfScore(id)-50)/50*B);};
       try{await update(ref(db,"rooms/"+rc+"/game"),{scored:true});}catch(e){}
       const baseScore=Math.max(20,calcScore(g.hands||{},winnerId));
       const coinGain=Math.min(60,20+Math.round(baseScore*0.4));
@@ -2515,7 +2536,8 @@ export default function UnoGame(){
           /* Bot winner — a real, non-minted loss (no farm tracking, no winner to credit). */
           loss=Math.min(calcElo(oRank.idx,oRank.idx,baseScore).losePts,before);
         }
-        const newPts=before-loss;deltas[oppId]=-loss;
+        const pb=perfBonus(oppId,op.gamesPlayed||0); // calibration nudge (rewards good play in a loss)
+        const newPts=Math.max(0,before-loss+pb);deltas[oppId]=-loss+pb;
         await update(ref(db,"leaderboard/"+oppId),{name:rd.players[oppId]?.name||"Player",
           gamesPlayed:(op.gamesPlayed||0)+1,totalPoints:newPts,wins:op.wins||0,losses:(op.losses||0)+1,lastPlayed:now,since:op.since||now,
           coins:(op.coins||0)+LOSE_COINS});
@@ -2528,12 +2550,13 @@ export default function UnoGame(){
         const share=Math.max(1,Math.round(totalWin/humanWinners.length));
         for(const wId of humanWinners){
           const wp=wId===winnerId?prev:((await get(ref(db,"leaderboard/"+wId))).val()||{totalPoints:0,gamesPlayed:0,wins:0});
+          const pb=perfBonus(wId,wp.gamesPlayed||0); // calibration nudge (placement-amplified)
           const upd={name:rd.players[wId]?.name||"Player",
-            totalPoints:(wp.totalPoints||0)+share,gamesPlayed:(wp.gamesPlayed||0)+1,wins:(wp.wins||0)+1,lastPlayed:now,since:wp.since||now,
+            totalPoints:Math.max(0,(wp.totalPoints||0)+share+pb),gamesPlayed:(wp.gamesPlayed||0)+1,wins:(wp.wins||0)+1,lastPlayed:now,since:wp.since||now,
             coins:(wp.coins||0)+coinGain};
           if(wId===winnerId)upd.beat=beat;
           await update(ref(db,"leaderboard/"+wId),upd);
-          deltas[wId]=share;
+          deltas[wId]=share+pb;
         }
       }else{totalWin=baseScore;}
       const curScores=(await get(ref(db,"rooms/"+rc+"/scores"))).val()||{};
@@ -3226,11 +3249,14 @@ export default function UnoGame(){
               <div style={{fontSize:7,color:"#778"}}>{myStats.gamesPlayed} games</div>
             </div>
           </div>
+          {myRank.name==="Unranked"&&<div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.06)",overflow:"hidden",marginTop:2}}>
+            <div style={{height:"100%",borderRadius:2,background:"linear-gradient(90deg,#00E5FF88,#00E5FF)",
+              width:`${Math.min(100,((myStats.gamesPlayed||0)/10)*100)}%`,transition:"width 0.5s"}}/></div>}
           {myRank.stars<5&&myRank.name!=="Unranked"&&<div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.06)",overflow:"hidden",marginTop:2}}>
             <div style={{height:"100%",borderRadius:2,background:`linear-gradient(90deg,${myRank.color}88,${myRank.color})`,
               width:`${myRank.starProgress*100}%`,transition:"width 0.5s"}}/></div>}
-          {nextRank&&<div style={{fontSize:7,color:"#667",textAlign:"center",marginTop:3}}>
-            {nextRank.type==="games"?`${nextRank.need} more games to rank`:nextRank.type==="star"?`${nextRank.need} pts to ★${nextRank.nextStar}`:`${nextRank.need} pts to ${nextRank.name}`}</div>}
+          {nextRank&&<div style={{fontSize:7,color:myRank.name==="Unranked"?"#00E5FF":"#667",textAlign:"center",marginTop:3,fontWeight:myRank.name==="Unranked"?800:400,letterSpacing:myRank.name==="Unranked"?1:0}}>
+            {nextRank.type==="games"?`CALIBRATING · ${myStats.gamesPlayed||0}/10 GAMES`:nextRank.type==="star"?`${nextRank.need} pts to ★${nextRank.nextStar}`:`${nextRank.need} pts to ${nextRank.name}`}</div>}
         </div>}
 
         {/* Main card */}
@@ -3337,6 +3363,22 @@ export default function UnoGame(){
       </div>
       {audioModal}
 
+      {/* Calibration-complete reveal */}
+      {placed&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.78)",zIndex:400,
+        display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}}
+        onClick={()=>setPlaced(null)}>
+        <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:"28px 24px",width:"88%",maxWidth:340,textAlign:"center"}}>
+          <div style={{fontSize:10,fontWeight:900,letterSpacing:4,color:"#00E5FF",marginBottom:6}}>CALIBRATION COMPLETE</div>
+          <div style={{fontSize:12,color:"#aab",marginBottom:18}}>Your first 10 games are done — you've been placed!</div>
+          <div style={{width:96,height:96,margin:"0 auto 12px",borderRadius:"50%",background:placed.bg,display:"flex",alignItems:"center",justifyContent:"center",
+            fontSize:46,boxShadow:`0 0 40px ${placed.color}66`,animation:"trophyPop 0.7s cubic-bezier(.34,1.56,.64,1) both"}}>{placed.icon}</div>
+          <div style={{fontSize:24,fontWeight:900,color:placed.color,letterSpacing:2,fontFamily:"'Chakra Petch',sans-serif",textShadow:`0 0 20px ${placed.color}66`}}>{placed.name.toUpperCase()}</div>
+          <div style={{display:"flex",justifyContent:"center",gap:3,margin:"8px 0 18px"}}>
+            {[1,2,3,4,5].map(s=><span key={s} style={{fontSize:18,color:s<=placed.stars?placed.color:"#445"}}>{s<=placed.stars?"⭐":"☆"}</span>)}
+          </div>
+          <button onClick={()=>setPlaced(null)} style={{...bst,background:`linear-gradient(135deg,${placed.color},${placed.color}cc)`,color:"#0a0a0a",fontSize:13,letterSpacing:2}}>CONTINUE</button>
+        </div></div>)}
+
       {/* Global Leaderboard Modal */}
       {showGlobalLB&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:200,
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
@@ -3345,7 +3387,7 @@ export default function UnoGame(){
           overflow:"hidden",display:"flex",flexDirection:"column"}}>
           <div style={{padding:"16px 20px 10px",borderBottom:"1px solid rgba(255,215,0,0.08)"}}>
             <div style={{fontSize:18,fontWeight:900,color:"#FFD700",textAlign:"center",letterSpacing:4}}>🏆 GLOBAL RANKINGS</div>
-            <div style={{fontSize:9,color:"#667",textAlign:"center",marginTop:4,letterSpacing:2}}>Play 10 games to earn your rank</div>
+            <div style={{fontSize:9,color:"#667",textAlign:"center",marginTop:4,letterSpacing:2}}>Your first 10 games calibrate your rank</div>
           </div>
           <div style={{overflow:"auto",padding:"8px 12px",flex:1}}>
             {globalLB.length===0?<div style={{textAlign:"center",color:"#556",padding:30,fontSize:12}}>No players yet. Be the first!</div>
