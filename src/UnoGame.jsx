@@ -4205,16 +4205,22 @@ export default function UnoGame(){
               background:`radial-gradient(circle,rgba(20,40,35,0.6),rgba(10,22,20,0.3) 60%,transparent 80%)`,
               boxShadow:`0 0 80px rgba(0,0,0,0.4) inset,0 0 40px ${gcHex}06`,transition:"all 1s",
               animation:"tableGlow 4s ease-in-out infinite"}}>
-              {/* Turn-direction emblem: element from the current pile color, and the
-                 mirrored `rotation2` art (+ reversed spin) when a reverse flips direction. */}
-              <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-                width:"min(600px,86vw,64vh)",height:"min(600px,86vw,64vh)",pointerEvents:"none",
-                display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <img src={UI_URL+"rot/"+({red:"fire",blue:"ice",yellow:"lightning",green:"wind"}[g.currentColor]||"fire")+(g.direction===1?"":"2")+".png"}
-                  alt="" style={{width:"100%",height:"100%",flexShrink:0,maxWidth:"none",objectFit:"contain",opacity:0.38,
-                  filter:`drop-shadow(0 0 18px ${gcHex}77)`,
-                  animation:g.direction===1?"sCW 11s linear infinite":"sCCW 11s linear infinite"}}/>
-              </div>
+              {/* Turn-direction indicator: a ring of chevrons that CHASE around in the
+                 direction of play (reverses on a reverse card), tinted to the pile colour.
+                 Clearer than the old circular-arrow emblem, which read like a refresh icon. */}
+              {(()=>{const col=CH[g.currentColor]||"#FFD700";const cw=g.direction===1;const nC=8;const R=46;
+                return(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
+                  width:"min(300px,58vw,46vh)",height:"min(300px,58vw,46vh)",pointerEvents:"none",opacity:0.85}}>
+                  <svg viewBox="0 0 120 120" width="100%" height="100%" style={{filter:`drop-shadow(0 0 5px ${col}cc)`}}>
+                    {Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*360;const a=ang*Math.PI/180;
+                      const x=60+Math.cos(a)*R,y=60+Math.sin(a)*R;const rot=ang+(cw?90:-90);
+                      const delay=(((cw?i:(nC-1-i))/nC)*1.6).toFixed(2);
+                      return(<g key={i} transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${rot})`}
+                        style={{animation:`chevFlow 1.6s linear ${delay}s infinite`}}>
+                        <path d="M -4.5 -6 L 3.5 0 L -4.5 6" fill="none" stroke={col} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </g>);})}
+                  </svg>
+                </div>);})()}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
               <div onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;handleDeckTap();}}
@@ -4370,6 +4376,7 @@ const globalCSS=`
   @keyframes deckIdle{0%,100%{transform:scale(1) rotate(0deg);box-shadow:0 3px 15px rgba(0,0,0,0.5)}
     50%{transform:scale(1.02) rotate(0.5deg);box-shadow:0 6px 25px rgba(0,0,0,0.6)}}
   @keyframes tableGlow{0%,100%{box-shadow:0 0 40px rgba(255,215,0,0.02) inset}50%{box-shadow:0 0 60px rgba(255,215,0,0.05) inset}}
+  @keyframes chevFlow{0%,100%{opacity:0.1}45%{opacity:1}}
   @keyframes sCW{from{transform:rotate(0)}to{transform:rotate(360deg)}}
   @keyframes sCCW{from{transform:rotate(360deg)}to{transform:rotate(0)}}
   @keyframes af{0%{opacity:1}50%{opacity:1}70%{opacity:0.7}85%{opacity:0.3;transform:scale(1.02)}100%{opacity:0;transform:scale(1.05)}}
