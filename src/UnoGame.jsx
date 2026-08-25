@@ -1988,6 +1988,19 @@ function calcScore(hands,winnerId){let total=0;
     for(const c of hand){if(c.type==="wild")total+=50;else if(c.value==="shadow")total+=40;else if(c.value==="snatch")total+=35;else if(c.value==="discardAll")total+=30;else if(c.type==="action")total+=20;else total+=parseInt(c.value)||0;}}
   return total;}
 
+/* Original green loop spinner (two chasing arrows) — used on the connecting screen. */
+const LoopSpinner=({size=78})=>(
+  <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true"
+    style={{animation:"sCW 1.05s linear infinite",filter:"drop-shadow(0 0 9px rgba(62,230,140,0.5))"}}>
+    <defs><linearGradient id="loopGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stopColor="#6BF2B0"/><stop offset="100%" stopColor="#15B082"/></linearGradient></defs>
+    <path d="M 80 30 A 37 37 0 0 1 72 80" fill="none" stroke="url(#loopGrad)" strokeWidth="9" strokeLinecap="round"/>
+    <path d="M 72 80 l 14 -1 l -8 13 z" fill="url(#loopGrad)"/>
+    <path d="M 20 70 A 37 37 0 0 1 28 20" fill="none" stroke="url(#loopGrad)" strokeWidth="9" strokeLinecap="round"/>
+    <path d="M 28 20 l -14 1 l 8 -13 z" fill="url(#loopGrad)"/>
+  </svg>
+);
+
 /* ═══ CONFETTI — victory celebration ═══ */
 const ConfettiFX=()=>{
   const ref=useRef(null);
@@ -2113,7 +2126,13 @@ export default function UnoGame(){
   useEffect(()=>{
     const lbRef=ref(db,"leaderboard");
     const u=onValue(lbRef,s=>{const d=s.val();if(!d){setGlobalLB([]);setMyStats(null);return;}
-      const arr=Object.entries(d).map(([id,v])=>({id,...v})).sort((a,b)=>b.totalPoints-a.totalPoints);
+      // Robust ordering: coerce to numbers (migrated/partial rows can lack totalPoints, and
+      // undefined-undefined = NaN scrambles the sort). Ranked players (10+ games) rank above
+      // players still in placement; then by points.
+      const arr=Object.entries(d).map(([id,v])=>({id,...v})).sort((a,b)=>{
+        const ra=(+a.gamesPlayed||0)>=10,rb=(+b.gamesPlayed||0)>=10;
+        if(ra!==rb)return ra?-1:1;
+        return (+b.totalPoints||0)-(+a.totalPoints||0);});
       setGlobalLB(arr);
       const me=d[pid];if(me){setMyStats(me);
         // Merge server-side cosmetics (authoritative across devices) into local state.
@@ -3869,7 +3888,7 @@ export default function UnoGame(){
     </div>);
 
   /* ═══ GAME ═══ */
-  if(!g)return<div style={{height:"100%",background:"#060e0c",display:"flex",alignItems:"center",justifyContent:"center",color:"#889"}}><style>{globalCSS}</style>Loading...</div>;
+  if(!g)return<div style={{height:"100%",background:"#060e0c",display:"flex",flexDirection:"column",gap:16,alignItems:"center",justifyContent:"center",color:"#889"}}><style>{globalCSS}</style><LoopSpinner/><div style={{fontSize:12,letterSpacing:4,fontWeight:800,color:"#4CE0A0"}}>CONNECTING…</div></div>;
   const myIdx=po.indexOf(pid);
   // Self-relative seating: everyone sees the table going around from their own seat
   // (next player after me first). Teammates end up across from each other consistently,
@@ -4247,21 +4266,20 @@ export default function UnoGame(){
               background:`radial-gradient(circle,rgba(20,40,35,0.6),rgba(10,22,20,0.3) 60%,transparent 80%)`,
               boxShadow:`0 0 80px rgba(0,0,0,0.4) inset,0 0 40px ${gcHex}06`,transition:"all 1s",
               animation:"tableGlow 4s ease-in-out infinite"}}>
-              {/* Turn-direction indicator: a ring of chevrons that CHASE around in the
-                 direction of play (reverses on a reverse card), tinted to the pile colour.
-                 Clearer than the old circular-arrow emblem, which read like a refresh icon. */}
-              {(()=>{const col=CH[g.currentColor]||"#FFD700";const cw=g.direction===1;const nC=8;const R=46;
+              {/* Turn-direction indicator: a colour-matched LOOP that spins in the direction
+                 of play and flips on a reverse card, tinted to the current pile colour. */}
+              {(()=>{const col=CH[g.currentColor]||"#FFD700";const cw=g.direction===1;
                 return(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-                  width:"min(300px,58vw,46vh)",height:"min(300px,58vw,46vh)",pointerEvents:"none",opacity:0.85}}>
-                  <svg viewBox="0 0 120 120" width="100%" height="100%" style={{filter:`drop-shadow(0 0 5px ${col}cc)`}}>
-                    {Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*360;const a=ang*Math.PI/180;
-                      const x=60+Math.cos(a)*R,y=60+Math.sin(a)*R;const rot=ang+(cw?90:-90);
-                      const delay=(((cw?i:(nC-1-i))/nC)*1.6).toFixed(2);
-                      return(<g key={i} transform={`translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${rot})`}
-                        style={{animation:`chevFlow 1.6s linear ${delay}s infinite`}}>
-                        <path d="M -4.5 -6 L 3.5 0 L -4.5 6" fill="none" stroke={col} strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"/>
-                      </g>);})}
-                  </svg>
+                  width:"min(280px,55vw,44vh)",height:"min(280px,55vw,44vh)",pointerEvents:"none",opacity:0.72}}>
+                  <div style={{width:"100%",height:"100%",animation:`${cw?"sCW":"sCCW"} 3.4s linear infinite`}}>
+                    <svg viewBox="0 0 100 100" width="100%" height="100%"
+                      style={{transform:cw?"none":"scaleX(-1)",filter:`drop-shadow(0 0 7px ${col}cc)`}}>
+                      <path d="M 80 30 A 37 37 0 0 1 72 80" fill="none" stroke={col} strokeWidth="8.5" strokeLinecap="round"/>
+                      <path d="M 72 80 l 14 -1 l -8 13 z" fill={col}/>
+                      <path d="M 20 70 A 37 37 0 0 1 28 20" fill="none" stroke={col} strokeWidth="8.5" strokeLinecap="round"/>
+                      <path d="M 28 20 l -14 1 l 8 -13 z" fill={col}/>
+                    </svg>
+                  </div>
                 </div>);})()}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
