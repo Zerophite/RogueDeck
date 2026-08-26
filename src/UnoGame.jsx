@@ -2498,7 +2498,7 @@ export default function UnoGame(){
        • Team mode → the leaver's team loses, the other team is declared winner.
        • Free-for-all → the leaver loses points (split to the remaining humans), is removed,
          and the game continues (or the last player standing wins). */
-  const HB_STALE=10000,RECONNECT_MS=30000;
+  const HB_STALE=10000,RECONNECT_MS=60000; // 1-minute reconnect window (game paused meanwhile)
   const gRef=useRef(g);gRef.current=g;
   const plsRef=useRef(pls);plsRef.current=pls;
   const rdRef=useRef(rd);rdRef.current=rd;
@@ -4544,8 +4544,8 @@ export default function UnoGame(){
         {/* Center column */}
         <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,minHeight:0}}>
 
-          {/* Top opponents */}
-          <div style={{display:"flex",justifyContent:"center",gap:5,padding:"2px 5px",flexWrap:"wrap",flexShrink:0}}>
+          {/* Top opponents — extra top padding so their crown clears the top bar / room code */}
+          <div style={{display:"flex",justifyContent:"center",gap:5,padding:"26px 5px 2px",flexWrap:"wrap",flexShrink:0}}>
             {topOpps.map(id=><OppCard key={id} id={id} pos="top"/>)}
           </div>
 
@@ -4634,7 +4634,7 @@ export default function UnoGame(){
                 animation:"turnArrowBounce 0.8s ease-in-out infinite"}}>▼</span>
             </div>}
             <div style={{flex:1,position:"relative"}}>
-            <div style={{position:"absolute",left:`max(6px,calc(50% - ${clusterHalf}px - 48px))`,bottom:8,zIndex:12,
+            <div style={{position:"absolute",left:`max(6px,calc(50% - ${clusterHalf}px - 48px))`,bottom:8,zIndex:60,
               display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"left 0.3s ease"}}>
               {/* your own avatar (mirrors how opponents see you) with your global rank on top */}
               <div style={{position:"relative",filter:`drop-shadow(0 2px 8px ${gcHex}55)`}}>
