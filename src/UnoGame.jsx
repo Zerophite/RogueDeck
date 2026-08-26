@@ -373,13 +373,20 @@ function useLandscape(){
   const[l,setL]=useState(()=>typeof window!=="undefined"&&window.innerWidth>window.innerHeight);
   useEffect(()=>{
     let t,raf,cur=window.innerWidth>window.innerHeight;
-    // React ONLY to genuine orientation flips. Mobile browsers fire a storm of `resize`
-    // events as the URL/tool bar shows & hides (dvh changes); reacting to each caused the
-    // layout to thrash up/down in portrait. rAF-debounce + a same-value guard stops that.
+    const el=document.documentElement;
+    el.style.setProperty("--app-h",window.innerHeight+"px");
+    // Drive the app height from --app-h, which only GROWS within an orientation (never shrinks
+    // when the URL bar reappears) and RESETS on a real rotation. This stops the portrait
+    // up/down jitter caused by 100dvh oscillating as the mobile tool bar shows/hides. Orientation
+    // state (l) still only flips on a genuine rotation.
     const f=()=>{cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>{
-      const nl=window.innerWidth>window.innerHeight;if(nl===cur)return;cur=nl;setL(nl);
-      const el=document.documentElement;el.classList.add("uno-rotating");
-      clearTimeout(t);t=setTimeout(()=>el.classList.remove("uno-rotating"),450);
+      const nl=window.innerWidth>window.innerHeight,h=window.innerHeight,flip=nl!==cur;
+      const curH=parseInt(el.style.getPropertyValue("--app-h"))||0;
+      // grow when the URL bar hides; reset on rotation; honor big shrinks (keyboard/split-screen);
+      // but IGNORE small shrinks (<150px = URL bar reappearing) — that's what stops the jitter.
+      if(flip||h>curH||(curH-h)>150)el.style.setProperty("--app-h",h+"px");
+      if(flip){cur=nl;setL(nl);el.classList.add("uno-rotating");
+        clearTimeout(t);t=setTimeout(()=>el.classList.remove("uno-rotating"),450);}
     });};
     window.addEventListener("resize",f);window.addEventListener("orientationchange",f);
     return()=>{window.removeEventListener("resize",f);window.removeEventListener("orientationchange",f);clearTimeout(t);cancelAnimationFrame(raf);};
@@ -2499,9 +2506,11 @@ export default function UnoGame(){
   const gameLive=scr==="game"&&!!g&&!g.winner;
   useEffect(()=>{ // heartbeat
     if(!rc||!gameLive)return;
-    const beat=()=>set(ref(db,"rooms/"+rc+"/game/seen/"+pid),Date.now()).catch(()=>{});
+    const beat=()=>{set(ref(db,"rooms/"+rc+"/game/seen/"+pid),Date.now()).catch(()=>{});
+      try{localStorage.setItem("uno_lastroom",rc+"|"+Date.now());}catch(e){}}; // for one-tap rejoin
     beat();const iv=setInterval(beat,3000);return()=>clearInterval(iv);
   },[rc,gameLive,pid]);
+  useEffect(()=>{if(g?.winner){try{localStorage.removeItem("uno_lastroom");}catch(e){}}},[g?.winner]);
   const resolveForfeit=useCallback(async(leaverId)=>{
     if(forfeitBusy.current)return;forfeitBusy.current=true;
     try{
@@ -2959,9 +2968,17 @@ export default function UnoGame(){
     const code=(typeof codeArg==="string"?codeArg:jc).trim().toUpperCase();if(code.length!==4){setErr("4-letter code");return;}ua();
     const cl=await claimName(pName,pid);if(!cl.ok){ps("error");setNameErr(cl.msg);startRename();setShowAccount(true);return;}
     try{const snap=await get(ref(db,"rooms/"+code));if(!snap.exists()){setErr("Not found");return;}
-      const data=snap.val();if(data.status!=="waiting"){setErr("Already started");return;}
-      const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=MAX_PLAYERS){setErr("Full");return;}
-      if(!data.players?.[pid])await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt,avatar:myAvatar,photo:myPhoto||null,flags:myFlags});
+      const data=snap.val();const wasMember=!!data.players?.[pid];
+      const live=data.status!=="waiting"; // game already running
+      // RECONNECT: a player who's still listed in a running game can drop straight back in.
+      if(live){
+        if(!wasMember){setErr("Already started");return;}
+        // refresh my heartbeat so the resolver clears the disconnect pause immediately
+        try{await set(ref(db,"rooms/"+code+"/game/seen/"+pid),Date.now());}catch(e2){}
+        setRc(code);setErr("");setScr("game");ps("join");return;
+      }
+      const cnt=data.players?Object.keys(data.players).length:0;if(cnt>=MAX_PLAYERS&&!wasMember){setErr("Full");return;}
+      if(!wasMember)await update(ref(db,"rooms/"+code+"/players/"+pid),{name:pName.trim(),order:cnt,avatar:myAvatar,photo:myPhoto||null,flags:myFlags});
       setRc(code);setErr("");setScr("lobby");ps("join");
     }catch(e){setErr("Failed.");console.error(e);}};
 
@@ -3391,29 +3408,30 @@ export default function UnoGame(){
       </div>
 
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",
-        width:"100%",maxWidth:400,padding:"0 16px",flex:1,justifyContent:"center",gap:0,overflow:"auto"}}>
+        width:"100%",maxWidth:400,padding:isLandscape?"12px 16px 20px":"0 16px",flex:1,
+        justifyContent:isLandscape?"flex-start":"center",gap:0,overflow:"auto"}}>
 
         {/* Logo (tap 5x to reveal admin login) */}
-        <div style={{position:"relative",marginBottom:10,display:"flex",flexDirection:"column",alignItems:"center",gap:10,cursor:"pointer"}} onClick={logoTap}>
+        <div style={{position:"relative",marginBottom:isLandscape?4:10,display:"flex",flexDirection:"column",alignItems:"center",gap:isLandscape?4:10,cursor:"pointer"}} onClick={logoTap}>
           <div style={{animation:"menuLogo 4s ease-in-out infinite"}}>
-            <div style={{width:62,height:62,transform:"rotate(45deg)",borderRadius:16,
+            <div style={{width:isLandscape?42:62,height:isLandscape?42:62,transform:"rotate(45deg)",borderRadius:isLandscape?12:16,
               background:"linear-gradient(145deg,#2b3242,#12151d)",border:"2px solid #FFD700",
               boxShadow:"0 0 34px rgba(255,215,0,0.35),0 8px 30px rgba(0,0,0,0.5),inset 0 0 18px rgba(255,215,0,0.10)",
               display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{transform:"rotate(-45deg)",fontFamily:"'Chakra Petch',sans-serif",fontWeight:700,fontSize:25,color:"#FFD700",
+              <span style={{transform:"rotate(-45deg)",fontFamily:"'Chakra Petch',sans-serif",fontWeight:700,fontSize:isLandscape?17:25,color:"#FFD700",
                 textShadow:"0 0 14px rgba(255,215,0,0.6)"}}>RD</span>
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",lineHeight:0.92}}>
-            <span style={{fontFamily:"'Chakra Petch',sans-serif",fontWeight:700,fontSize:40,letterSpacing:3,color:"#F4F7FB",
+            <span style={{fontFamily:"'Chakra Petch',sans-serif",fontWeight:700,fontSize:isLandscape?26:40,letterSpacing:3,color:"#F4F7FB",
               textShadow:"0 2px 12px rgba(0,0,0,0.7),0 0 24px rgba(255,215,0,0.22)"}}>ROGUE</span>
-            <span style={{fontFamily:"'Chakra Petch',sans-serif",fontWeight:600,fontSize:21,letterSpacing:11,paddingLeft:11,color:"#FFD700",marginTop:3,
+            <span style={{fontFamily:"'Chakra Petch',sans-serif",fontWeight:600,fontSize:isLandscape?14:21,letterSpacing:11,paddingLeft:11,color:"#FFD700",marginTop:3,
               textShadow:"0 0 16px rgba(255,215,0,0.5)"}}>DECK</span>
           </div>
         </div>
 
         {/* Rank badge */}
-        {myStats&&<div style={{marginBottom:8,padding:"8px 14px",borderRadius:16,background:"rgba(0,0,0,0.5)",
+        {myStats&&<div style={{marginBottom:isLandscape?5:8,padding:isLandscape?"6px 14px":"8px 14px",borderRadius:16,background:"rgba(0,0,0,0.5)",
           border:`1px solid ${myRank.color}33`,animation:"fadeIn 0.5s",backdropFilter:"blur(8px)",
           width:"100%",maxWidth:320}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
@@ -3450,16 +3468,23 @@ export default function UnoGame(){
         </div>}
 
         {/* Main card */}
-        <div style={{...GLASS,padding:"20px 20px 16px",width:"100%",marginBottom:8}}>
-          <div onClick={()=>{ps("click");setStoreOpen(true);}} title="Customize (Store)" style={{width:64,height:64,borderRadius:"50%",margin:"0 auto 12px",cursor:"pointer",
+        <div style={{...GLASS,padding:isLandscape?"12px 18px 12px":"20px 20px 16px",width:"100%",marginBottom:8}}>
+          <div onClick={()=>{ps("click");setStoreOpen(true);}} title="Customize (Store)" style={{width:isLandscape?46:64,height:isLandscape?46:64,borderRadius:"50%",margin:isLandscape?"0 auto 7px":"0 auto 12px",cursor:"pointer",
             background:"radial-gradient(circle at 50% 32%,#2a3550,#141d2e)",border:"2px solid rgba(255,215,0,0.25)",
             display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
-            <Avatar id={myAvatar} state="idle" size={56} photo={myPhoto}/>
+            <Avatar id={myAvatar} state="idle" size={isLandscape?40:56} photo={myPhoto}/>
             {rankOf[pid]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-6,zIndex:6,pointerEvents:"none"}}>
               <RankMark rank={rankOf[pid]} size={rankOf[pid]<=5?18:15}/></div>}
           </div>
+          {/* Reconnect: one-tap rejoin if you dropped out of a game in the last ~2.5 min */}
+          {(()=>{let s=null;try{s=localStorage.getItem("uno_lastroom");}catch(e){}
+            if(!s)return null;const[c,t]=s.split("|");if(!c||Date.now()-(+t||0)>150000)return null;
+            return(<button onClick={()=>{if(pName.trim())joinRoom(c);}} style={{width:"100%",padding:"11px 0",borderRadius:14,border:"none",marginBottom:12,
+              background:"linear-gradient(135deg,#43A047,#2E7D32)",color:"#fff",fontSize:14,fontWeight:900,letterSpacing:2,cursor:"pointer",
+              boxShadow:"0 6px 22px rgba(46,125,50,0.5)"}}>↩ REJOIN GAME · {c}</button>);})()}
+
           {/* Name is display-only now — rename lives in Settings */}
-          <div onClick={()=>{ps("click");startRename();setShowAccount(true);}} title="Tap to rename" style={{textAlign:"center",marginBottom:14,cursor:"pointer"}}>
+          <div onClick={()=>{ps("click");startRename();setShowAccount(true);}} title="Tap to rename" style={{textAlign:"center",marginBottom:isLandscape?7:14,cursor:"pointer"}}>
             <div style={{fontSize:9,color:"#8aa2b8",letterSpacing:3,fontWeight:800}}>PLAYING AS</div>
             <div style={{fontSize:21,fontWeight:900,color:"#fff",letterSpacing:1,fontFamily:"'Chakra Petch',sans-serif",
               textShadow:"0 2px 14px rgba(0,0,0,0.55)",display:"inline-flex",alignItems:"center",gap:7,marginTop:1}}>
@@ -3474,13 +3499,13 @@ export default function UnoGame(){
             {label:"PLAY WITH BOTS",icon:"🤖",fn:quickPlayFFA,grad:"linear-gradient(135deg,#12D8B0,#04A6C2,#0077C2)",glow:"0,190,190"},
           ].map((b,i)=>(
             <button key={b.label} onClick={()=>{if(!pName.trim()){ps("error");setShowSet(true);return;}b.fn();}}
-              style={{width:"100%",padding:"12px 14px",borderRadius:16,border:"none",background:b.grad,color:"#fff",cursor:"pointer",
-                marginBottom:10,position:"relative",overflow:"hidden",display:"flex",alignItems:"center",gap:12,textAlign:"left",
+              style={{width:"100%",padding:isLandscape?"8px 14px":"12px 14px",borderRadius:16,border:"none",background:b.grad,color:"#fff",cursor:"pointer",
+                marginBottom:isLandscape?7:10,position:"relative",overflow:"hidden",display:"flex",alignItems:"center",gap:12,textAlign:"left",
                 boxShadow:`0 7px 26px rgba(${b.glow},0.45),0 0 50px rgba(${b.glow},0.12)`,transition:"transform 0.2s"}}
               onPointerEnter={e=>e.currentTarget.style.transform="translateY(-2px) scale(1.015)"}
               onPointerLeave={e=>e.currentTarget.style.transform="translateY(0) scale(1)"}>
-              <span style={{position:"relative",zIndex:2,flexShrink:0,width:42,height:42,borderRadius:12,display:"flex",alignItems:"center",justifyContent:"center",
-                fontSize:23,background:"rgba(255,255,255,0.17)",boxShadow:"inset 0 1px 2px rgba(255,255,255,0.3)",border:"1px solid rgba(255,255,255,0.22)"}}>{b.icon}</span>
+              <span style={{position:"relative",zIndex:2,flexShrink:0,width:isLandscape?34:42,height:isLandscape?34:42,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",
+                fontSize:isLandscape?19:23,background:"rgba(255,255,255,0.17)",boxShadow:"inset 0 1px 2px rgba(255,255,255,0.3)",border:"1px solid rgba(255,255,255,0.22)"}}>{b.icon}</span>
               <span style={{position:"relative",zIndex:2,flex:1,minWidth:0,fontSize:15,fontWeight:900,letterSpacing:3,textShadow:"0 1px 6px rgba(0,0,0,0.35)"}}>{b.label}</span>
               <span style={{position:"absolute",top:0,bottom:0,left:0,width:"55%",pointerEvents:"none",
                 background:"linear-gradient(100deg,transparent,rgba(255,255,255,0.35),transparent)",
@@ -4172,7 +4197,8 @@ export default function UnoGame(){
           {g.teamMode&&pd?.team&&TEAMS[pd.team]&&<div style={{position:"absolute",inset:-3,borderRadius:"50%",border:`2px solid ${TEAMS[pd.team].color}`,boxShadow:`0 0 7px ${TEAMS[pd.team].glow}`,pointerEvents:"none"}}/>}
           {rankOf[id]&&<div style={{position:"absolute",bottom:"100%",left:"50%",transform:"translateX(-50%)",marginBottom:-3,zIndex:25,pointerEvents:"none"}}>
             <RankMark rank={rankOf[id]} size={22}/></div>}
-          {levelOf[id]&&<div style={{position:"absolute",bottom:-5,right:-8,zIndex:26,pointerEvents:"none"}}><LevelBadge level={levelOf[id]} size={15}/></div>}</div>
+          </div>
+        {levelOf[id]&&<LevelBadge level={levelOf[id]} size={14}/>}
         <span style={{fontSize:9,color:turn?"#fff":"#999",fontWeight:700,whiteSpace:"nowrap",
           textShadow:turn?`0 0 8px ${gcHex}66`:"none"}}>{pd?.name}</span>
         <span style={{fontSize:9,background:"rgba(255,255,255,0.1)",borderRadius:5,padding:"1px 5px",
@@ -4834,8 +4860,7 @@ const globalCSS=`
   @keyframes stinkRise{0%{opacity:0;transform:translateY(8px)}35%{opacity:0.9}100%{opacity:0;transform:translateY(-16px)}}
   @keyframes smokePuff{0%{opacity:0.7;transform:scale(0.5)}100%{opacity:0;transform:scale(1.5)}}
   *{-webkit-tap-highlight-color:transparent;user-select:none;box-sizing:border-box;margin:0;padding:0;}
-  html,body,#root{height:100%;height:100dvh;overflow:hidden;}
-  @supports(height:100dvh){html,body,#root{height:100dvh;}}
+  html,body,#root{height:100%;height:100dvh;height:var(--app-h,100dvh);overflow:hidden;}
   @media(orientation:landscape) and (max-height:500px){
     .uno-hand-area{height:min(95px,25vh)!important;z-index:8!important;}
     .uno-table-circle{width:min(130px,22vw)!important;height:min(130px,22vw)!important;}
