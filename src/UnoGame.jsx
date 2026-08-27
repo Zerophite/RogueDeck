@@ -890,7 +890,9 @@ const StoreModal=({onClose,coins,owned,myAvatar,myThrow,onBuy,onEquipAvatar,onEq
   const onFile=e=>{const f=e.target.files?.[0];if(f)fileToAvatarDataUrl(f,url=>{if(url){onPhoto(url);flash("Photo set — you're using it now!");}else flash("Couldn't read that image.");});if(e.target)e.target.value="";};
   const landscape=useLandscape();
   const cols=landscape?5:3;
-  const items=catId==="avatar"?AVATARS:THROWABLES;
+  // Admin-hidden items are COMPLETELY hidden from players (kept visible if already owned, so they
+  // stay usable). Admins always see everything (with the hide/unhide toggle).
+  const items=(catId==="avatar"?AVATARS:THROWABLES).filter(it=>isAdm||!hidden[it.id]||owned.includes(it.id));
   const tabS=on=>({flex:1,padding:"9px 4px",borderRadius:10,border:"none",cursor:"pointer",fontSize:11,fontWeight:800,letterSpacing:1,
     background:on?"linear-gradient(135deg,#FFD700,#DAA520)":"rgba(255,255,255,0.05)",color:on?"#1a1200":"#99a",transition:"all 0.2s"});
   const flash=m=>{setMsg(m);setTimeout(()=>setMsg(""),1600);};
@@ -3408,11 +3410,11 @@ export default function UnoGame(){
       </div>
 
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",
-        width:"100%",maxWidth:400,padding:isLandscape?"12px 16px 20px":"0 16px",flex:1,
+        width:"100%",maxWidth:isLandscape?780:400,padding:isLandscape?"10px 16px 16px":"0 16px",flex:1,
         justifyContent:isLandscape?"flex-start":"center",gap:0,overflow:"auto"}}>
 
         {/* Logo (tap 5x to reveal admin login) */}
-        <div style={{position:"relative",marginBottom:isLandscape?4:10,display:"flex",flexDirection:"column",alignItems:"center",gap:isLandscape?4:10,cursor:"pointer"}} onClick={logoTap}>
+        <div style={{position:"relative",marginBottom:isLandscape?4:10,display:isLandscape?"none":"flex",flexDirection:"column",alignItems:"center",gap:isLandscape?4:10,cursor:"pointer"}} onClick={logoTap}>
           <div style={{animation:"menuLogo 4s ease-in-out infinite"}}>
             <div style={{width:isLandscape?42:62,height:isLandscape?42:62,transform:"rotate(45deg)",borderRadius:isLandscape?12:16,
               background:"linear-gradient(145deg,#2b3242,#12151d)",border:"2px solid #FFD700",
@@ -3430,10 +3432,12 @@ export default function UnoGame(){
           </div>
         </div>
 
+        {/* Rank + main card side-by-side on landscape so the whole menu fits without scrolling */}
+        <div style={isLandscape?{display:"flex",gap:12,width:"100%",alignItems:"flex-start"}:{display:"contents"}}>
         {/* Rank badge */}
-        {myStats&&<div style={{marginBottom:isLandscape?5:8,padding:isLandscape?"6px 14px":"8px 14px",borderRadius:16,background:"rgba(0,0,0,0.5)",
+        {myStats&&<div style={{marginBottom:isLandscape?0:8,padding:"8px 14px",borderRadius:16,background:"rgba(0,0,0,0.5)",
           border:`1px solid ${myRank.color}33`,animation:"fadeIn 0.5s",backdropFilter:"blur(8px)",
-          width:"100%",maxWidth:320}}>
+          flex:isLandscape?"0 0 42%":undefined,width:isLandscape?"auto":"100%",maxWidth:isLandscape?"none":320}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
             <LevelBadge level={myLevel.level} size={28}/>
             <span style={{fontSize:18}}>{myRank.icon}</span>
@@ -3468,7 +3472,7 @@ export default function UnoGame(){
         </div>}
 
         {/* Main card */}
-        <div style={{...GLASS,padding:isLandscape?"12px 18px 12px":"20px 20px 16px",width:"100%",marginBottom:8}}>
+        <div style={{...GLASS,padding:isLandscape?"12px 18px 12px":"20px 20px 16px",flex:isLandscape?1:undefined,minWidth:0,width:isLandscape?"auto":"100%",marginBottom:isLandscape?0:8}}>
           <div onClick={()=>{ps("click");setStoreOpen(true);}} title="Customize (Store)" style={{width:isLandscape?46:64,height:isLandscape?46:64,borderRadius:"50%",margin:isLandscape?"0 auto 7px":"0 auto 12px",cursor:"pointer",
             background:"radial-gradient(circle at 50% 32%,#2a3550,#141d2e)",border:"2px solid rgba(255,215,0,0.25)",
             display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
@@ -3527,6 +3531,7 @@ export default function UnoGame(){
           {err&&<div style={{color:"#FF5252",fontSize:11,textAlign:"center",padding:8,background:"rgba(255,82,82,0.08)",
             borderRadius:10,marginTop:8,animation:"fadeIn 0.3s",border:"1px solid rgba(255,82,82,0.12)"}}>{err}</div>}
         </div>
+        </div>{/* end rank+main row */}
 
         {/* Bottom buttons */}
         <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"center"}}>
