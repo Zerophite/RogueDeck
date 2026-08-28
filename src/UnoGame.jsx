@@ -2857,12 +2857,16 @@ export default function UnoGame(){
     let ndp=[...(g.drawPile||[])];const nd=[...g.discardPile];
     if(ndp.length<cnt){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
     const drawn=ndp.splice(0,Math.min(cnt,ndp.length));
-    const nh={...g.hands};nh[victimId]=[...victimHand,...drawn];
-    const drawWrite={hands:nh,drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,pendingChallenge:null,
-      currentPlayer:nextPlayer,message:reasonBase+" Draws "+cnt+"!",turnTimestamp:Date.now()};
-    const delay=type==="wild4"?SLASH_DELAY:DRAW2_DELAY;
+    // Cadence at which each flying card reaches the hand (matches the CardFlyFX/penaltyFling
+    // land times AND the per-card sounds). Deliver one card per landing → they appear one at a time.
+    const landBase=type==="wild4"?1950:1260,gap=280;
     await wgs({pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:type||"draw2",count:cnt,ts:Date.now()}});
-    setTimeout(()=>{wgs({...drawWrite,pendingSlash:null});},delay);
+    let hand=[...victimHand];
+    drawn.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},landBase+i*gap);});
+    // After the last card lands, finalize: refresh the deck, clear the stack, pass the turn.
+    setTimeout(()=>{wgs({drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,pendingChallenge:null,pendingSlash:null,
+      currentPlayer:nextPlayer,message:reasonBase+" Draws "+cnt+"!",turnTimestamp:Date.now()});
+    },landBase+Math.max(0,drawn.length-1)*gap+450);
   },[g,wgs,rd]);
 
   /* Which screen direction do penalty cards fly toward, from THIS client's view?
@@ -3417,16 +3421,17 @@ export default function UnoGame(){
       else{victimId=pid;count=6;nextPlayer=np(pid,dir);
         m=(rd.players[pid]?.name)+" challenged & lost — INNOCENT! Draws 6.";}
     }else{victimId=pid;count=4;nextPlayer=np(pid,dir);m=(rd.players[pid]?.name)+" accepts. Draws 4.";}
-    // Play the element penalty cinematic FIRST, then deliver the cards synced to its finish.
+    // Re-read the freshest state, start the cinematic, then drop the cards into the hand ONE AT
+    // A TIME as they fly in (synced to the +4 penaltyFling land cadence), not all at once.
+    let cg=g;try{const snap=await get(ref(db,"rooms/"+rc+"/game"));if(snap.exists())cg=snap.val();}catch(e){}
+    let ndp=[...(cg.drawPile||[])];const nd=[...(cg.discardPile||[])];
+    if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
+    const dr=ndp.splice(0,Math.min(count,ndp.length));
     await wgs({pendingChallenge:null,drawStack:0,drawStackType:null,pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:"wild4",count,ts:Date.now()}});
-    setTimeout(async()=>{
-      let cg=g;try{const snap=await get(ref(db,"rooms/"+rc+"/game"));if(snap.exists())cg=snap.val();}catch(e){}
-      const nh={...cg.hands};let ndp=[...(cg.drawPile||[])];const nd=[...(cg.discardPile||[])];
-      if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
-      const dr=ndp.splice(0,Math.min(count,ndp.length));
-      nh[victimId]=[...(nh[victimId]||[]),...dr];
-      await wgs({hands:nh,drawPile:ndp,discardPile:nd,currentPlayer:nextPlayer,message:m,pendingSlash:null,drawStack:0,drawStackType:null,turnTimestamp:Date.now()});
-    },SLASH_DELAY);
+    const landBase=1950,gap=280;
+    let hand=[...(cg.hands?.[victimId]||[])];
+    dr.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},landBase+i*gap);});
+    setTimeout(()=>{wgs({drawPile:ndp,discardPile:nd,currentPlayer:nextPlayer,message:m,pendingSlash:null,drawStack:0,drawStackType:null,turnTimestamp:Date.now()});},landBase+Math.max(0,dr.length-1)*gap+450);
   },[g,challenge,pid,np,wgs,rd,rc]);
 
   const doDraw=useCallback(async()=>{
