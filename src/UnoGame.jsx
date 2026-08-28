@@ -4600,21 +4600,21 @@ export default function UnoGame(){
                  of play and flips on a reverse card, tinted to the current pile colour. */}
               {(()=>{const col=CH[g.currentColor]||"#FFD700";const cw=g.direction===1;
                 return(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-                  width:"min(290px,58vw,46vh)",height:"min(290px,58vw,46vh)",pointerEvents:"none",opacity:0.95}}>
+                  width:"min(205px,42vw,38vh)",height:"min(205px,42vw,38vh)",pointerEvents:"none",opacity:0.92}}>
                   <div style={{width:"100%",height:"100%",animation:`${cw?"sCW":"sCCW"} 3s linear infinite`}}>
                     <svg viewBox="0 0 100 100" width="100%" height="100%"
-                      style={{transform:cw?"none":"scaleX(-1)",filter:`drop-shadow(0 0 9px ${col}) drop-shadow(0 0 4px ${col})`}}>
+                      style={{transform:cw?"none":"scaleX(-1)",filter:`drop-shadow(0 0 7px ${col}) drop-shadow(0 0 3px ${col})`}}>
                       {/* faint full-circle track so the direction ring reads even between the arcs */}
-                      <circle cx="50" cy="50" r="37" fill="none" stroke={col} strokeWidth="2.5" strokeDasharray="1 7" strokeLinecap="round" opacity="0.5"/>
-                      <path d="M 80 30 A 37 37 0 0 1 72 80" fill="none" stroke={col} strokeWidth="12" strokeLinecap="round"/>
-                      <path d="M 72 80 l 18 -2 l -10 17 z" fill={col}/>
-                      <path d="M 20 70 A 37 37 0 0 1 28 20" fill="none" stroke={col} strokeWidth="12" strokeLinecap="round"/>
-                      <path d="M 28 20 l -18 2 l 10 -17 z" fill={col}/>
+                      <circle cx="50" cy="50" r="37" fill="none" stroke={col} strokeWidth="1.6" strokeDasharray="1 7" strokeLinecap="round" opacity="0.5"/>
+                      <path d="M 80 30 A 37 37 0 0 1 72 80" fill="none" stroke={col} strokeWidth="7" strokeLinecap="round"/>
+                      <path d="M 72 80 l 12 -1.5 l -6 11.5 z" fill={col}/>
+                      <path d="M 20 70 A 37 37 0 0 1 28 20" fill="none" stroke={col} strokeWidth="7" strokeLinecap="round"/>
+                      <path d="M 28 20 l -12 1.5 l 6 -11.5 z" fill={col}/>
                     </svg>
                   </div>
                 </div>);})()}
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:"min(16px, 3vw)",zIndex:3}}>
+            <div style={{display:"flex",alignItems:"center",gap:"min(26px, 6vw)",zIndex:3}}>
               <div onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;handleDeckTap();}}
                 style={{cursor:(pickDr&&isAdm)||(myTurn&&!drawnCard&&!challenge)?"pointer":"default",transition:"transform 0.3s",position:"relative",touchAction:"manipulation",padding:8,margin:-8,
                   animation:drawStack>0&&myTurn?"dangerPulse 0.8s infinite":(myTurn&&!drawnCard&&!challenge?"deckIdle 3s ease-in-out infinite":"none"),
