@@ -2306,6 +2306,8 @@ export default function UnoGame(){
   const[turnTimer,setTurnTimer]=useState(TURN_TIME);
   const[showLB,setShowLB]=useState(false);
   const[discardFx,setDiscardFx]=useState(null);
+  const[daLanded,setDaLanded]=useState(0); // how many discard-all cards have visibly landed on the pile
+  const[dirFlip,setDirFlip]=useState(false); // brief flash when the turn direction reverses
   const[globalLB,setGlobalLB]=useState([]);
   const[myStats,setMyStats]=useState(null);
   const[showGlobalLB,setShowGlobalLB]=useState(false);
@@ -2739,6 +2741,11 @@ export default function UnoGame(){
     const dac=color||"yellow";const cnt=Math.max(2,count||2);
     psE(dac);psSeq("carddist",cnt,1150,280);setActFx("discardAll");trigBurst(dac);
     setDiscardFx({color:dac,count:cnt,cards:(cards&&cards.length===cnt)?cards:undefined});
+    // Reveal the just-discarded cards on the pile ONE AT A TIME, synced to each flying card's
+    // landing (~1150 + i·280ms) so the pile fills as the cards arrive instead of dropping at once.
+    setDaLanded(0);const dc=cnt-1;
+    for(let i=0;i<dc;i++)setTimeout(()=>setDaLanded(k=>Math.max(k,i+1)),1150+i*280);
+    setTimeout(()=>setDaLanded(dc),1150+dc*280+300);
   },[psE,psSeq,trigBurst]);
   useEffect(()=>{const da=g?.discardAllFx;if(!da||!da.ts)return;
     if(Date.now()-da.ts>6000){daRef.current=da.ts;return;} // skip stale on late join
@@ -2761,6 +2768,11 @@ export default function UnoGame(){
       const t=setTimeout(()=>setPlayFlyFx(f=>f&&f.key===id?null:f),560);return()=>clearTimeout(t);
     }
     setCAn("cFly 0.5s cubic-bezier(.22,1,.36,1)");const t=setTimeout(()=>setCAn(null),520);return()=>clearTimeout(t);},[topC?.id]);
+  // Flash the direction ring whenever the turn order reverses, so the change is obvious.
+  const prevDirRef=useRef();
+  useEffect(()=>{const d=g?.direction;if(d===undefined)return;
+    if(prevDirRef.current!==undefined&&d!==prevDirRef.current){setDirFlip(true);const t=setTimeout(()=>setDirFlip(false),1000);prevDirRef.current=d;return()=>clearTimeout(t);}
+    prevDirRef.current=d;},[g?.direction]);
 
   const np=useCallback((cur,dir,skip=false)=>{const i=po.indexOf(cur);const n=po.length;
     let x=(i+dir+n)%n;if(skip)x=(x+dir+n)%n;return po[x];},[po]);
@@ -3277,14 +3289,14 @@ export default function UnoGame(){
     const cl=await claimName(pName,pid);if(!cl.ok){ps("error");setNameErr(cl.msg);startRename();setShowAccount(true);return;}
     const code=grc();const now=Date.now();
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
-      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true,avatar:randAvatar()}},
+      players:{[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags},["bot_1_"+now]:{name:randBotName([pName.trim()]),order:1,isBot:true,ready:true,avatar:randAvatar()}},
       scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
 
   const quickPlayFFA=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("click");
     const cl=await claimName(pName,pid);if(!cl.ok){ps("error");setNameErr(cl.msg);startRename();setShowAccount(true);return;}
     const code=grc();const now=Date.now();const players={[pid]:{name:pName.trim(),order:0,avatar:myAvatar,photo:myPhoto||null,flags:myFlags}};
-    const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true,avatar:randAvatar()};}
+    const usedN=[pName.trim()];for(let i=0;i<3;i++){const bn=randBotName(usedN);usedN.push(bn);players["bot_"+(i+1)+"_"+now]={name:bn,order:i+1,isBot:true,ready:true,avatar:randAvatar()};}
     try{await set(ref(db,"rooms/"+code),{host:pid,status:"waiting",createdAt:now,
       players,scores:{},settings:DEF_SETTINGS});setRc(code);setErr("");setScr("lobby");setAutoStart(true);
     }catch(e){setErr("Check Firebase config.");}};
@@ -5039,8 +5051,13 @@ export default function UnoGame(){
                  of play and flips on a reverse card, tinted to the current pile colour. */}
               {(()=>{const col=CH[g.currentColor]||"#FFD700";const cw=g.direction===1;
                 return(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-                  width:"min(205px,42vw,38vh)",height:"min(205px,42vw,38vh)",pointerEvents:"none",opacity:0.92}}>
-                  <div style={{width:"100%",height:"100%",animation:`${cw?"sCW":"sCCW"} 3s linear infinite`}}>
+                  width:"min(205px,42vw,38vh)",height:"min(205px,42vw,38vh)",pointerEvents:"none",
+                  opacity:dirFlip?1:0.92,transition:"opacity 0.2s"}}>
+                  {/* reversal flash: an expanding ring pulse so the direction change is unmistakable */}
+                  {dirFlip&&<div style={{position:"absolute",inset:0,borderRadius:"50%",border:`3px solid ${col}`,
+                    boxShadow:`0 0 18px ${col}`,animation:"dirFlash 0.9s ease-out"}}/>}
+                  <div style={{width:"100%",height:"100%",animation:`${cw?"sCW":"sCCW"} 3s linear infinite`,
+                    ...(dirFlip?{filter:`drop-shadow(0 0 10px ${col})`}:{})}}>
                     <svg viewBox="0 0 100 100" width="100%" height="100%"
                       style={{transform:cw?"none":"scaleX(-1)",filter:`drop-shadow(0 0 7px ${col}) drop-shadow(0 0 3px ${col})`}}>
                       {/* faint full-circle track so the direction ring reads even between the arcs */}
@@ -5075,8 +5092,10 @@ export default function UnoGame(){
                   boxShadow:"0 0 10px rgba(229,57,53,0.5)",zIndex:4}}>+{drawStack}</div>}
               </div>
               <div ref={pileRef} style={{position:"relative",isolation:"isolate",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>
-                {/* Previously-played cards fanned underneath, like a real tabletop discard pile */}
-                {!g.winner&&(g.discardPile||[]).slice(-9,-1).map((c,i)=>{const s=(""+c.id).split("").reduce((a,ch)=>a+ch.charCodeAt(0),0);
+                {/* Previously-played cards fanned underneath, like a real tabletop discard pile.
+                   During a discard-all, hide the freshly-discarded cards until they visibly land. */}
+                {!g.winner&&(()=>{const hideN=discardFx?Math.max(0,(discardFx.count-1)-daLanded):0;
+                  return (g.discardPile||[]).slice(-9,hideN>0?(-1-hideN):-1);})().map((c,i)=>{const s=(""+c.id).split("").reduce((a,ch)=>a+ch.charCodeAt(0),0);
                   const ang=(s%25)-12,dx=(s%17)-8,dy=((s*2)%15)-7;
                   return(<div key={c.id} style={{position:"absolute",top:"50%",left:"50%",zIndex:0,pointerEvents:"none",
                     transform:`translate(-50%,-50%) translate(${dx}px,${dy}px) rotate(${ang}deg)`,
@@ -5229,6 +5248,7 @@ const globalCSS=`
   @keyframes tableGlow{0%,100%{box-shadow:0 0 40px rgba(255,215,0,0.02) inset}50%{box-shadow:0 0 60px rgba(255,215,0,0.05) inset}}
   @keyframes chevFlow{0%,100%{opacity:0.1}45%{opacity:1}}
   @keyframes sheen{0%{transform:translateX(-120%)}55%,100%{transform:translateX(360%)}}
+  @keyframes dirFlash{0%{transform:scale(0.55);opacity:0.95}70%{opacity:0.4}100%{transform:scale(1.45);opacity:0}}
   @keyframes sCW{from{transform:rotate(0)}to{transform:rotate(360deg)}}
   @keyframes sCCW{from{transform:rotate(360deg)}to{transform:rotate(0)}}
   @keyframes af{0%{opacity:1}50%{opacity:1}70%{opacity:0.7}85%{opacity:0.3;transform:scale(1.02)}100%{opacity:0;transform:scale(1.05)}}
