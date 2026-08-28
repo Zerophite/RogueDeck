@@ -2751,6 +2751,13 @@ export default function UnoGame(){
     if(Date.now()-da.ts>6000){daRef.current=da.ts;return;} // skip stale on late join
     triggerDiscardAll(da.ts,da.color,da.count,(g?.discardPile||[]).slice(-Math.max(2,da.count||2)));
   },[g?.discardAllFx?.ts]);
+  // Draw sound for OBSERVERS — the drawer already hears it locally, but everyone else should
+  // hear opponents draw (single or multiple cards) too.
+  const drawSndRef=useRef(0);
+  useEffect(()=>{const ld=g?.lastDraw;if(!ld||!ld.ts||ld.ts===drawSndRef.current)return;drawSndRef.current=ld.ts;
+    if(ld.by===pid||Date.now()-ld.ts>4000)return; // drawer already heard it; skip stale on late join
+    psSeq("draw",Math.min(ld.count||1,6),0,220);
+  },[g?.lastDraw?.ts]);
   const prevTopRef=useRef();
   useEffect(()=>{const id=topC?.id;if(!id||id===prevTopRef.current)return;prevTopRef.current=id;
     // Fly a face-up copy of the played card to the pile — from the player's seat if it was an
@@ -2873,8 +2880,10 @@ export default function UnoGame(){
     // land times AND the per-card sounds). Deliver one card per landing → they appear one at a time.
     const landBase=type==="wild4"?1950:1260,gap=280;
     await wgs({pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:type||"draw2",count:cnt,ts:Date.now()}});
-    let hand=[...victimHand];
-    drawn.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},landBase+i*gap);});
+    // Write each card ~500ms before its land time so its fade-in (cardReceive) finishes exactly as
+    // the flying card arrives and the sound plays — keeps hand, fly and sound in lockstep.
+    const RECV=500;let hand=[...victimHand];
+    drawn.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},Math.max(50,landBase-RECV)+i*gap);});
     // After the last card lands, finalize: refresh the deck, clear the stack, pass the turn.
     setTimeout(()=>{wgs({drawPile:ndp,discardPile:nd,drawStack:0,drawStackType:null,pendingChallenge:null,pendingSlash:null,
       currentPlayer:nextPlayer,message:reasonBase+" Draws "+cnt+"!",turnTimestamp:Date.now()});
@@ -3152,7 +3161,7 @@ export default function UnoGame(){
           if(!found){nh[cp]=[...hand];cu[cp]=false;
             const dm=drawnCards.length>1?drawnCards.length+" cards":"";
             await wgs({hands:nh,drawPile:ndp2,discardPile:nd,currentPlayer:np(cp,dir),
-              message:bn+" drew"+(dm?" "+dm:"")+" — can't play",turnTimestamp:Date.now(),calledUno:cu});return;}
+              message:bn+" drew"+(dm?" "+dm:"")+" — can't play",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:cp,count:drawnCards.length,ts:Date.now()}});return;}
           drewMsg=drawnCards.length>1?" drew "+drawnCards.length+" and":" drew and";
         }
 
@@ -3440,9 +3449,9 @@ export default function UnoGame(){
     if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
     const dr=ndp.splice(0,Math.min(count,ndp.length));
     await wgs({pendingChallenge:null,drawStack:0,drawStackType:null,pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:"wild4",count,ts:Date.now()}});
-    const landBase=1950,gap=280;
+    const landBase=1950,gap=280,RECV=500;
     let hand=[...(cg.hands?.[victimId]||[])];
-    dr.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},landBase+i*gap);});
+    dr.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},Math.max(50,landBase-RECV)+i*gap);});
     setTimeout(()=>{wgs({drawPile:ndp,discardPile:nd,currentPlayer:nextPlayer,message:m,pendingSlash:null,drawStack:0,drawStackType:null,turnTimestamp:Date.now()});},landBase+Math.max(0,dr.length-1)*gap+450);
   },[g,challenge,pid,np,wgs,rd,rc]);
 
@@ -3465,11 +3474,11 @@ export default function UnoGame(){
       }
       const nh={...g.hands};nh[pid]=hand;const cu={...(g.calledUno||{}),[pid]:false};
       if(foundPlayable){
-        await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew "+cnt+" card"+(cnt>1?"s":""),turnTimestamp:Date.now(),calledUno:cu});
+        await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew "+cnt+" card"+(cnt>1?"s":""),turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:cnt,ts:Date.now()}});
         psSeq("draw",cnt,500,280);setHasDrawn(true);setTimeout(()=>ps("playable"),Math.max(0,(cnt-1)*280+520));
       } else {
         await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(pid,g.direction),
-          message:(rd.players[pid]?.name)+" drew "+cnt+" — can't play",turnTimestamp:Date.now(),calledUno:cu});
+          message:(rd.players[pid]?.name)+" drew "+cnt+" — can't play",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:cnt,ts:Date.now()}});
         psSeq("draw",cnt,500,280);setLMsg("Drew "+cnt+" — can't play");setTimeout(()=>setLMsg(""),1500);
       }
     } else {
@@ -3477,11 +3486,11 @@ export default function UnoGame(){
       const cu={...(g.calledUno||{}),[pid]:false};
       const playable=canPlay(drawn,topC,g.currentColor);
       if(playable){
-        await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew a card",turnTimestamp:Date.now(),calledUno:cu});
+        await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew a card",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:1,ts:Date.now()}});
         psSeq("draw",1,500,280);setHasDrawn(true);setTimeout(()=>ps("playable"),520);
       } else {
         await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(pid,g.direction),
-          message:(rd.players[pid]?.name)+" drew — can't play",turnTimestamp:Date.now(),calledUno:cu});
+          message:(rd.players[pid]?.name)+" drew — can't play",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:1,ts:Date.now()}});
         psSeq("draw",1,500,280);setLMsg("Drew — can't play");setTimeout(()=>setLMsg(""),1200);
       }
     }
