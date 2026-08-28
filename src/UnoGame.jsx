@@ -3469,6 +3469,24 @@ export default function UnoGame(){
             <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,0.06)",overflow:"hidden"}}>
               <div style={{height:"100%",borderRadius:3,background:"linear-gradient(90deg,#2979FF,#6FE3FF)",width:`${myLevel.pct*100}%`,transition:"width 0.5s"}}/></div>
           </div>
+          {/* Daily-missions preview fills the left column in landscape */}
+          {isLandscape&&<div style={{marginTop:9,paddingTop:9,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+              <span style={{fontSize:9,fontWeight:900,color:"#6FE3FF",letterSpacing:1}}>🎯 DAILY MISSIONS</span>
+              {claimableCount>0&&<span style={{fontSize:8,fontWeight:900,color:"#fff",background:"#E53935",borderRadius:7,padding:"1px 6px"}}>{claimableCount} READY</span>}</div>
+            {DAILY_MISSIONS.map(d=>{const prog=Math.min(myMissions[d.counter]||0,d.goal);const done=prog>=d.goal;const claimed=!!myMissions.claimed?.[d.id];
+              return(<div key={d.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:9,color:"#cdd6e2",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</div>
+                  <div style={{height:4,borderRadius:2,background:"rgba(255,255,255,0.07)",overflow:"hidden",marginTop:2}}>
+                    <div style={{height:"100%",borderRadius:2,background:claimed?"linear-gradient(90deg,#43A047,#66BB6A)":"linear-gradient(90deg,#2979FF,#6FE3FF)",width:`${(prog/d.goal)*100}%`,transition:"width 0.4s"}}/></div>
+                </div>
+                <span style={{fontSize:8,color:"#889",fontWeight:700,minWidth:22,textAlign:"right"}}>{prog}/{d.goal}</span>
+                {claimed?<span style={{fontSize:9,color:"#66BB6A",fontWeight:900}}>✓</span>
+                  :done?<button onClick={()=>claimMission(d.id)} style={{padding:"3px 8px",borderRadius:6,border:"none",background:"linear-gradient(135deg,#2979FF,#6FE3FF)",color:"#06121e",fontSize:8,fontWeight:900,cursor:"pointer",letterSpacing:0.5}}>CLAIM</button>
+                  :null}
+              </div>);})}
+          </div>}
         </div>}
 
         {/* Main card */}
