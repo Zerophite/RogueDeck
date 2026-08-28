@@ -2151,6 +2151,7 @@ export default function UnoGame(){
   const[unoPenaltyFx,setUnoPenaltyFx]=useState(null);
   const[timeoutFx,setTimeoutFx]=useState(null);
   const[showWin,setShowWin]=useState(false);
+  const[leaveConfirm,setLeaveConfirm]=useState(false); // two-tap guard so a stray tap during card-reveal can't exit
   const[turnFx,setTurnFx]=useState(null);
   const[showAccount,setShowAccount]=useState(false);
   const[restoreId,setRestoreId]=useState("");
@@ -2748,7 +2749,7 @@ export default function UnoGame(){
      "reviewing" so the lobby shows their status until they close the review. */
   useEffect(()=>{
     if(g?.winner&&scr==="game"){setShowWin(true);update(ref(db,"rooms/"+rc+"/players/"+pid),{reviewing:true}).catch(()=>{});}
-    else if(!g?.winner)setShowWin(false);
+    else if(!g?.winner){setShowWin(false);setLeaveConfirm(false);}
   },[g?.winner,scr,rc,pid]);
 
   const autoPassRef=useRef(false);
@@ -3284,11 +3285,22 @@ export default function UnoGame(){
     if(card.type==="wild"){setPendW(ci);setPickCol(true);}else playC(ci);};
   const colPick=c=>{setPickCol(false);if(pendW!==null){playC(pendW,c);setPendW(null);}};
   const colCancel=()=>{setPickCol(false);setPendW(null);};
-  const callUno=async()=>{if(!(g.calledUno||{})[pid]){
+  const callUno=async()=>{if((g.calledUno||{})[pid]||g.winner)return;
+    const myCount=(g.hands?.[pid]||myH).length;
+    // False UNO: you can only legitimately call at 1 card, or at 2 (about to play your
+    // second-to-last). Calling with 3+ can never reach UNO this turn → +1-card penalty.
+    if(myCount>2){
+      ps("penalty");
+      const dp=[...(g.drawPile||[])],nd=[...(g.discardPile||[])];
+      if(!dp.length){const reshuf=sh(nd.slice(0,-1));dp.push(...reshuf);nd.splice(0,nd.length-1);}
+      const drawn=dp.shift();const nh={...g.hands};nh[pid]=[...(g.hands?.[pid]||myH),drawn];
+      await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" called UNO with too many cards! +1 penalty"});
+      setLMsg("False UNO! +1 card");setTimeout(()=>setLMsg(""),1600);
+      return;}
     ps("uno");unoSndRef.current=Date.now(); // immediate feedback on press
     const clearGrace=g.unoGrace&&g.unoGrace.pid===pid?{unoGrace:null}:{};
     await wgs({calledUno:{...(g.calledUno||{}),[pid]:true},message:(rd.players[pid]?.name)+" called UNO!",...clearGrace});
-    setLMsg("UNO!");setTimeout(()=>setLMsg(""),1200);}};
+    setLMsg("UNO!");setTimeout(()=>setLMsg(""),1200);};
   const leave=async(e)=>{if(e&&e.stopPropagation)e.stopPropagation();
     bgm.stop();setMus(false);
     if(scr==="game"&&g&&!g.winner){ // live game: don't tear down — the resolver pauses & forfeits us after 30s
@@ -4244,11 +4256,13 @@ export default function UnoGame(){
         background:"rgba(0,0,0,0.9)",padding:"2px 7px",borderRadius:5,animation:"pulse 0.6s infinite",
         whiteSpace:"nowrap",border:"1px solid rgba(255,152,0,0.25)"}}>CATCH!</div>}
       {turn&&!g.winner&&<div style={{position:"absolute",zIndex:6,pointerEvents:"none",
-        ...(pos==="left"?{right:-17,top:"50%",transform:"translateY(-50%)"}
-          :pos==="right"?{left:-17,top:"50%",transform:"translateY(-50%)"}
-          :{bottom:-19,left:"50%",transform:"translateX(-50%)"})}}>
-        <span style={{display:"block",fontSize:20,lineHeight:1,color:gcHex,
-          textShadow:`0 0 10px ${gcHex},0 0 20px ${gcHex}aa,0 1px 3px rgba(0,0,0,0.8)`,
+        display:"flex",alignItems:"center",justifyContent:"center",width:34,height:34,
+        ...(pos==="left"?{right:-24,top:"50%",transform:"translateY(-50%)"}
+          :pos==="right"?{left:-24,top:"50%",transform:"translateY(-50%)"}
+          :{bottom:-26,left:"50%",transform:"translateX(-50%)"})}}>
+        <div style={{position:"absolute",inset:0,borderRadius:"50%",background:`radial-gradient(circle,${gcHex}77,transparent 70%)`,animation:"pulse 0.8s ease-in-out infinite"}}/>
+        <span style={{position:"relative",display:"block",fontSize:26,lineHeight:1,color:gcHex,
+          textShadow:`0 0 12px ${gcHex},0 0 22px ${gcHex},0 1px 3px rgba(0,0,0,0.9)`,
           animation:"arrowPulse 0.8s ease-in-out infinite"}}>{pos==="left"?"◀":pos==="right"?"▶":"▲"}</span></div>}
     </div>);};
 
@@ -4436,10 +4450,12 @@ export default function UnoGame(){
         <div style={{position:"absolute",bottom:"calc(env(safe-area-inset-bottom,0px) + 16px)",left:"50%",transform:"translateX(-50%)",zIndex:151,
           display:"flex",flexDirection:"column",alignItems:"center",gap:5,animation:"fadeIn 0.5s 0.6s both"}}>
           <span style={{fontSize:9,color:"#99a",letterSpacing:1,textShadow:"0 1px 4px #000"}}>👀 Review everyone's cards, then</span>
-          <button onClick={backToLobby} style={{...bst,maxWidth:250,padding:"12px 30px",background:"linear-gradient(135deg,#2E7D32,#1B5E20)",
-            boxShadow:"0 4px 22px rgba(46,125,50,0.55)"}}
+          <button onClick={()=>{if(leaveConfirm){backToLobby();}else{ps("click");setLeaveConfirm(true);setTimeout(()=>setLeaveConfirm(false),2800);}}}
+            style={{...bst,maxWidth:250,padding:"12px 30px",
+            background:leaveConfirm?"linear-gradient(135deg,#C62828,#8E1616)":"linear-gradient(135deg,#2E7D32,#1B5E20)",
+            boxShadow:leaveConfirm?"0 4px 22px rgba(198,40,40,0.6)":"0 4px 22px rgba(46,125,50,0.55)"}}
             onPointerEnter={e=>e.currentTarget.style.transform="scale(1.03)"}
-            onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>BACK TO LOBBY</button>
+            onPointerLeave={e=>e.currentTarget.style.transform="scale(1)"}>{leaveConfirm?"TAP AGAIN TO LEAVE":"BACK TO LOBBY"}</button>
         </div>
       </>);})()}
 
@@ -4584,14 +4600,16 @@ export default function UnoGame(){
                  of play and flips on a reverse card, tinted to the current pile colour. */}
               {(()=>{const col=CH[g.currentColor]||"#FFD700";const cw=g.direction===1;
                 return(<div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",
-                  width:"min(280px,55vw,44vh)",height:"min(280px,55vw,44vh)",pointerEvents:"none",opacity:0.72}}>
-                  <div style={{width:"100%",height:"100%",animation:`${cw?"sCW":"sCCW"} 3.4s linear infinite`}}>
+                  width:"min(290px,58vw,46vh)",height:"min(290px,58vw,46vh)",pointerEvents:"none",opacity:0.95}}>
+                  <div style={{width:"100%",height:"100%",animation:`${cw?"sCW":"sCCW"} 3s linear infinite`}}>
                     <svg viewBox="0 0 100 100" width="100%" height="100%"
-                      style={{transform:cw?"none":"scaleX(-1)",filter:`drop-shadow(0 0 7px ${col}cc)`}}>
-                      <path d="M 80 30 A 37 37 0 0 1 72 80" fill="none" stroke={col} strokeWidth="8.5" strokeLinecap="round"/>
-                      <path d="M 72 80 l 14 -1 l -8 13 z" fill={col}/>
-                      <path d="M 20 70 A 37 37 0 0 1 28 20" fill="none" stroke={col} strokeWidth="8.5" strokeLinecap="round"/>
-                      <path d="M 28 20 l -14 1 l 8 -13 z" fill={col}/>
+                      style={{transform:cw?"none":"scaleX(-1)",filter:`drop-shadow(0 0 9px ${col}) drop-shadow(0 0 4px ${col})`}}>
+                      {/* faint full-circle track so the direction ring reads even between the arcs */}
+                      <circle cx="50" cy="50" r="37" fill="none" stroke={col} strokeWidth="2.5" strokeDasharray="1 7" strokeLinecap="round" opacity="0.5"/>
+                      <path d="M 80 30 A 37 37 0 0 1 72 80" fill="none" stroke={col} strokeWidth="12" strokeLinecap="round"/>
+                      <path d="M 72 80 l 18 -2 l -10 17 z" fill={col}/>
+                      <path d="M 20 70 A 37 37 0 0 1 28 20" fill="none" stroke={col} strokeWidth="12" strokeLinecap="round"/>
+                      <path d="M 28 20 l -18 2 l 10 -17 z" fill={col}/>
                     </svg>
                   </div>
                 </div>);})()}
@@ -4604,14 +4622,29 @@ export default function UnoGame(){
                   boxShadow:drawStack>0&&myTurn?"0 0 20px rgba(255,82,82,0.4)":"none"}}
                 onPointerEnter={e=>{if(e.pointerType==="mouse"&&myTurn&&!drawnCard&&!challenge)e.currentTarget.style.transform="scale(1.1) rotate(-3deg)";}}
                 onPointerLeave={e=>{if(e.pointerType==="mouse")e.currentTarget.style.transform="scale(1)";}}>
-                <Card card={{color:"wild",value:"wild",type:"wild"}} sz={isLandscape?"sm":"md"} faceDown/>
+                {/* Layered deck: offset card-back edges behind the top card give it real thickness */}
+                {(()=>{const dm=isLandscape?{w:44,h:66,r:7}:{w:70,h:105,r:12};const n=Math.min(5,Math.max(2,Math.ceil((g.drawPile||[]).length/10)));
+                  return(<div style={{position:"relative",width:dm.w,height:dm.h}}>
+                    {Array.from({length:n}).map((_,k)=>{const o=(n-k)*1.7;return(
+                      <div key={k} style={{position:"absolute",top:o,left:o,width:dm.w,height:dm.h,borderRadius:dm.r,
+                        background:"linear-gradient(135deg,#232838,#151a26 55%,#090c12)",
+                        border:"1px solid rgba(255,215,0,0.28)",boxShadow:"0 1px 3px rgba(0,0,0,0.5)"}}/>);})}
+                    <div style={{position:"absolute",top:0,left:0}}><Card card={{color:"wild",value:"wild",type:"wild"}} sz={isLandscape?"sm":"md"} faceDown/></div>
+                  </div>);})()}
                 {drawStack>0&&myTurn&&<div style={{position:"absolute",top:-10,left:"50%",transform:"translateX(-50%)",
                   fontSize:11,fontWeight:900,color:"#fff",background:"#E53935",borderRadius:8,padding:"2px 8px",
                   boxShadow:"0 0 10px rgba(229,57,53,0.5)",zIndex:4}}>+{drawStack}</div>}
               </div>
-              <div style={{position:"relative",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>{topC&&<Card card={topC} sz={isLandscape?"sm":"md"} animate={cAn}/>}
-                {g.winner&&<div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",fontSize:7,color:"#FFD700",fontWeight:900,letterSpacing:1,whiteSpace:"nowrap",textShadow:"0 0 6px rgba(255,215,0,0.6)",pointerEvents:"none"}}>👑 WINNING CARD</div>}
-                <div style={{position:"absolute",top:-8,right:-8,width:isLandscape?16:22,height:isLandscape?16:22,borderRadius:"50%",
+              <div style={{position:"relative",isolation:"isolate",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>
+                {/* Previously-played cards fanned underneath, like a real tabletop discard pile */}
+                {!g.winner&&(g.discardPile||[]).slice(-5,-1).map((c)=>{const s=(""+c.id).split("").reduce((a,ch)=>a+ch.charCodeAt(0),0);
+                  const ang=(s%15)-7,dx=(s%9)-4,dy=((s*2)%9)-4;
+                  return(<div key={c.id} style={{position:"absolute",top:"50%",left:"50%",zIndex:0,pointerEvents:"none",
+                    transform:`translate(-50%,-50%) translate(${dx}px,${dy}px) rotate(${ang}deg)`,filter:"brightness(0.8)"}}>
+                    <Card card={c} sz={isLandscape?"sm":"md"}/></div>);})}
+                <div style={{position:"relative",zIndex:1}}>{topC&&<Card card={topC} sz={isLandscape?"sm":"md"} animate={cAn}/>}</div>
+                {g.winner&&<div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",zIndex:3,fontSize:7,color:"#FFD700",fontWeight:900,letterSpacing:1,whiteSpace:"nowrap",textShadow:"0 0 6px rgba(255,215,0,0.6)",pointerEvents:"none"}}>👑 WINNING CARD</div>}
+                <div style={{position:"absolute",top:-8,right:-8,zIndex:3,width:isLandscape?16:22,height:isLandscape?16:22,borderRadius:"50%",
                   background:CG[g.currentColor],border:"2px solid rgba(255,255,255,0.7)",
                   boxShadow:`0 0 18px ${gcHex}aa,0 0 35px ${gcHex}44`,transition:"all 0.5s"}}/>
                 {!g.winner&&(()=>{const low=turnTimer<=5;return(<div style={{position:"absolute",left:"calc(100% + 12px)",top:"50%",transform:"translateY(-50%)",
