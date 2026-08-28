@@ -2590,8 +2590,9 @@ export default function UnoGame(){
   const visChat=useMemo(()=>chat.filter(m=>m.chan!=="team"||m.team===myTeam||m.pid===pid),[chat,myTeam,pid]);
   useEffect(()=>{if(chatOpen&&visChat.length)setChatSeen(visChat[visChat.length-1].ts);},[chatOpen,visChat]);
   const chatUnread=visChat.filter(m=>m.ts>chatSeen&&m.pid!==pid).length;
-  const chatEndRef=useRef(null);
+  const chatEndRef=useRef(null);const chatInputRef=useRef(null);
   useEffect(()=>{if(chatOpen)setTimeout(()=>chatEndRef.current?.scrollIntoView({block:"end",behavior:"smooth"}),50);},[visChat,chatOpen]);
+  useEffect(()=>{if(chatOpen)setTimeout(()=>chatInputRef.current?.focus(),90);},[chatOpen]);
   // In-game live feed: pop transient bubbles for newly-arrived visible messages (so players
   // read chat without opening the panel). Skips the backlog on first load.
   const lastFeedRef=useRef(0);
@@ -2708,13 +2709,7 @@ export default function UnoGame(){
     else if(m.includes("+4")){const wc=g?.currentColor||"green";ps("draw4");trigShake();trigBurst(wc);trigImpact(wc);}
     else if(m.includes("wild")&&!m.includes("+4")){setActFx("wild");ps("wild");trigBurst("yellow");}
     else if(m.includes("wins")){const wt=g?.teamMode?rd?.players?.[g.winner]?.team:null;const iWon=g?.winner===pid||(wt&&rd?.players?.[pid]?.team===wt);ps(iWon?"win":"defeat");trigBurst("yellow");trigImpact("yellow");}
-    else if(m.includes("discard all")){
-      if(Date.now()-discardFxRef.current>1500){const dac=g?.currentColor||"yellow";
-        const cm=g.message.match(/\(-(\d+)\s*cards?\)/i);const cnt=cm?parseInt(cm[1]):1;
-        psE(dac);psSeq("carddist",cnt,cnt>1?1150:0,280); // one card-sound per discarded card (replaces old discard-all sfx)
-        if(cnt>1){setActFx("discardAll");trigBurst(dac);
-          const real=(g.discardPile||[]).slice(-cnt); // the just-discarded cards are the last N of the pile
-          setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});}}}
+    else if(m.includes("discard all")){/* handled uniformly by the discardAllFx watcher */}
     else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("shadow");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
     else if(m.includes("played")){}
@@ -2732,6 +2727,16 @@ export default function UnoGame(){
   useEffect(()=>{setSel(-1);},[myH.length]);
   // Animate the discard pile whenever a NEW card lands on it (any player), so plays
   // don't look like the pile just "changed color".
+  /* Discard-all animation, broadcast so the PLAYER who used it and every observer trigger
+     the exact same fly-to-pile effect (no more actor/observer asymmetry). */
+  const daRef=useRef(0);
+  useEffect(()=>{const da=g?.discardAllFx;if(!da||!da.ts||da.ts===daRef.current)return;
+    const fresh=Date.now()-da.ts<6000;daRef.current=da.ts;if(!fresh)return; // skip stale on late join
+    const dac=da.color||g?.currentColor||"yellow";const cnt=Math.max(2,da.count||2);
+    psE(dac);psSeq("carddist",cnt,1150,280);setActFx("discardAll");trigBurst(dac);
+    const real=(g?.discardPile||[]).slice(-cnt);
+    setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});
+  },[g?.discardAllFx?.ts]);
   const prevTopRef=useRef();
   useEffect(()=>{const id=topC?.id;if(!id||id===prevTopRef.current)return;prevTopRef.current=id;
     // If an OPPONENT just played, fly a face-up copy of the card from their seat to the pile
@@ -3124,11 +3129,12 @@ export default function UnoGame(){
 
         let remain=hand.filter(c=>c.id!==cardToPlay.id);
         let nCol=cardToPlay.color==="wild"?botPickColor(remain):(cardToPlay.color||curColor);
-        let m=bn+drewMsg+" played "+gl(cardToPlay.value),skip2=false,nds=0,ndt=null,pc=null;
+        let m=bn+drewMsg+" played "+gl(cardToPlay.value),skip2=false,nds=0,ndt=null,pc=null,bdaFx=null;
 
         if(cardToPlay.value==="discardAll"){const mc=cardToPlay.color;
           const disc=remain.filter(c=>c.color===mc);remain=remain.filter(c=>c.color!==mc);
-          nd.push(...disc,cardToPlay);m+=" Discard all "+mc+"! (-"+(disc.length+1)+" cards)";}
+          nd.push(...disc,cardToPlay);m+=" Discard all "+mc+"! (-"+(disc.length+1)+" cards)";
+          if(disc.length+1>1)bdaFx={color:mc,count:disc.length+1,ts:Date.now()};}
         else nd.push(cardToPlay);
 
         if(cardToPlay.value==="reverse"){if(is2P){skip2=true;m+=" Reverse! (Skip)";}else{dir=-dir;m+=" Reverse!";}}
@@ -3149,7 +3155,7 @@ export default function UnoGame(){
         cu[cp]=remain.length===1?cu[cp]:false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
         let nxP=w?cp:np(cp,dir,skip2);
         if((cardToPlay.value==="draw2"||cardToPlay.value==="wild4")&&!w)nxP=np(cp,dir,false);
-        await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,lastPlay:{by:cp,ts:Date.now()},
+        await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,lastPlay:{by:cp,ts:Date.now()},discardAllFx:bdaFx,
           currentPlayer:nxP,winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
           pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
       }catch(e){console.error("Bot:",e);try{await wgs({currentPlayer:np(g.currentPlayer,g.direction),
@@ -3323,7 +3329,7 @@ export default function UnoGame(){
     const mn=rd.players[pid]?.name||"P";let m=mn+" played "+gl(card.value);
     let pendingChallenge=null;let newDrawStack=0;let newDrawStackType=null;let snatchHold=false;
     const is2P=po.length===2;
-    let ndp2=[...(g.drawPile||[])];
+    let ndp2=[...(g.drawPile||[])];let daFx=null;
 
     if(card.value==="discardAll"){
       const matchColor=card.color;
@@ -3332,10 +3338,9 @@ export default function UnoGame(){
       nd.push(...discarded,card);
       const dCount=discarded.length;
       m+=" Discard all "+matchColor+"! (-"+(dCount+1)+" cards)";
-      // Trigger the fly-to-pile animation locally right away (fires even on a winning discard-all).
-      // ≥2 cards discarded → discard-all sfx + big animation; single card → just the draw sfx.
-      discardFxRef.current=Date.now();
-      if(dCount+1>1){psSeq("carddist",dCount+1,1150,280);setActFx("discardAll");trigBurst(matchColor);setDiscardFx({color:matchColor,count:dCount+1,cards:[...discarded,card],ts:Date.now()});}
+      // Broadcast the animation so EVERYONE (the player who used it AND observers) sees the
+      // same fly-to-pile effect via the shared discardAllFx watcher below.
+      if(dCount+1>1)daFx={color:matchColor,count:dCount+1,ts:Date.now()};
       else psSeq("carddist",1,0,0);
     } else {
       nd.push(card);
@@ -3377,7 +3382,7 @@ export default function UnoGame(){
     let nextPlayer=winner?pid:nxt;
     if((card.value==="draw2"||card.value==="wild4")&&!winner)nextPlayer=np(pid,nDir,false);
     if(snatchHold&&!winner)nextPlayer=pid;
-    await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,lastPlay:{by:pid,ts:Date.now()},
+    await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,lastPlay:{by:pid,ts:Date.now()},discardAllFx:daFx,
       currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:(nh[pid].length===1&&cu[pid])?true:false},
       unoGrace,turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
       drawStack:winner?0:newDrawStack,drawStackType:winner?null:newDrawStackType});
@@ -4406,7 +4411,7 @@ export default function UnoGame(){
           <div ref={chatEndRef}/>
         </div>
         <div style={{display:"flex",gap:8,padding:"10px 14px calc(env(safe-area-inset-bottom,0px) + 12px)",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-          <input value={chatText} onChange={e=>setChatText(e.target.value)} maxLength={140} placeholder={effChan==="team"?"Message your team…":"Message everyone…"}
+          <input ref={chatInputRef} autoFocus value={chatText} onChange={e=>setChatText(e.target.value)} maxLength={140} placeholder={effChan==="team"?"Message your team…":"Message everyone…"}
             onKeyDown={e=>{if(e.key==="Enter")doSend();}}
             style={{flex:1,padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.14)",background:"rgba(255,255,255,0.08)",
               color:"#fff",fontSize:13,outline:"none"}}/>
