@@ -2110,7 +2110,7 @@ function shuffledMemoryDeck(){
   for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
   return cards;
 }
-function MemoryGame({onExit,onWin,sound,net,friends,isOnline,onInvite}){
+function MemoryGame({onExit,onWin,sound,net,friends,isOnline,onInvite,landscape}){
   const isNet=!!net;const nState=net?.state||null;const myId=net?.myId;
   const[deck,setDeck]=useState(shuffledMemoryDeck);
   const[flipped,setFlipped]=useState([]);   // single-player: face-up, not-yet-matched indices
@@ -2165,8 +2165,8 @@ function MemoryGame({onExit,onWin,sound,net,friends,isOnline,onInvite}){
   const total=isNet?netTotal:(deck.length/2);
   const onlineFriendIds=friends?Object.keys(friends).filter(fid=>!isOnline||isOnline(fid)):[];
   return(<div style={{position:"fixed",inset:0,zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",
-    background:"radial-gradient(120% 90% at 50% 0%,#16213a,#0a0f1c 70%,#05070d)",
-    padding:"calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px)",animation:"fadeIn 0.3s"}}>
+    background:"radial-gradient(120% 90% at 50% 0%,#16213a,#0a0f1c 70%,#05070d)",overflowY:"auto",
+    padding:`calc(env(safe-area-inset-top,0px) + ${landscape?6:12}px) 12px calc(env(safe-area-inset-bottom,0px) + ${landscape?6:12}px)`,animation:"fadeIn 0.3s"}}>
     <div style={{width:"100%",maxWidth:440,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
       <button onClick={()=>{play("click");isNet?net.leave():onExit&&onExit();}} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",
         borderRadius:10,color:"#cdd",fontSize:13,fontWeight:800,padding:"7px 14px",cursor:"pointer",letterSpacing:1}}>← {isNet?"LEAVE":"BACK"}</button>
@@ -2186,19 +2186,20 @@ function MemoryGame({onExit,onWin,sound,net,friends,isOnline,onInvite}){
       </div>
     ):(
       <>
-      <div style={{width:"100%",maxWidth:440,display:"flex",justifyContent:"space-around",marginBottom:8,
-        background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"8px 0"}}>
+      <div style={{width:"100%",maxWidth:440,display:"flex",justifyContent:"space-around",marginBottom:landscape?5:8,
+        background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:landscape?"4px 0":"8px 0"}}>
         {[["PAIRS",`${pairsDone}/${total}`],["MOVES",moves],["TIME",fmt(elapsed)]].map(([l,v])=>(
           <div key={l} style={{textAlign:"center"}}>
             <div style={{fontSize:8,color:"#7a8699",fontWeight:800,letterSpacing:1}}>{l}</div>
-            <div style={{fontSize:16,fontWeight:900,color:"#eaf2ff",fontFamily:"monospace"}}>{v}</div></div>))}
+            <div style={{fontSize:landscape?13:16,fontWeight:900,color:"#eaf2ff",fontFamily:"monospace"}}>{v}</div></div>))}
       </div>
-      <button onClick={()=>{play("click");setPick(true);}} style={{marginBottom:10,padding:"7px 18px",borderRadius:11,border:"1px solid rgba(0,230,150,0.32)",
-        background:"rgba(0,200,120,0.12)",color:"#28E08A",fontSize:11,fontWeight:900,letterSpacing:1,cursor:"pointer"}}>👥 INVITE A FRIEND</button>
+      <button onClick={()=>{play("click");setPick(true);}} style={{marginBottom:landscape?6:10,padding:landscape?"5px 16px":"7px 18px",borderRadius:11,border:"1px solid rgba(0,230,150,0.32)",
+        background:"rgba(0,200,120,0.12)",color:"#28E08A",fontSize:landscape?10:11,fontWeight:900,letterSpacing:1,cursor:"pointer"}}>👥 INVITE A FRIEND</button>
       </>
     )}
-    <div style={{position:"relative",width:"100%",maxWidth:440,flex:1,minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"min(10px,2.2vw)",width:"100%",maxWidth:360,
+    <div style={{position:"relative",width:"100%",maxWidth:440,flex:"1 1 auto",minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:landscape?"min(8px,1.4vh)":"min(10px,2.2vw)",width:"100%",
+        maxWidth:landscape?"min(300px,44vh)":360,flexShrink:0,
         opacity:(isNet&&nState?.status==="waiting")?0.5:1,pointerEvents:(isNet&&!netMyTurn)?"none":"auto"}}>
         {gDeck.map((c,i)=>{const up=isUp(i);const done=isMatched(i);const owner=isNet?nState?.matched?.[i]:null;const mine=owner===myId;
           return(<div key={c.key} onClick={()=>doFlip(i)} style={{position:"relative",aspectRatio:"3/4",cursor:up?"default":"pointer",
@@ -2730,21 +2731,33 @@ export default function UnoGame(){
   /* Discard-all animation, broadcast so the PLAYER who used it and every observer trigger
      the exact same fly-to-pile effect (no more actor/observer asymmetry). */
   const daRef=useRef(0);
-  useEffect(()=>{const da=g?.discardAllFx;if(!da||!da.ts||da.ts===daRef.current)return;
-    const fresh=Date.now()-da.ts<6000;daRef.current=da.ts;if(!fresh)return; // skip stale on late join
-    const dac=da.color||g?.currentColor||"yellow";const cnt=Math.max(2,da.count||2);
+  // Single entry point for the discard-all animation — deduped by ts, so whichever fires first
+  // (the player's own optimistic call in playC, or the broadcast watcher on the state echo) wins
+  // and the other is ignored. Guarantees the player who used it sees it too.
+  const triggerDiscardAll=useCallback((ts,color,count,cards)=>{
+    if(!ts||daRef.current===ts)return;daRef.current=ts;
+    const dac=color||"yellow";const cnt=Math.max(2,count||2);
     psE(dac);psSeq("carddist",cnt,1150,280);setActFx("discardAll");trigBurst(dac);
-    const real=(g?.discardPile||[]).slice(-cnt);
-    setDiscardFx({color:dac,count:cnt,cards:real.length===cnt?real:undefined});
+    setDiscardFx({color:dac,count:cnt,cards:(cards&&cards.length===cnt)?cards:undefined});
+  },[psE,psSeq,trigBurst]);
+  useEffect(()=>{const da=g?.discardAllFx;if(!da||!da.ts)return;
+    if(Date.now()-da.ts>6000){daRef.current=da.ts;return;} // skip stale on late join
+    triggerDiscardAll(da.ts,da.color,da.count,(g?.discardPile||[]).slice(-Math.max(2,da.count||2)));
   },[g?.discardAllFx?.ts]);
   const prevTopRef=useRef();
   useEffect(()=>{const id=topC?.id;if(!id||id===prevTopRef.current)return;prevTopRef.current=id;
-    // If an OPPONENT just played, fly a face-up copy of the card from their seat to the pile
-    // (everyone sees it come from the player). Otherwise use the in-place fly-in.
-    const by=g?.lastPlay?.by;const seatEl=(by&&by!==pid)?oppRefs.current[by]:null;const pileEl=pileRef.current;
-    if(seatEl&&pileEl){
-      const s=seatEl.getBoundingClientRect(),p=pileEl.getBoundingClientRect();
-      setPlayFlyFx({card:topC,sx:s.left+s.width/2,sy:s.top+s.height/2,tx:p.left+p.width/2,ty:p.top+p.height/2,key:id});
+    // Fly a face-up copy of the played card to the pile — from the player's seat if it was an
+    // opponent, or from MY hand (bottom-center) when it's my own play. Everyone, including the
+    // player who made the move, sees the same throw. Skip for discard-all (its own FX handles it).
+    const by=g?.lastPlay?.by;const pileEl=pileRef.current;
+    const isDA=!!g?.discardAllFx&&!!g?.lastPlay?.ts&&Math.abs((g.discardAllFx.ts||0)-g.lastPlay.ts)<150;
+    if(pileEl&&topC&&!isDA){
+      const p=pileEl.getBoundingClientRect();
+      const seatEl=(by&&by!==pid)?oppRefs.current[by]:null;
+      let sx,sy;
+      if(seatEl){const s=seatEl.getBoundingClientRect();sx=s.left+s.width/2;sy=s.top+s.height/2;}
+      else{sx=window.innerWidth/2;sy=window.innerHeight*0.9;} // my own play → sweep up from my hand
+      setPlayFlyFx({card:topC,sx,sy,tx:p.left+p.width/2,ty:p.top+p.height/2,key:id});
       const t=setTimeout(()=>setPlayFlyFx(f=>f&&f.key===id?null:f),560);return()=>clearTimeout(t);
     }
     setCAn("cFly 0.5s cubic-bezier(.22,1,.36,1)");const t=setTimeout(()=>setCAn(null),520);return()=>clearTimeout(t);},[topC?.id]);
@@ -3338,9 +3351,10 @@ export default function UnoGame(){
       nd.push(...discarded,card);
       const dCount=discarded.length;
       m+=" Discard all "+matchColor+"! (-"+(dCount+1)+" cards)";
-      // Broadcast the animation so EVERYONE (the player who used it AND observers) sees the
-      // same fly-to-pile effect via the shared discardAllFx watcher below.
-      if(dCount+1>1)daFx={color:matchColor,count:dCount+1,ts:Date.now()};
+      // Broadcast (so observers animate via the watcher) AND fire it locally right now (so the
+      // player who used it sees it instantly, without waiting on the state echo).
+      if(dCount+1>1){daFx={color:matchColor,count:dCount+1,ts:Date.now()};
+        triggerDiscardAll(daFx.ts,matchColor,dCount+1,[...discarded,card]);}
       else psSeq("carddist",1,0,0);
     } else {
       nd.push(card);
@@ -3386,7 +3400,7 @@ export default function UnoGame(){
       currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:(nh[pid].length===1&&cu[pid])?true:false},
       unoGrace,turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
       drawStack:winner?0:newDrawStack,drawStackType:winner?null:newDrawStackType});
-  },[g,myTurn,myH,pid,po,np,wgs,rd,ps,rc,trigBurst,trigImpact]);
+  },[g,myTurn,myH,pid,po,np,wgs,rd,ps,rc,trigBurst,trigImpact,triggerDiscardAll]);
 
   const respondChallenge=useCallback(async(doChallenge)=>{
     if(!g||!challenge)return;setChallenge(null);
@@ -4007,8 +4021,8 @@ export default function UnoGame(){
         </div></div>)}
 
       {/* Daily Missions */}
-      {(miniRoom&&miniG)?<MemoryGame sound={ps} net={{state:miniG,myId:pid,flip:miniFlip,leave:leaveMini}}/>
-        :miniOpen?<MemoryGame onExit={()=>setMiniOpen(false)} onWin={finishMiniGame} sound={ps} friends={friends} isOnline={isOnline} onInvite={startMiniMulti}/>
+      {(miniRoom&&miniG)?<MemoryGame sound={ps} landscape={isLandscape} net={{state:miniG,myId:pid,flip:miniFlip,leave:leaveMini}}/>
+        :miniOpen?<MemoryGame onExit={()=>setMiniOpen(false)} onWin={finishMiniGame} sound={ps} landscape={isLandscape} friends={friends} isOnline={isOnline} onInvite={startMiniMulti}/>
         :null}
       {showMissions&&(<div onClick={()=>setShowMissions(false)} style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:400,
         display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)",animation:"fadeIn 0.25s"}}>
