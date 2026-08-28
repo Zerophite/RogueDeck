@@ -4588,9 +4588,9 @@ export default function UnoGame(){
             {topOpps.map(id=><OppCard key={id} id={id} pos="top"/>)}
           </div>
 
-          {/* Center play area */}
+          {/* Center play area — bottom padding keeps the deck/pile clear of the player's hand */}
           <div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
-            position:"relative",minHeight:0,zIndex:5}}>
+            position:"relative",minHeight:0,zIndex:5,paddingBottom:isLandscape?34:48}}>
             <div className="uno-table-circle" style={{position:"absolute",width:"min(200px, 40vw)",height:"min(200px, 40vw)",borderRadius:"50%",
               border:`2px solid rgba(255,215,0,0.1)`,pointerEvents:"none",
               background:`radial-gradient(circle,rgba(20,40,35,0.6),rgba(10,22,20,0.3) 60%,transparent 80%)`,
@@ -4637,10 +4637,11 @@ export default function UnoGame(){
               </div>
               <div style={{position:"relative",isolation:"isolate",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>
                 {/* Previously-played cards fanned underneath, like a real tabletop discard pile */}
-                {!g.winner&&(g.discardPile||[]).slice(-5,-1).map((c)=>{const s=(""+c.id).split("").reduce((a,ch)=>a+ch.charCodeAt(0),0);
-                  const ang=(s%15)-7,dx=(s%9)-4,dy=((s*2)%9)-4;
+                {!g.winner&&(g.discardPile||[]).slice(-9,-1).map((c,i)=>{const s=(""+c.id).split("").reduce((a,ch)=>a+ch.charCodeAt(0),0);
+                  const ang=(s%25)-12,dx=(s%17)-8,dy=((s*2)%15)-7;
                   return(<div key={c.id} style={{position:"absolute",top:"50%",left:"50%",zIndex:0,pointerEvents:"none",
-                    transform:`translate(-50%,-50%) translate(${dx}px,${dy}px) rotate(${ang}deg)`,filter:"brightness(0.8)"}}>
+                    transform:`translate(-50%,-50%) translate(${dx}px,${dy}px) rotate(${ang}deg)`,
+                    filter:`brightness(${(0.62+i*0.045).toFixed(2)}) drop-shadow(0 2px 4px rgba(0,0,0,0.4))`}}>
                     <Card card={c} sz={isLandscape?"sm":"md"}/></div>);})}
                 <div style={{position:"relative",zIndex:1}}>{topC&&<Card card={topC} sz={isLandscape?"sm":"md"} animate={cAn}/>}</div>
                 {g.winner&&<div style={{position:"absolute",top:-16,left:"50%",transform:"translateX(-50%)",zIndex:3,fontSize:7,color:"#FFD700",fontWeight:900,letterSpacing:1,whiteSpace:"nowrap",textShadow:"0 0 6px rgba(255,215,0,0.6)",pointerEvents:"none"}}>👑 WINNING CARD</div>}
