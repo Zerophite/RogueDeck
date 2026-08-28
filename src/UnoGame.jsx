@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo } from "react";
 import { db } from "./firebase.js";
-import { ref, set, get, onValue, update, remove, off } from "firebase/database";
+import { ref, set, get, onValue, update, remove, off, onDisconnect } from "firebase/database";
 
 const COLORS=["red","blue","green","yellow"];
 const CH={red:"#ED1C24",blue:"#0956BF",green:"#00A651",yellow:"#FFDE00",wild:"#222"};
@@ -438,17 +438,29 @@ function xpForGame(won,perf){return 20+(won?25:0)+Math.round((Math.max(0,Math.mi
 
 /* ═══ DAILY MISSIONS ═══ another way to earn XP + coins. Reset each day. */
 const DAILY_MISSIONS=[
-  {id:"play",  label:"Play 3 games",              goal:3,xp:60,coins:30,counter:"play"},
-  {id:"win",   label:"Win 2 games",               goal:2,xp:90,coins:60,counter:"win"},
-  {id:"strong",label:"Finish 2 games with ≤3 cards",goal:2,xp:50,coins:25,counter:"strong"},
+  {id:"play",    label:"Play 3 games",               goal:3,xp:60, coins:30, counter:"play"},
+  {id:"marathon",label:"Play 6 games",               goal:6,xp:110,coins:55, counter:"play"},
+  {id:"win",     label:"Win 2 games",                goal:2,xp:90, coins:60, counter:"win"},
+  {id:"champion",label:"Win 4 games",                goal:4,xp:160,coins:100,counter:"win"},
+  {id:"strong",  label:"Finish 2 games with ≤3 cards",goal:2,xp:50, coins:25, counter:"strong"},
+  {id:"ffa",     label:"Win a Free For All game",    goal:1,xp:70, coins:40, counter:"ffa"},
+  {id:"team",    label:"Win a Team Mode game",       goal:1,xp:70, coins:40, counter:"team"},
+  {id:"mini",    label:"Play a mini-game",           goal:1,xp:40, coins:20, counter:"mini"},
 ];
 function todayStr(){return new Date().toISOString().slice(0,10);}
 // Fold one finished game into a player's daily mission counters (resets on a new day).
-function bumpMissions(cur,{won,strong}){
-  const t=todayStr();
-  const m=(cur&&cur.date===t)?{...cur,claimed:{...(cur.claimed||{})}}:{date:t,play:0,win:0,strong:0,claimed:{}};
-  m.play=(m.play||0)+1;if(won)m.win=(m.win||0)+1;if(strong)m.strong=(m.strong||0)+1;
+function bumpMissions(cur,{won,strong,teamMode}){
+  const m=freshMissions(cur);
+  m.play=(m.play||0)+1;
+  if(won){m.win=(m.win||0)+1;if(teamMode)m.team=(m.team||0)+1;else m.ffa=(m.ffa||0)+1;}
+  if(strong)m.strong=(m.strong||0)+1;
   return m;
+}
+// Return today's mission object (fresh zeros on a new day), preserving claimed flags.
+function freshMissions(cur){
+  const t=todayStr();
+  return (cur&&cur.date===t)?{date:t,play:0,win:0,strong:0,ffa:0,team:0,mini:0,...cur,claimed:{...(cur.claimed||{})}}
+    :{date:t,play:0,win:0,strong:0,ffa:0,team:0,mini:0,claimed:{}};
 }
 
 /* ═══ ACHIEVEMENTS ═══ */
@@ -2079,6 +2091,179 @@ const ConfettiFX=()=>{
   return <canvas ref={ref} style={{position:"fixed",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:151}}/>;
 };
 
+/* ═══ MINI-GAME: MEMORY MATCH ═══
+   Flip two cards; a matched pair stays face-up, a mismatch flips back. Clear the
+   board to win. Presentational — the host wires rewards via onWin({moves,secs}). */
+// Face pool: a mix of real UNO cards and elemental icons, so the board has both.
+const MEMORY_FACES=[
+  {fid:"c-r7",card:{color:"red",value:"7",type:"number"}},
+  {fid:"c-b3",card:{color:"blue",value:"3",type:"number"}},
+  {fid:"c-g5",card:{color:"green",value:"5",type:"number"}},
+  {fid:"c-y1",card:{color:"yellow",value:"1",type:"number"}},
+  {fid:"c-skip",card:{color:"red",value:"skip",type:"action"}},
+  {fid:"c-rev",card:{color:"blue",value:"reverse",type:"action"}},
+  {fid:"i-crown",icon:"👑"},
+  {fid:"i-star",icon:"⭐"},
+];
+function shuffledMemoryDeck(){
+  const cards=[...MEMORY_FACES,...MEMORY_FACES].map((f,i)=>({key:i,...f}));
+  for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+  return cards;
+}
+function MemoryGame({onExit,onWin,sound,net,friends,isOnline,onInvite}){
+  const isNet=!!net;const nState=net?.state||null;const myId=net?.myId;
+  const[deck,setDeck]=useState(shuffledMemoryDeck);
+  const[flipped,setFlipped]=useState([]);   // single-player: face-up, not-yet-matched indices
+  const[matched,setMatched]=useState([]);    // single-player: matched indices
+  const[moves,setMoves]=useState(0);
+  const[busy,setBusy]=useState(false);
+  const[won,setWon]=useState(false);
+  const[startAt,setStartAt]=useState(()=>Date.now());
+  const[elapsed,setElapsed]=useState(0);
+  const[reward,setReward]=useState(null);
+  const[pick,setPick]=useState(false); // friend-picker overlay (single-player, to invite)
+  const play=useCallback(t=>{if(sound)sound(t);},[sound]);
+  const flippedRef=useRef([]); // authoritative face-up set so two fast taps both register
+  useEffect(()=>{if(isNet||won)return;const t=setInterval(()=>setElapsed(Math.floor((Date.now()-startAt)/1000)),500);return()=>clearInterval(t);},[isNet,won,startAt]);
+  const reset=()=>{flippedRef.current=[];setDeck(shuffledMemoryDeck());setFlipped([]);setMatched([]);setMoves(0);setBusy(false);setWon(false);setStartAt(Date.now());setElapsed(0);setReward(null);play("click");};
+  const flip=(idx)=>{
+    if(busy||won)return;
+    const cur=flippedRef.current;
+    if(cur.length>=2||cur.includes(idx)||matched.includes(idx))return;
+    play("cardLift");
+    const nf=[...cur,idx];flippedRef.current=nf;setFlipped(nf);
+    if(nf.length===2){
+      const nMoves=moves+1;setMoves(nMoves);setBusy(true);
+      const[a,b]=nf;
+      if(deck[a].fid===deck[b].fid){
+        setTimeout(()=>{const nm=[...matched,a,b];setMatched(nm);flippedRef.current=[];setFlipped([]);setBusy(false);play("playable");
+          if(nm.length===deck.length){const secs=Math.floor((Date.now()-startAt)/1000);setWon(true);play("win");
+            Promise.resolve(onWin&&onWin({moves:nMoves,secs})).then(r=>setReward(r||{}));}},480);
+      }else{setTimeout(()=>{flippedRef.current=[];setFlipped([]);setBusy(false);play("error");},820);}
+    }
+  };
+  const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+  // Sounds for the networked board (react to state changes coming from either player)
+  const netSig=isNet?`${(nState?.up||[]).join(",")}|${Object.keys(nState?.matched||{}).length}|${nState?.status}`:"";
+  const prevSig=useRef("");
+  useEffect(()=>{if(!isNet)return;const up=(nState?.up||[]).length;const mc=Object.keys(nState?.matched||{}).length;
+    if(prevSig.current){const[pu,pm]=prevSig.current.split("|").map(Number);
+      if(up>pu)play("cardLift");else if(mc>pm)play("playable");else if(up<pu&&mc===pm&&up===0)play("error");
+      if(nState?.status==="done"&&!prevSig.current.endsWith("done"))play("win");}
+    prevSig.current=`${up}|${mc}|${nState?.status}`;
+  },[netSig]);
+  // Unified accessors (single vs networked)
+  const gDeck=isNet?(nState?.deck||[]):deck;
+  const upArr=isNet?(nState?.up||[]):flipped;
+  const isMatched=i=>isNet?(nState?.matched?.[i]!==undefined):matched.includes(i);
+  const isUp=i=>upArr.includes(i)||isMatched(i);
+  const netMyTurn=isNet&&nState?.turn===myId&&nState?.status==="playing";
+  const doFlip=i=>{if(isNet){if(netMyTurn)net.flip(i);}else flip(i);};
+  const players=nState?.players||{};const oppId=isNet?Object.keys(players).find(id=>id!==myId):null;
+  const myScore=isNet?(players[myId]?.score||0):0,oppScore=isNet?(players[oppId]?.score||0):0;
+  const netTotal=gDeck.length/2;const pairsDone=isNet?(Object.keys(nState?.matched||{}).length/2):(matched.length/2);
+  const total=isNet?netTotal:(deck.length/2);
+  const onlineFriendIds=friends?Object.keys(friends).filter(fid=>!isOnline||isOnline(fid)):[];
+  return(<div style={{position:"fixed",inset:0,zIndex:300,display:"flex",flexDirection:"column",alignItems:"center",
+    background:"radial-gradient(120% 90% at 50% 0%,#16213a,#0a0f1c 70%,#05070d)",
+    padding:"calc(env(safe-area-inset-top,0px) + 12px) 12px calc(env(safe-area-inset-bottom,0px) + 12px)",animation:"fadeIn 0.3s"}}>
+    <div style={{width:"100%",maxWidth:440,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+      <button onClick={()=>{play("click");isNet?net.leave():onExit&&onExit();}} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",
+        borderRadius:10,color:"#cdd",fontSize:13,fontWeight:800,padding:"7px 14px",cursor:"pointer",letterSpacing:1}}>← {isNet?"LEAVE":"BACK"}</button>
+      <span style={{fontSize:16,fontWeight:900,color:"#6FE3FF",letterSpacing:2,fontFamily:"'Chakra Petch',sans-serif"}}>🧠 MEMORY MATCH</span>
+      {isNet?<span style={{fontSize:9,fontWeight:900,color:"#28E08A",letterSpacing:1,background:"rgba(0,200,120,0.12)",border:"1px solid rgba(0,230,150,0.3)",borderRadius:9,padding:"6px 10px"}}>VS</span>
+        :<button onClick={reset} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",
+          borderRadius:10,color:"#cdd",fontSize:13,fontWeight:800,padding:"7px 14px",cursor:"pointer",letterSpacing:1}}>↻ NEW</button>}
+    </div>
+    {isNet?(
+      <div style={{width:"100%",maxWidth:440,display:"flex",gap:8,marginBottom:12}}>
+        {[[myId,players[myId],myScore,true],[oppId,players[oppId],oppScore,false]].map(([id,p,sc,me])=>{const turn=nState?.turn===id&&nState?.status==="playing";return(
+          <div key={id||"opp"} style={{flex:1,textAlign:"center",padding:"8px 4px",borderRadius:12,
+            background:turn?"linear-gradient(135deg,rgba(41,121,255,0.28),rgba(111,227,255,0.14))":"rgba(255,255,255,0.04)",
+            border:`1px solid ${turn?"rgba(111,227,255,0.6)":"rgba(255,255,255,0.07)"}`,transition:"all 0.3s"}}>
+            <div style={{fontSize:9,fontWeight:800,color:me?"#6FE3FF":"#f5b0b0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{me?"You":(p?.name||"…")}{turn?" ▸":""}</div>
+            <div style={{fontSize:20,fontWeight:900,color:"#eaf2ff",fontFamily:"monospace"}}>{sc}</div></div>);})}
+      </div>
+    ):(
+      <>
+      <div style={{width:"100%",maxWidth:440,display:"flex",justifyContent:"space-around",marginBottom:8,
+        background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.07)",borderRadius:12,padding:"8px 0"}}>
+        {[["PAIRS",`${pairsDone}/${total}`],["MOVES",moves],["TIME",fmt(elapsed)]].map(([l,v])=>(
+          <div key={l} style={{textAlign:"center"}}>
+            <div style={{fontSize:8,color:"#7a8699",fontWeight:800,letterSpacing:1}}>{l}</div>
+            <div style={{fontSize:16,fontWeight:900,color:"#eaf2ff",fontFamily:"monospace"}}>{v}</div></div>))}
+      </div>
+      <button onClick={()=>{play("click");setPick(true);}} style={{marginBottom:10,padding:"7px 18px",borderRadius:11,border:"1px solid rgba(0,230,150,0.32)",
+        background:"rgba(0,200,120,0.12)",color:"#28E08A",fontSize:11,fontWeight:900,letterSpacing:1,cursor:"pointer"}}>👥 INVITE A FRIEND</button>
+      </>
+    )}
+    <div style={{position:"relative",width:"100%",maxWidth:440,flex:1,minHeight:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"min(10px,2.2vw)",width:"100%",maxWidth:360,
+        opacity:(isNet&&nState?.status==="waiting")?0.5:1,pointerEvents:(isNet&&!netMyTurn)?"none":"auto"}}>
+        {gDeck.map((c,i)=>{const up=isUp(i);const done=isMatched(i);const owner=isNet?nState?.matched?.[i]:null;const mine=owner===myId;
+          return(<div key={c.key} onClick={()=>doFlip(i)} style={{position:"relative",aspectRatio:"3/4",cursor:up?"default":"pointer",
+            perspective:600,touchAction:"manipulation"}}>
+            <div style={{position:"absolute",inset:0,transition:"transform 0.4s",transformStyle:"preserve-3d",
+              transform:up?"rotateY(180deg)":"none"}}>
+              <div style={{position:"absolute",inset:0,borderRadius:10,backfaceVisibility:"hidden",
+                background:"linear-gradient(135deg,#232838,#151a26 55%,#090c12)",border:"1px solid rgba(255,215,0,0.3)",
+                display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 3px 8px rgba(0,0,0,0.5)"}}>
+                <div style={{width:"46%",height:"46%",borderRadius:"22%",transform:"rotate(45deg)",
+                  background:"linear-gradient(135deg,#2c3244,#11141d)",boxShadow:"0 0 10px rgba(255,215,0,0.35)"}}/></div>
+              <div style={{position:"absolute",inset:0,borderRadius:10,backfaceVisibility:"hidden",transform:"rotateY(180deg)",
+                background:done?(isNet?(mine?"linear-gradient(135deg,#173a55,#0d2033)":"linear-gradient(135deg,#3a1717,#240d0d)"):"linear-gradient(135deg,#1b3a26,#0f2417)"):"linear-gradient(135deg,#1c2740,#0e1626)",
+                border:`1px solid ${done?(isNet?(mine?"rgba(111,227,255,0.7)":"rgba(239,120,120,0.7)"):"rgba(102,187,106,0.7)"):"rgba(111,227,255,0.4)"}`,
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:"min(34px,8vw)",
+                boxShadow:done?"0 0 14px rgba(0,0,0,0.2)":"0 3px 8px rgba(0,0,0,0.5)",
+                opacity:done?0.92:1,transition:"opacity 0.3s",overflow:"hidden"}}>
+                {c.card?<div style={{transform:"scale(0.82)"}}><Card card={c.card} sz="sm"/></div>:c.icon}</div>
+            </div>
+          </div>);})}
+      </div>
+      {isNet&&nState?.status==="waiting"&&<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,
+        background:"rgba(5,8,14,0.7)",backdropFilter:"blur(4px)",borderRadius:16}}>
+        <div style={{fontSize:34}}>⏳</div>
+        <div style={{fontSize:14,fontWeight:900,color:"#6FE3FF",letterSpacing:1}}>Waiting for your friend to join…</div>
+        <div style={{fontSize:10,color:"#889"}}>They'll get an invite in their Friends list</div></div>}
+      {isNet&&nState?.status==="done"&&(()=>{const win=myScore>oppScore,tie=myScore===oppScore;return(
+        <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,
+          background:"rgba(5,8,14,0.85)",backdropFilter:"blur(6px)",borderRadius:16,animation:"fadeIn 0.4s"}}>
+          <div style={{fontSize:48}}>{tie?"🤝":win?"🏆":"😤"}</div>
+          <div style={{fontSize:22,fontWeight:900,color:tie?"#FFD700":win?"#4CE0A0":"#EF5350",letterSpacing:2,fontFamily:"'Chakra Petch',sans-serif"}}>{tie?"IT'S A TIE!":win?"YOU WIN!":"YOU LOSE"}</div>
+          <div style={{fontSize:13,color:"#cdd"}}>You {myScore} · {players[oppId]?.name||"Opponent"} {oppScore}</div>
+          <button onClick={()=>{play("click");net.leave();}} style={{marginTop:8,padding:"10px 26px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#2979FF,#6FE3FF)",color:"#06121e",fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:1}}>DONE</button>
+        </div>);})()}
+      {!isNet&&won&&<div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,
+        background:"rgba(5,8,14,0.82)",backdropFilter:"blur(6px)",borderRadius:16,animation:"fadeIn 0.4s"}}>
+        <div style={{fontSize:48}}>🏆</div>
+        <div style={{fontSize:22,fontWeight:900,color:"#FFD700",letterSpacing:2,fontFamily:"'Chakra Petch',sans-serif"}}>CLEARED!</div>
+        <div style={{fontSize:12,color:"#cdd"}}>{moves} moves · {fmt(elapsed)}</div>
+        {reward&&<div style={{display:"flex",gap:10,marginTop:2}}>
+          {reward.coins>0&&<span style={{fontSize:14,fontWeight:900,color:"#FFC107"}}>🪙 +{reward.coins}</span>}
+          {reward.xp>0&&<span style={{fontSize:14,fontWeight:900,color:"#6FE3FF"}}>✦ +{reward.xp} XP</span>}</div>}
+        <div style={{display:"flex",gap:10,marginTop:8}}>
+          <button onClick={reset} style={{padding:"10px 22px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#2979FF,#6FE3FF)",color:"#06121e",fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:1}}>PLAY AGAIN</button>
+          <button onClick={()=>{play("click");onExit&&onExit();}} style={{padding:"10px 22px",borderRadius:12,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(255,255,255,0.06)",color:"#cdd",fontSize:13,fontWeight:900,cursor:"pointer",letterSpacing:1}}>DONE</button>
+        </div>
+      </div>}
+      {pick&&<div onClick={()=>setPick(false)} style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",
+        background:"rgba(5,8,14,0.8)",backdropFilter:"blur(6px)",borderRadius:16,animation:"fadeIn 0.25s"}}>
+        <div onClick={e=>e.stopPropagation()} style={{width:"88%",maxWidth:320,background:"rgba(20,30,45,0.9)",border:"1px solid rgba(120,180,230,0.2)",borderRadius:16,padding:18,maxHeight:"80%",overflowY:"auto"}}>
+          <div style={{fontSize:13,fontWeight:900,color:"#28E08A",letterSpacing:1,marginBottom:4,textAlign:"center"}}>INVITE A FRIEND</div>
+          <div style={{fontSize:10,color:"#889",textAlign:"center",marginBottom:12}}>Pick an online friend to play head-to-head</div>
+          {onlineFriendIds.length===0&&<div style={{fontSize:11,color:"#667",textAlign:"center",padding:"14px 0"}}>No friends online right now.<br/>You can keep playing solo!</div>}
+          {onlineFriendIds.map(fid=>(<button key={fid} onClick={()=>{play("click");setPick(false);onInvite&&onInvite(fid);}}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:10,marginBottom:6,cursor:"pointer",
+            background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.08)",color:"#eaf2ff",fontSize:12,fontWeight:700,textAlign:"left"}}>
+            <span style={{width:9,height:9,borderRadius:"50%",background:"#4CAF50",boxShadow:"0 0 6px rgba(76,175,80,0.8)",flexShrink:0}}/>
+            {friends[fid]?.name||"Friend"}</button>))}
+          <button onClick={()=>setPick(false)} style={{width:"100%",marginTop:6,padding:"8px",borderRadius:10,border:"1px solid rgba(255,255,255,0.1)",background:"none",color:"#889",fontSize:11,fontWeight:800,cursor:"pointer"}}>CANCEL</button>
+        </div>
+      </div>}
+    </div>
+  </div>);
+}
+
 /* ═══ MAIN GAME ═══ */
 export default function UnoGame(){
   const pid=useRef(gpid()).current;
@@ -2138,17 +2323,27 @@ export default function UnoGame(){
   const[throwAnim,setThrowAnim]=useState(null);
   const[splatFx,setSplatFx]=useState(null);
   const[hitFx,setHitFx]=useState({});
-  const oppRefs=useRef({});const throwCD=useRef(0);const prevThrow=useRef(0);
+  const oppRefs=useRef({});const throwCD=useRef(0);const prevThrow=useRef(0);const pileRef=useRef(null);
   const[snatchModal,setSnatchModal]=useState(null);
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
   const[cardFlyFx,setCardFlyFx]=useState(null);
+  const[playFlyFx,setPlayFlyFx]=useState(null); // opponent's played card flying from their seat → pile
   const[dealFx,setDealFx]=useState(null);
   const[draw2Fx,setDraw2Fx]=useState(null);
   const[reverseFx,setReverseFx]=useState(null);
   const[skipFx,setSkipFx]=useState(null);
   const[unoCallFx,setUnoCallFx]=useState(null);
   const[unoPenaltyFx,setUnoPenaltyFx]=useState(null);
+  const[miniOpen,setMiniOpen]=useState(false);
+  const[miniRoom,setMiniRoom]=useState(null); // networked memory-match room code (rooms/<code>)
+  const[miniG,setMiniG]=useState(null);       // synced networked mini-game state
+  const[chatOpen,setChatOpen]=useState(false);
+  const[chatText,setChatText]=useState("");
+  const[chat,setChat]=useState([]);       // room chat messages (lobby + in-game)
+  const[chatSeen,setChatSeen]=useState(0); // ts of newest message I've seen (unread badge)
+  const[chatChan,setChatChan]=useState("all"); // "all" (everyone) | "team" (teammates only)
+  const[liveFeed,setLiveFeed]=useState([]); // transient in-game message bubbles
   const[timeoutFx,setTimeoutFx]=useState(null);
   const[showWin,setShowWin]=useState(false);
   const[leaveConfirm,setLeaveConfirm]=useState(false); // two-tap guard so a stray tap during card-reveal can't exit
@@ -2244,6 +2439,21 @@ export default function UnoGame(){
   },[pid]);
 
   useEffect(()=>{const r=ref(db,"store/hidden");const u=onValue(r,s=>setStoreHidden(s.val()||{}));return()=>off(r);},[]);
+
+  /* Global presence: heartbeat my own timestamp, auto-clear on disconnect, and listen to
+     everyone's so friends can be shown online/offline. A player counts as online if their
+     heartbeat is within PRESENCE_TTL. */
+  const[presence,setPresence]=useState({});
+  useEffect(()=>{const r=ref(db,"presence");const u=onValue(r,s=>setPresence(s.val()||{}));return()=>off(r);},[]);
+  useEffect(()=>{if(!pid)return;const pr=ref(db,"presence/"+pid);
+    const beat=()=>set(pr,Date.now()).catch(()=>{});
+    beat();try{onDisconnect(pr).remove();}catch(e){}
+    const iv=setInterval(beat,25000);
+    const onVis=()=>{if(!document.hidden)beat();};
+    document.addEventListener("visibilitychange",onVis);
+    return()=>{clearInterval(iv);document.removeEventListener("visibilitychange",onVis);};
+  },[pid]);
+  const isOnline=useCallback(fid=>{const t=presence[fid];return !!t&&(Date.now()-t)<70000;},[presence]);
   const toggleHidden=useCallback((id)=>{if(!isAdm)return;const cur=!!storeHidden[id];
     update(ref(db,"store/hidden"),{[id]:cur?null:true}).catch(()=>{});},[isAdm,storeHidden]);
   const buyItem=useCallback((it)=>{if(owned.includes(it.id))return;
@@ -2368,6 +2578,42 @@ export default function UnoGame(){
     const u=onValue(r,s=>{const d=s.val();if(d){setRd(d);if(d.settings)setSettings({...DEF_SETTINGS,...d.settings});}else{setRd(null);setScr("menu");setErr("Room closed");}});
     return()=>off(r);},[rc]);
 
+  /* Room chat (works in the lobby AND in-game). Messages live under rooms/<rc>/chat keyed
+     by timestamp; we keep the newest ~40 and prune older ones when sending. Each message has
+     a channel: "all" (everyone) or "team" (only teammates render it — client-side filter). */
+  useEffect(()=>{if(!rc){setChat([]);return;}const r=ref(db,"rooms/"+rc+"/chat");
+    const u=onValue(r,s=>{const d=s.val()||{};
+      const arr=Object.entries(d).map(([k,v])=>({k,...v})).sort((a,b)=>a.ts-b.ts);
+      setChat(arr);});
+    return()=>off(r);},[rc]);
+  const myTeam=rd?.players?.[pid]?.team||null;
+  const visChat=useMemo(()=>chat.filter(m=>m.chan!=="team"||m.team===myTeam||m.pid===pid),[chat,myTeam,pid]);
+  useEffect(()=>{if(chatOpen&&visChat.length)setChatSeen(visChat[visChat.length-1].ts);},[chatOpen,visChat]);
+  const chatUnread=visChat.filter(m=>m.ts>chatSeen&&m.pid!==pid).length;
+  const chatEndRef=useRef(null);
+  useEffect(()=>{if(chatOpen)setTimeout(()=>chatEndRef.current?.scrollIntoView({block:"end",behavior:"smooth"}),50);},[visChat,chatOpen]);
+  // In-game live feed: pop transient bubbles for newly-arrived visible messages (so players
+  // read chat without opening the panel). Skips the backlog on first load.
+  const lastFeedRef=useRef(0);
+  useEffect(()=>{if(!visChat.length)return;const newest=visChat[visChat.length-1].ts;
+    if(lastFeedRef.current===0){lastFeedRef.current=newest;return;}
+    const fresh=visChat.filter(m=>m.ts>lastFeedRef.current&&m.pid!==pid);lastFeedRef.current=newest;
+    if(chatOpen||!fresh.length)return;
+    fresh.forEach(m=>{setLiveFeed(f=>[...f.filter(x=>x.k!==m.k),m].slice(-4));
+      setTimeout(()=>setLiveFeed(f=>f.filter(x=>x.k!==m.k)),11000);});
+  },[visChat,chatOpen]);
+  const sendChat=useCallback(async(txt)=>{
+    const t=(txt||"").trim().slice(0,140);if(!t||!rc)return;
+    const now=Date.now();const key=now+"_"+pid.slice(-4);
+    const team=rd?.players?.[pid]?.team||null;
+    const chan=(chatChan==="team"&&team)?"team":"all";
+    try{await set(ref(db,"rooms/"+rc+"/chat/"+key),{pid,name:pName.trim()||"Player",text:t,ts:now,team,chan});
+      // prune: keep only the newest ~40 messages
+      const snap=(await get(ref(db,"rooms/"+rc+"/chat"))).val()||{};
+      const keys=Object.keys(snap).sort();if(keys.length>40){for(const k of keys.slice(0,keys.length-40))remove(ref(db,"rooms/"+rc+"/chat/"+k)).catch(()=>{});}
+    }catch(e){}
+  },[rc,pid,pName,rd,chatChan]);
+
   const pls=rd?.players?Object.entries(rd.players).sort((a,b)=>a[1].order-b[1].order):[];
   const po=pls.map(([id])=>id);const isHost=rd?.host===pid;
   const g=rd?.game||null;const myH=g?.hands?.[pid]||[];
@@ -2449,7 +2695,7 @@ export default function UnoGame(){
     else if(m.includes("challenge")&&m.includes("innocent")){setActFx("challenge");ps("challenge");trigBurst("blue");trigImpact("blue");}
     else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);}
     else if(m.includes("called uno")){setUnoCallFx(g?.currentColor||"red");if(Date.now()-unoSndRef.current>1500)ps("uno");trigShake();}
-    else if(m.includes("forgot uno")||m.includes("caught!")){psSeq("carddist",2,650,170);trigShake(); // +2 penalty cards → carddist per card
+    else if(m.includes("forgot uno")||m.includes("caught!")){psSeq("carddist",2,500,280);trigShake(); // +2 penalty cards → one thunk per card, synced to each cardReceive land (~no*280+500ms)
       const fm=g.message.match(/^(.*?)\s+played\s/i);const cm=g.message.match(/^(.*?)\s+caught!/i);
       setUnoPenaltyFx((cm&&cm[1])||(fm&&fm[1])||"");}
     else if(/has no counter! draws|timed out! draws|accepts\. draws|draws \d+ cards!/i.test(m)){
@@ -2487,8 +2733,16 @@ export default function UnoGame(){
   // Animate the discard pile whenever a NEW card lands on it (any player), so plays
   // don't look like the pile just "changed color".
   const prevTopRef=useRef();
-  useEffect(()=>{const id=topC?.id;if(id&&id!==prevTopRef.current){prevTopRef.current=id;
-    setCAn("cFly 0.5s cubic-bezier(.22,1,.36,1)");const t=setTimeout(()=>setCAn(null),520);return()=>clearTimeout(t);}},[topC?.id]);
+  useEffect(()=>{const id=topC?.id;if(!id||id===prevTopRef.current)return;prevTopRef.current=id;
+    // If an OPPONENT just played, fly a face-up copy of the card from their seat to the pile
+    // (everyone sees it come from the player). Otherwise use the in-place fly-in.
+    const by=g?.lastPlay?.by;const seatEl=(by&&by!==pid)?oppRefs.current[by]:null;const pileEl=pileRef.current;
+    if(seatEl&&pileEl){
+      const s=seatEl.getBoundingClientRect(),p=pileEl.getBoundingClientRect();
+      setPlayFlyFx({card:topC,sx:s.left+s.width/2,sy:s.top+s.height/2,tx:p.left+p.width/2,ty:p.top+p.height/2,key:id});
+      const t=setTimeout(()=>setPlayFlyFx(f=>f&&f.key===id?null:f),560);return()=>clearTimeout(t);
+    }
+    setCAn("cFly 0.5s cubic-bezier(.22,1,.36,1)");const t=setTimeout(()=>setCAn(null),520);return()=>clearTimeout(t);},[topC?.id]);
 
   const np=useCallback((cur,dir,skip=false)=>{const i=po.indexOf(cur);const n=po.length;
     let x=(i+dir+n)%n;if(skip)x=(x+dir+n)%n;return po[x];},[po]);
@@ -2732,7 +2986,7 @@ export default function UnoGame(){
           const upd={name:rd.players[wId]?.name||"Player",
             totalPoints:Math.max(0,(wp.totalPoints||0)+share+pb),gamesPlayed:(wp.gamesPlayed||0)+1,wins:(wp.wins||0)+1,lastPlayed:now,since:wp.since||now,
             xp:(wp.xp||0)+xpForGame(true,perfScore(wId)),coins:(wp.coins||0)+coinGain,
-            missions:bumpMissions(wp.missions,{won:true,strong:true})};
+            missions:bumpMissions(wp.missions,{won:true,strong:true,teamMode})};
           if(wId===winnerId)upd.beat=beat;
           await update(ref(db,"leaderboard/"+wId),upd);
           deltas[wId]=share+pb;
@@ -2838,7 +3092,7 @@ export default function UnoGame(){
             if(remain.length===1&&(intel>=1||Math.random()>0.1))cu[cp]=true;
             if(remain.length===1&&!cu[cp]){m+=" | Forgot UNO! +2 penalty!";remain=[...remain,...ensure(2)];}
             cu[cp]=remain.length===1?cu[cp]:false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
-            await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,
+            await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,lastPlay:{by:cp,ts:Date.now()},
               currentPlayer:w?cp:np(cp,dir,false),winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
               pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
           }else{
@@ -2895,7 +3149,7 @@ export default function UnoGame(){
         cu[cp]=remain.length===1?cu[cp]:false;nh[cp]=remain;const w=remain.length===0?cp:null;if(w)m=bn+" WINS!";
         let nxP=w?cp:np(cp,dir,skip2);
         if((cardToPlay.value==="draw2"||cardToPlay.value==="wild4")&&!w)nxP=np(cp,dir,false);
-        await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,
+        await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:dir,currentColor:nCol,lastPlay:{by:cp,ts:Date.now()},
           currentPlayer:nxP,winner:w,message:m,calledUno:cu,turnTimestamp:Date.now(),
           pendingChallenge:w?null:pc,drawStack:w?0:nds,drawStackType:w?null:ndt});
       }catch(e){console.error("Bot:",e);try{await wgs({currentPlayer:np(g.currentPlayer,g.direction),
@@ -3123,7 +3377,7 @@ export default function UnoGame(){
     let nextPlayer=winner?pid:nxt;
     if((card.value==="draw2"||card.value==="wild4")&&!winner)nextPlayer=np(pid,nDir,false);
     if(snatchHold&&!winner)nextPlayer=pid;
-    await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,
+    await wgs({hands:nh,discardPile:nd,drawPile:ndp2,direction:nDir,currentColor:nCol,lastPlay:{by:pid,ts:Date.now()},
       currentPlayer:nextPlayer,winner,message:m,calledUno:{...cu,[pid]:(nh[pid].length===1&&cu[pid])?true:false},
       unoGrace,turnTimestamp:Date.now(),pendingChallenge:winner?null:pendingChallenge,
       drawStack:winner?0:newDrawStack,drawStackType:winner?null:newDrawStackType});
@@ -3162,7 +3416,7 @@ export default function UnoGame(){
     if(drawStack>0){
       await applyStackDraw(pid,myH,(rd.players[pid]?.name)+" has no counter!",np(pid,g.direction));
       return;}
-    ps("draw");const dp=[...(g.drawPile||[])];const nd=[...g.discardPile];
+    const dp=[...(g.drawPile||[])];const nd=[...g.discardPile];
     if(!dp.length){const reshuf=sh(nd.slice(0,-1));dp.push(...reshuf);nd.splice(0,nd.length-1);}
     if(settings.drawTilPlay){
       let cnt=0;let lastDrawn=null;let foundPlayable=false;
@@ -3176,11 +3430,11 @@ export default function UnoGame(){
       const nh={...g.hands};nh[pid]=hand;const cu={...(g.calledUno||{}),[pid]:false};
       if(foundPlayable){
         await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew "+cnt+" card"+(cnt>1?"s":""),turnTimestamp:Date.now(),calledUno:cu});
-        setHasDrawn(true);ps("playable");
+        psSeq("draw",cnt,500,280);setHasDrawn(true);setTimeout(()=>ps("playable"),Math.max(0,(cnt-1)*280+520));
       } else {
         await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(pid,g.direction),
           message:(rd.players[pid]?.name)+" drew "+cnt+" — can't play",turnTimestamp:Date.now(),calledUno:cu});
-        ps("notPlayable");setLMsg("Drew "+cnt+" — can't play");setTimeout(()=>setLMsg(""),1500);
+        psSeq("draw",cnt,500,280);setLMsg("Drew "+cnt+" — can't play");setTimeout(()=>setLMsg(""),1500);
       }
     } else {
       const drawn=dp.shift();const nh={...g.hands};nh[pid]=[...myH,drawn];
@@ -3188,14 +3442,14 @@ export default function UnoGame(){
       const playable=canPlay(drawn,topC,g.currentColor);
       if(playable){
         await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew a card",turnTimestamp:Date.now(),calledUno:cu});
-        setHasDrawn(true);ps("playable");
+        psSeq("draw",1,500,280);setHasDrawn(true);setTimeout(()=>ps("playable"),520);
       } else {
         await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(pid,g.direction),
           message:(rd.players[pid]?.name)+" drew — can't play",turnTimestamp:Date.now(),calledUno:cu});
-        ps("notPlayable");setLMsg("Drew — can't play");setTimeout(()=>setLMsg(""),1200);
+        psSeq("draw",1,500,280);setLMsg("Drew — can't play");setTimeout(()=>setLMsg(""),1200);
       }
     }
-  },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay,applyStackDraw]);
+  },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,psSeq,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay,applyStackDraw]);
 
   /* Deck tap: draw exactly one card on your turn. Out of turn does nothing.
      A synchronous guard prevents rapid taps from drawing multiple cards. */
@@ -3295,6 +3549,7 @@ export default function UnoGame(){
       if(!dp.length){const reshuf=sh(nd.slice(0,-1));dp.push(...reshuf);nd.splice(0,nd.length-1);}
       const drawn=dp.shift();const nh={...g.hands};nh[pid]=[...(g.hands?.[pid]||myH),drawn];
       await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" called UNO with too many cards! +1 penalty"});
+      psSeq("carddist",1,500,280); // thunk lands with the penalty card
       setLMsg("False UNO! +1 card");setTimeout(()=>setLMsg(""),1600);
       return;}
     ps("uno");unoSndRef.current=Date.now(); // immediate feedback on press
@@ -3323,14 +3578,75 @@ export default function UnoGame(){
   const rankOf=useMemo(()=>{const m={};globalLB.forEach((p,i)=>{if(p.id)m[p.id]=i+1;});return m;},[globalLB]);
   const levelOf=useMemo(()=>{const m={};globalLB.forEach(p=>{if(p.id)m[p.id]=levelFromXp(p.xp);});return m;},[globalLB]);
   const myLevel=myStats?levelInfo(myStats.xp):levelInfo(0);
-  const myMissions=useMemo(()=>{const m=myStats?.missions;const t=todayStr();return(m&&m.date===t)?m:{date:t,play:0,win:0,strong:0,claimed:{}};},[myStats?.missions]);
+  const myMissions=useMemo(()=>freshMissions(myStats?.missions),[myStats?.missions]);
   const claimableCount=DAILY_MISSIONS.filter(d=>(myMissions[d.counter]||0)>=d.goal&&!myMissions.claimed?.[d.id]).length;
+  // Compact landscape widget can't fit every mission — surface the 3 most actionable (claimable → in-progress → claimed).
+  const widgetMissions=useMemo(()=>{const prio=d=>{const done=(myMissions[d.counter]||0)>=d.goal;return myMissions.claimed?.[d.id]?2:(done?0:1);};
+    return[...DAILY_MISSIONS].sort((a,b)=>prio(a)-prio(b)).slice(0,3);},[myMissions]);
   const claimMission=async(mid)=>{const def=DAILY_MISSIONS.find(x=>x.id===mid);if(!def)return;
     if((myMissions[def.counter]||0)<def.goal||myMissions.claimed?.[mid])return;
     const v=(await get(ref(db,"leaderboard/"+pid))).val()||{};
-    const cm=(v.missions&&v.missions.date===todayStr())?v.missions:{date:todayStr(),play:0,win:0,strong:0,claimed:{}};
+    const cm=freshMissions(v.missions);
     await update(ref(db,"leaderboard/"+pid),{xp:(v.xp||0)+def.xp,coins:(v.coins||0)+def.coins,missions:{...cm,claimed:{...(cm.claimed||{}),[mid]:true}}}).catch(()=>{});
     ps("win");};
+  /* Mini-game reward: coins scale down with sloppier/slower clears (8 pairs, par ~14 moves).
+     Also advances the "Play a mini-game" daily mission. Returns the reward for the win screen. */
+  const finishMiniGame=useCallback(async({moves,secs})=>{
+    const coins=Math.max(15,Math.round(80-Math.max(0,moves-8)*3-Math.floor(secs/10)*2));
+    const xp=40;
+    try{const v=(await get(ref(db,"leaderboard/"+pid))).val()||{};
+      const cm=freshMissions(v.missions);cm.mini=(cm.mini||0)+1;
+      await update(ref(db,"leaderboard/"+pid),{coins:(v.coins||0)+coins,xp:(v.xp||0)+xp,missions:cm});
+    }catch(e){}
+    return{coins,xp};
+  },[pid]);
+
+  /* ── NETWORKED MEMORY MATCH (2-player, turn-based; lives under rooms/<code>) ── */
+  const miniAwardRef=useRef(null);
+  useEffect(()=>{if(!miniRoom){setMiniG(null);return;}const r=ref(db,"rooms/"+miniRoom);
+    const u=onValue(r,s=>{const d=s.val();
+      if(!d||!d.mini){setMiniG(null);setMiniRoom(null);return;} // room gone → opponent ended it
+      setMiniG(d);});
+    return()=>off(r);},[miniRoom]);
+  // Each client credits itself once when a networked match finishes.
+  useEffect(()=>{if(!miniG||miniG.status!=="done"||!miniRoom)return;
+    if(miniAwardRef.current===miniRoom)return;miniAwardRef.current=miniRoom;
+    const oppId=Object.keys(miniG.players||{}).find(id=>id!==pid);
+    const my=miniG.players?.[pid]?.score||0,opp=miniG.players?.[oppId]?.score||0;
+    const coins=my>opp?80:(my===opp?40:25);
+    (async()=>{try{const v=(await get(ref(db,"leaderboard/"+pid))).val()||{};
+      const cm=freshMissions(v.missions);cm.mini=(cm.mini||0)+1;
+      await update(ref(db,"leaderboard/"+pid),{coins:(v.coins||0)+coins,xp:(v.xp||0)+40,missions:cm});
+    }catch(e){}})();
+  },[miniG?.status,miniRoom,pid]);
+  const startMiniMulti=useCallback(async(friendId)=>{
+    const code="mini_"+Math.random().toString(36).slice(2,6).toUpperCase()+Date.now().toString(36).slice(-2).toUpperCase();
+    const deck=shuffledMemoryDeck();
+    await set(ref(db,"rooms/"+code),{mini:true,deck,up:[],matched:{},turn:pid,host:pid,status:"waiting",
+      players:{[pid]:{name:pName.trim()||"You",score:0}},ts:Date.now()});
+    if(friendId)await set(ref(db,"ginv/"+friendId+"/"+pid),{name:pName.trim()||"Player",code,ts:Date.now(),mini:true});
+    miniAwardRef.current=null;setMiniRoom(code);setMiniOpen(false);ps("join");
+  },[pid,pName,ps]);
+  const acceptMini=useCallback(async(fromId,code)=>{await remove(ref(db,"ginv/"+pid+"/"+fromId));
+    try{await update(ref(db,"rooms/"+code),{["players/"+pid]:{name:pName.trim()||"You",score:0},status:"playing"});
+      miniAwardRef.current=null;setMiniRoom(code);setMiniOpen(false);setShowFriends(false);ps("join");}catch(e){}
+  },[pid,pName,ps]);
+  const miniFlip=useCallback(async(idx)=>{
+    const st=miniG;if(!st||!miniRoom||st.turn!==pid||st.status!=="playing")return;
+    const up=st.up||[],matched=st.matched||{};
+    if(up.length>=2||up.includes(idx)||matched[idx]!==undefined)return;
+    const nUp=[...up,idx];await update(ref(db,"rooms/"+miniRoom),{up:nUp}).catch(()=>{});
+    if(nUp.length===2){const[a,b]=nUp;const oppId=Object.keys(st.players||{}).find(id=>id!==pid);
+      if(st.deck[a].fid===st.deck[b].fid){
+        const nMatched={...matched,[a]:pid,[b]:pid};const nScore=(st.players[pid]?.score||0)+1;
+        const done=Object.keys(nMatched).length>=st.deck.length;
+        setTimeout(()=>update(ref(db,"rooms/"+miniRoom),{up:[],matched:nMatched,["players/"+pid+"/score"]:nScore,...(done?{status:"done"}:{})}).catch(()=>{}),520);
+      }else{setTimeout(()=>update(ref(db,"rooms/"+miniRoom),{up:[],turn:oppId||pid}).catch(()=>{}),920);}
+    }
+  },[miniG,miniRoom,pid]);
+  const leaveMini=useCallback(async()=>{const code=miniRoom,host=miniG?.host===pid;setMiniRoom(null);setMiniG(null);
+    if(!code)return;try{if(host)await remove(ref(db,"rooms/"+code));else await update(ref(db,"rooms/"+code),{["players/"+pid]:null,status:"done"});}catch(e){}
+  },[miniRoom,miniG,pid]);
 
   /* UNO grace window: if I'm the one who forgot to call, run a self-timer. When it
      expires, re-check the live state — if I still have one card and never called,
@@ -3407,9 +3723,9 @@ export default function UnoGame(){
           background:"linear-gradient(135deg,rgba(46,125,50,0.97),rgba(27,94,32,0.97))",
           border:"1px solid rgba(129,199,132,0.5)",boxShadow:"0 8px 30px rgba(0,0,0,0.55)",
           backdropFilter:"blur(8px)",animation:"aslide 0.4s ease-out",maxWidth:"94vw"}}>
-          <span style={{fontSize:18}}>🎮</span>
-          <span style={{fontSize:12,color:"#fff",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><b>{v.name}</b> invited you!</span>
-          <button onClick={e=>{e.stopPropagation();acceptInvite(fid,v.code);}} style={{background:"#fff",border:"none",borderRadius:9,color:"#1B5E20",fontSize:11,fontWeight:900,padding:"6px 14px",cursor:"pointer",letterSpacing:1}}>JOIN</button>
+          <span style={{fontSize:18}}>{v.mini?"🧠":"🎮"}</span>
+          <span style={{fontSize:12,color:"#fff",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}><b>{v.name}</b> {v.mini?"wants a Memory Match!":"invited you!"}</span>
+          <button onClick={e=>{e.stopPropagation();v.mini?acceptMini(fid,v.code):acceptInvite(fid,v.code);}} style={{background:"#fff",border:"none",borderRadius:9,color:"#1B5E20",fontSize:11,fontWeight:900,padding:"6px 14px",cursor:"pointer",letterSpacing:1}}>{v.mini?"PLAY":"JOIN"}</button>
           <button onClick={e=>{e.stopPropagation();remove(ref(db,"ginv/"+pid+"/"+fid));}} style={{background:"rgba(0,0,0,0.2)",border:"none",borderRadius:8,color:"#fff",fontSize:12,width:24,height:24,cursor:"pointer"}}>×</button>
         </div>);})()}
 
@@ -3486,7 +3802,7 @@ export default function UnoGame(){
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
               <span style={{fontSize:9,fontWeight:900,color:"#6FE3FF",letterSpacing:1}}>🎯 DAILY MISSIONS</span>
               {claimableCount>0&&<span style={{fontSize:8,fontWeight:900,color:"#fff",background:"#E53935",borderRadius:7,padding:"1px 6px"}}>{claimableCount} READY</span>}</div>
-            {DAILY_MISSIONS.map(d=>{const prog=Math.min(myMissions[d.counter]||0,d.goal);const done=prog>=d.goal;const claimed=!!myMissions.claimed?.[d.id];
+            {widgetMissions.map(d=>{const prog=Math.min(myMissions[d.counter]||0,d.goal);const done=prog>=d.goal;const claimed=!!myMissions.claimed?.[d.id];
               return(<div key={d.id} style={{display:"flex",alignItems:"center",gap:7,marginBottom:6}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:9,color:"#cdd6e2",fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{d.label}</div>
@@ -3581,6 +3897,13 @@ export default function UnoGame(){
             🎯 MISSIONS
             {claimableCount>0&&<span style={{position:"absolute",top:-5,right:-5,background:"#E53935",color:"#fff",fontSize:9,fontWeight:900,minWidth:16,height:16,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 3px",boxShadow:"0 0 8px rgba(229,57,53,0.6)"}}>{claimableCount}</span>}
           </button>
+          <button onClick={()=>{ps("click");setMiniOpen(true);}} style={{background:"rgba(0,200,120,0.1)",
+            border:"1px solid rgba(0,230,150,0.28)",padding:"7px 18px",borderRadius:12,
+            color:"#28E08A",fontSize:11,fontWeight:800,cursor:"pointer",transition:"all 0.2s",
+            display:"flex",alignItems:"center",gap:5,letterSpacing:2}}
+            onPointerEnter={e=>{e.currentTarget.style.background="rgba(0,200,120,0.2)";e.currentTarget.style.transform="translateY(-1px)";}}
+            onPointerLeave={e=>{e.currentTarget.style.background="rgba(0,200,120,0.1)";e.currentTarget.style.transform="translateY(0)";}}>
+            🧠 MINI GAME</button>
           <button onClick={()=>{ps("click");setStoreOpen(true);}} style={{background:"rgba(156,39,176,0.1)",
             border:"1px solid rgba(224,64,251,0.25)",padding:"7px 18px",borderRadius:12,
             color:"#E040FB",fontSize:11,fontWeight:800,cursor:"pointer",transition:"all 0.2s",
@@ -3679,6 +4002,9 @@ export default function UnoGame(){
         </div></div>)}
 
       {/* Daily Missions */}
+      {(miniRoom&&miniG)?<MemoryGame sound={ps} net={{state:miniG,myId:pid,flip:miniFlip,leave:leaveMini}}/>
+        :miniOpen?<MemoryGame onExit={()=>setMiniOpen(false)} onWin={finishMiniGame} sound={ps} friends={friends} isOnline={isOnline} onInvite={startMiniMulti}/>
+        :null}
       {showMissions&&(<div onClick={()=>setShowMissions(false)} style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:400,
         display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(12px)",animation:"fadeIn 0.25s"}}>
         <div onClick={e=>e.stopPropagation()} style={{...GLASS,width:"min(92vw,380px)",maxHeight:"88vh",overflow:"auto",padding:"20px 20px 18px",position:"relative"}}>
@@ -3788,8 +4114,8 @@ export default function UnoGame(){
             {Object.entries(gameInvites).map(([fid,v])=>(
               <div key={fid} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,marginBottom:4,
                 background:"rgba(76,175,80,0.1)",border:"1px solid rgba(76,175,80,0.25)"}}>
-                <span style={{flex:1,fontSize:12,color:"#ddd",fontWeight:600}}>{v.name} invited you</span>
-                <button onClick={()=>acceptInvite(fid,v.code)} style={{background:"#2E7D32",border:"none",borderRadius:7,color:"#fff",fontSize:10,fontWeight:800,padding:"5px 12px",cursor:"pointer"}}>JOIN</button>
+                <span style={{flex:1,fontSize:12,color:"#ddd",fontWeight:600}}>{v.name} {v.mini?"· Memory Match 🧠":"invited you"}</span>
+                <button onClick={()=>v.mini?acceptMini(fid,v.code):acceptInvite(fid,v.code)} style={{background:"#2E7D32",border:"none",borderRadius:7,color:"#fff",fontSize:10,fontWeight:800,padding:"5px 12px",cursor:"pointer"}}>{v.mini?"PLAY":"JOIN"}</button>
               </div>))}
           </div>}
           {/* Pending friend requests */}
@@ -3806,13 +4132,16 @@ export default function UnoGame(){
           {/* Friends list */}
           <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:5,fontWeight:800}}>MY FRIENDS ({Object.keys(friends).length})</div>
           {Object.keys(friends).length===0&&<div style={{fontSize:11,color:"#667",textAlign:"center",padding:"12px 0"}}>No friends yet. Share your ID or add someone above.</div>}
-          {Object.entries(friends).map(([fid,v])=>{const online=globalLB.find(p=>p.id===fid);return(
+          {Object.entries(friends).sort((a,b)=>(isOnline(b[0])?1:0)-(isOnline(a[0])?1:0)).map(([fid,v])=>{const online=globalLB.find(p=>p.id===fid);const on=isOnline(fid);return(
             <div key={fid} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,marginBottom:4,
               background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{width:28,height:28,borderRadius:8,background:CG[COLORS[fid.charCodeAt(0)%4]],display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff"}}>{(v.name||"?")[0]?.toUpperCase()}</div>
+              <div style={{position:"relative",flexShrink:0}}>
+                <div style={{width:28,height:28,borderRadius:8,background:CG[COLORS[fid.charCodeAt(0)%4]],display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:800,color:"#fff",opacity:on?1:0.55}}>{(v.name||"?")[0]?.toUpperCase()}</div>
+                <div style={{position:"absolute",right:-2,bottom:-2,width:10,height:10,borderRadius:"50%",background:on?"#4CAF50":"#5a6472",border:"2px solid #12161c",boxShadow:on?"0 0 6px rgba(76,175,80,0.8)":"none"}}/>
+              </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,color:"#ddd",fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{online?.name||v.name}</div>
-                <div style={{fontSize:8,color:"#667"}}>{online?online.totalPoints+" pts":"—"}</div>
+                <div style={{fontSize:8,fontWeight:700,color:on?"#66BB6A":"#667"}}>{on?"● Online":"Offline"}{online?" · "+online.totalPoints+" pts":""}</div>
               </div>
               {delFriendId===fid?(<>
                 <span style={{fontSize:9,color:"#EF5350",fontWeight:700}}>Remove?</span>
@@ -4017,6 +4346,78 @@ export default function UnoGame(){
       <style>{globalCSS}</style>
     </div>);
 
+  /* Reusable room chat (rendered in BOTH the lobby and the in-game screens). No dimming
+     backdrop — the game stays visible; new messages also pop as a transient live feed. */
+  const teamColor=(tm)=>tm&&TEAMS[tm]?TEAMS[tm].color:null;
+  const canTeam=!!myTeam; // team channel only exists in team mode
+  const effChan=(chatChan==="team"&&canTeam)?"team":"all";
+  // Send → clear → auto-close the panel, and immediately echo my own message into the live
+  // feed so I see it in-game right after sending (no need to reopen chat).
+  const doSend=()=>{const t=chatText.trim();if(!t)return;
+    sendChat(t);setChatText("");setChatOpen(false);
+    const now=Date.now();const m={k:"me-"+now,pid,name:pName.trim()||"You",text:t.slice(0,140),ts:now,team:myTeam,chan:effChan};
+    setLiveFeed(f=>[...f.filter(x=>x.pid!==pid||x.text!==m.text),m].slice(-4));
+    setTimeout(()=>setLiveFeed(f=>f.filter(x=>x.k!==m.k)),11000);};
+  const chatWidget=(rc&&(scr==="lobby"||scr==="game"))?(<>
+    {/* Live in-game feed — read chat without opening the panel */}
+    {!chatOpen&&liveFeed.length>0&&<div style={{position:"fixed",left:"max(10px,env(safe-area-inset-left,10px))",
+      bottom:"calc(max(10px,env(safe-area-inset-bottom,10px)) + 58px)",zIndex:249,display:"flex",flexDirection:"column",gap:5,
+      maxWidth:"min(72vw,270px)",pointerEvents:"none"}}>
+      {liveFeed.map(m=>{const mine=m.pid===pid;const tc=teamColor(m.team);const tm=m.chan==="team";return(
+        <div key={m.k} style={{background:tm?"rgba(120,80,20,0.32)":"rgba(60,110,160,0.28)",borderRadius:10,padding:"5px 10px",
+          backdropFilter:"blur(10px)",WebkitBackdropFilter:"blur(10px)",
+          border:`1px solid ${tm?"rgba(255,190,80,0.65)":(tc||"rgba(140,205,245,0.6)")}`,boxShadow:"0 2px 10px rgba(0,0,0,0.3)",animation:"slideIn 0.25s ease-out"}}>
+          <span style={{fontSize:8,fontWeight:900,color:tc||(mine?"#bfe9ff":"#dbe6f2"),textShadow:"0 1px 2px rgba(0,0,0,0.9)"}}>{mine?"You":m.name}{tm?" · TEAM":""}</span>
+          <div style={{fontSize:11,color:"#fff",fontWeight:700,wordBreak:"break-word",lineHeight:1.25,textShadow:"0 1px 3px rgba(0,0,0,0.95),0 0 3px rgba(0,0,0,0.8)"}}>{m.text}</div>
+        </div>);})}
+    </div>}
+    {!chatOpen&&<button onClick={()=>{ps("click");setChatOpen(true);}} style={{position:"fixed",
+      left:"max(10px,env(safe-area-inset-left,10px))",bottom:"max(10px,env(safe-area-inset-bottom,10px))",zIndex:250,
+      width:46,height:46,borderRadius:"50%",border:"1px solid rgba(111,227,255,0.45)",background:"rgba(10,20,32,0.88)",
+      color:"#6FE3FF",fontSize:20,cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.55)",lineHeight:1}}>💬
+      {chatUnread>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E53935",color:"#fff",fontSize:10,fontWeight:900,
+        minWidth:18,height:18,borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 4px",boxShadow:"0 0 8px rgba(229,57,53,0.6)"}}>{chatUnread}</span>}
+    </button>}
+    {chatOpen&&<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:255,display:"flex",justifyContent:"center",pointerEvents:"none"}}>
+      <div style={{width:"100%",maxWidth:520,borderRadius:"16px 16px 0 0",pointerEvents:"auto",
+        background:"rgba(22,32,46,0.55)",backdropFilter:"blur(22px)",WebkitBackdropFilter:"blur(22px)",border:"1px solid rgba(120,180,230,0.18)",
+        maxHeight:"52vh",display:"flex",flexDirection:"column",padding:0,animation:"slideUp 0.25s ease-out",boxShadow:"0 -8px 30px rgba(0,0,0,0.35)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 8px",borderBottom:"1px solid rgba(255,255,255,0.07)",gap:8}}>
+          <span style={{fontSize:13,fontWeight:900,color:"#6FE3FF",letterSpacing:1,fontFamily:"'Chakra Petch',sans-serif",whiteSpace:"nowrap"}}>💬 CHAT</span>
+          <div style={{display:"flex",gap:0,borderRadius:9,overflow:"hidden",border:"1px solid rgba(255,255,255,0.12)"}}>
+            {["all","team"].map(ch=>{const dis=ch==="team"&&!canTeam;return(<button key={ch} disabled={dis}
+              onClick={()=>{if(dis){setChatChan("all");return;}setChatChan(ch);}}
+              title={dis?"Team chat is only available in Team Mode":""} style={{padding:"5px 12px",border:"none",cursor:dis?"not-allowed":"pointer",
+              fontSize:10,fontWeight:900,letterSpacing:1,opacity:dis?0.4:1,
+              background:effChan===ch?(ch==="team"?"linear-gradient(135deg,#FF9800,#F57C00)":"linear-gradient(135deg,#2979FF,#6FE3FF)"):"rgba(255,255,255,0.04)",
+              color:effChan===ch?"#06121e":"#8896aa"}}>{ch==="all"?"ALL":"TEAM"}</button>);})}
+          </div>
+          <button onClick={()=>setChatOpen(false)} style={{background:"none",border:"none",color:"#889",fontSize:24,cursor:"pointer",lineHeight:1,marginLeft:"auto"}}>×</button>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"10px 14px",display:"flex",flexDirection:"column",gap:6,minHeight:70}}>
+          {visChat.length===0&&<div style={{textAlign:"center",color:"#556",fontSize:11,padding:"16px 0"}}>No messages yet. Say hi! 👋</div>}
+          {visChat.map(m=>{const mine=m.pid===pid;const tc=teamColor(m.team);const tm=m.chan==="team";return(
+            <div key={m.k} style={{alignSelf:mine?"flex-end":"flex-start",maxWidth:"82%",display:"flex",flexDirection:"column",alignItems:mine?"flex-end":"flex-start"}}>
+              <span style={{fontSize:8,fontWeight:800,color:tc||(mine?"#6FE3FF":"#8896aa"),letterSpacing:0.5,margin:"0 4px 1px"}}>{mine?"You":m.name}{tm?" · TEAM":""}</span>
+              <div style={{fontSize:12,color:"#eaf2ff",fontWeight:600,padding:"6px 11px",borderRadius:mine?"12px 12px 3px 12px":"12px 12px 12px 3px",
+                background:tm?"linear-gradient(135deg,#7a4a12,#5a3608)":(mine?"linear-gradient(135deg,#1f4a8a,#15325f)":"rgba(255,255,255,0.06)"),
+                border:tm?"1px solid rgba(255,180,60,0.4)":"1px solid rgba(255,255,255,0.05)",wordBreak:"break-word"}}>{m.text}</div>
+            </div>);})}
+          <div ref={chatEndRef}/>
+        </div>
+        <div style={{display:"flex",gap:8,padding:"10px 14px calc(env(safe-area-inset-bottom,0px) + 12px)",borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+          <input value={chatText} onChange={e=>setChatText(e.target.value)} maxLength={140} placeholder={effChan==="team"?"Message your team…":"Message everyone…"}
+            onKeyDown={e=>{if(e.key==="Enter")doSend();}}
+            style={{flex:1,padding:"10px 14px",borderRadius:12,border:"1px solid rgba(255,255,255,0.14)",background:"rgba(255,255,255,0.08)",
+              color:"#fff",fontSize:13,outline:"none"}}/>
+          <button onClick={doSend} disabled={!chatText.trim()} style={{padding:"0 18px",borderRadius:12,border:"none",
+            background:chatText.trim()?(effChan==="team"?"linear-gradient(135deg,#FF9800,#F57C00)":"linear-gradient(135deg,#2979FF,#6FE3FF)"):"rgba(255,255,255,0.08)",
+            color:chatText.trim()?"#06121e":"#667",fontSize:13,fontWeight:900,cursor:chatText.trim()?"pointer":"default",letterSpacing:1}}>SEND</button>
+        </div>
+      </div>
+    </div>}
+  </>):null;
+
   /* ═══ LOBBY ═══ */
   if(scr==="lobby")return(
     <div style={{height:"100%",background:"radial-gradient(ellipse at 50% 25%,#1a2f2a 0%,#0f1f1c 35%,#0a1614 65%,#060e0c 100%)",
@@ -4196,6 +4597,7 @@ export default function UnoGame(){
               color:selCount?"#fff":"#667",fontSize:13,letterSpacing:2,cursor:selCount?"pointer":"not-allowed",boxShadow:selCount?"0 4px 18px rgba(21,101,192,0.4)":"none"}}>SEND INVITES ({selCount})</button>}
           </div>
         </div>);})()}
+      {chatWidget}
       <style>{globalCSS}</style>
     </div>);
 
@@ -4242,14 +4644,23 @@ export default function UnoGame(){
       </div>
       {/* CARDS → catch a forgotten UNO (only does anything when they're catchable) */}
       <div onClick={e=>{e.stopPropagation();tapOppCards(id);}} style={{display:"flex",flexDirection:isV?"column":"row",cursor:canCatch?"pointer":"default"}}>
-        {(()=>{const cards=h.slice(0,40);const n=cards.length;const dim=isV?72:48;
-          const maxS=isV?230:(isLandscape?165:300);
-          const step=Math.max(3,Math.min(isV?20:16,(maxS-dim)/Math.max(n-1,1)));const ov=step-dim;
+        {(()=>{const cards=h.slice(0,40);const n=cards.length;
           const reveal=!!g.winner; // flip everyone's cards face-up when the round is over
           const allyReveal=g.teamMode&&pd?.team&&rd.players[pid]?.team===pd.team; // teammates see each other's hands
-          return cards.map((c,ci)=><div key={c.id} style={{...(isV?{marginTop:ci>0?ov:0}:{marginLeft:ci>0?ov:0}),
+          const fd=(reveal||allyReveal)?false:(!peek||!isAdm);
+          if(isV){ // side opponents: cards lie LANDSCAPE (rotated 90°), stacked down the side
+            const vstep=Math.max(15,Math.min(26,(228-48)/Math.max(n-1,1)));
+            return(<div style={{position:"relative",width:74,height:(n-1)*vstep+60}}>
+              {cards.map((c,ci)=><div key={c.id} style={{position:"absolute",top:ci*vstep,left:"50%",marginLeft:-24,
+                animation:reveal?`cardFlipIn 0.55s cubic-bezier(.34,1.2,.5,1) ${ci*0.06}s both`:"none"}}>
+                <div style={{transform:"rotate(90deg)"}}><Card card={c} sz="xs" faceDown={fd}/></div></div>)}
+            </div>);
+          }
+          const dim=48,maxS=isLandscape?165:300;
+          const step=Math.max(3,Math.min(16,(maxS-dim)/Math.max(n-1,1)));const ov=step-dim;
+          return cards.map((c,ci)=><div key={c.id} style={{marginLeft:ci>0?ov:0,
             animation:reveal?`cardFlipIn 0.55s cubic-bezier(.34,1.2,.5,1) ${ci*0.06}s both`:"none"}}>
-            <Card card={c} sz="xs" faceDown={(reveal||allyReveal)?false:(!peek||!isAdm)}/></div>);})()}
+            <Card card={c} sz="xs" faceDown={fd}/></div>);})()}
       </div>
       {canCatch&&<div style={{position:"absolute",bottom:isV?"auto":-12,right:isV?-8:"auto",left:isV?"auto":"auto",
         fontSize:7,color:"#FF9800",fontWeight:800,
@@ -4295,6 +4706,10 @@ export default function UnoGame(){
           animation:`dealSweep 0.42s cubic-bezier(.4,0,.3,1) ${c.delay}s both`}}>
           <div style={{width:16,height:16,borderRadius:"50%",background:"#E53935",transform:"rotate(-20deg)",boxShadow:"0 0 4px rgba(0,0,0,0.4)"}}/></div>)}
       </div>}
+      {playFlyFx&&<div style={{position:"fixed",left:playFlyFx.tx,top:playFlyFx.ty,zIndex:120,pointerEvents:"none",
+        "--pfx":`${playFlyFx.sx-playFlyFx.tx}px`,"--pfy":`${playFlyFx.sy-playFlyFx.ty}px`,
+        animation:"playFly 0.5s cubic-bezier(.3,.85,.4,1) forwards"}}>
+        <Card card={playFlyFx.card} sz={isLandscape?"sm":"md"}/></div>}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
       {reverseFx&&<ReverseFX color={reverseFx} onDone={()=>setReverseFx(null)}/>}
       {skipFx&&<SkipFX color={skipFx} onDone={()=>setSkipFx(null)}/>}
@@ -4561,7 +4976,7 @@ export default function UnoGame(){
             background:showLB?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:showLB?"#000":"#FFD700",
             transition:"all 0.2s",fontWeight:700}}>🏆</button>
           {!g.winner&&<button onClick={()=>setEmoteTray(!emoteTray)} style={{background:emoteTray?"rgba(255,215,0,0.9)":"none",border:"none",fontSize:14,cursor:"pointer",
-            opacity:emoteCD?0.3:0.8,padding:"2px 4px",borderRadius:6,transition:"all 0.2s"}}>{"💬"}</button>}
+            opacity:emoteCD?0.3:0.8,padding:"2px 4px",borderRadius:6,transition:"all 0.2s"}}>{"🎭"}</button>}
           <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",opacity:(snd||mus)?0.8:0.3,padding:2}}>
             {(snd||mus)?"🔊":"🔇"}</button>
           <button onClick={()=>{goFS();goLand();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:2,opacity:0.3}}>{"⛶"}</button>
@@ -4635,7 +5050,7 @@ export default function UnoGame(){
                   fontSize:11,fontWeight:900,color:"#fff",background:"#E53935",borderRadius:8,padding:"2px 8px",
                   boxShadow:"0 0 10px rgba(229,57,53,0.5)",zIndex:4}}>+{drawStack}</div>}
               </div>
-              <div style={{position:"relative",isolation:"isolate",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>
+              <div ref={pileRef} style={{position:"relative",isolation:"isolate",...(g.winner?{filter:"drop-shadow(0 0 16px rgba(255,215,0,0.85))",animation:"pulse 1.4s ease-in-out infinite"}:{})}}>
                 {/* Previously-played cards fanned underneath, like a real tabletop discard pile */}
                 {!g.winner&&(g.discardPile||[]).slice(-9,-1).map((c,i)=>{const s=(""+c.id).split("").reduce((a,ch)=>a+ch.charCodeAt(0),0);
                   const ang=(s%25)-12,dx=(s%17)-8,dy=((s*2)%15)-7;
@@ -4751,6 +5166,7 @@ export default function UnoGame(){
           <OppCard id={rightOpp} pos="right"/>
         </div>}
       </div>
+      {chatWidget}
       <style>{globalCSS}</style>
     </div>);
 }
@@ -4764,6 +5180,8 @@ const globalCSS=`
     45%{transform:scale(0.98) translateY(2px) rotate(-0.5deg)}
     65%{transform:scale(1.01) translateY(-1px)}100%{transform:scale(1) translateY(0) rotate(0);opacity:1;filter:blur(0)}}
   @keyframes wB{0%{transform:scale(0)}40%{transform:scale(1.2)}70%{transform:scale(0.95)}100%{transform:scale(1)}}
+  @keyframes playFly{0%{transform:translate(-50%,-50%) translate(var(--pfx),var(--pfy)) scale(0.62) rotate(-14deg);opacity:0}
+    18%{opacity:1}85%{opacity:1}100%{transform:translate(-50%,-50%) translate(0,0) scale(1) rotate(0);opacity:1}}
   @keyframes spinRays{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
   @keyframes trophyPop{0%{opacity:0;transform:scale(0) translateY(30px) rotate(-18deg)}55%{opacity:1;transform:scale(1.25) translateY(0) rotate(6deg)}75%{transform:scale(0.92) rotate(-3deg)}100%{opacity:1;transform:scale(1) rotate(0deg)}}
   @keyframes slamIn{0%{opacity:0;transform:scale(2.4);filter:blur(6px)}60%{opacity:1;transform:scale(0.92);filter:blur(0)}100%{opacity:1;transform:scale(1)}}
