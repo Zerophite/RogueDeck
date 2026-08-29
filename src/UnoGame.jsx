@@ -18,6 +18,7 @@ function EM(color){return ELEM_META[color]||ELEM_META.yellow;}
 const VALS=["0","1","2","3","4","5","6","7","8","9","skip","reverse","draw2"];
 const ADMIN_PASS="admin123";
 const TURN_TIME=15;
+const PENALTY_GAP=440; // ms between each +2/+4 penalty card arriving — slower, one-at-a-time like discard-all
 const ROUND_TIME=180;
 const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:4,teamMode:false,autoSplit:true};
 const MAX_PLAYERS=4;
@@ -132,7 +133,12 @@ class AnimeSFX{
   init(){if(!this.c)try{this.c=new(window.AudioContext||window.webkitAudioContext)();this.master=this.c.createGain();this.master.gain.value=this.vol;this.master.connect(this.c.destination);bgm.init(this.c);}catch(e){}
     // Always try to resume — a context created earlier can get suspended by the browser (e.g. an
     // observer who isn't tapping anything), which would otherwise silence opponents' action sounds.
-    if(this.c&&this.c.state==="suspended")this.c.resume().catch(()=>{});}
+    if(this.c&&this.c.state==="suspended")this.c.resume().catch(()=>{});
+    this._keepAlive();}
+  // A silent, permanently-running source keeps the context "active" so mobile browsers (esp. iOS)
+  // don't auto-suspend it between the observer's own taps — which is what muted opponents' sounds.
+  _keepAlive(){if(!this.c||this._ka)return;try{const o=this.c.createOscillator();const g=this.c.createGain();
+    g.gain.value=0.0001;o.frequency.value=30;o.connect(g);g.connect(this.c.destination);o.start();this._ka=o;}catch(e){}}
   setVol(v){this.vol=v;if(this.master)this.master.gain.value=v;}
   _osc(freq,type,t,dur,vol=0.18){
     const o=this.c.createOscillator();const g=this.c.createGain();o.type=type;o.frequency.value=freq;
@@ -227,10 +233,10 @@ class AnimeSFX{
     try{const s=this.c.createBufferSource();s.buffer=this._thrBuf[id];
       const g=this.c.createGain();g.gain.value=t?.vol||1;
       s.connect(g);g.connect(this.master);s.start();return true;}catch(e){return false;}}
-  pEl(color){if(!this.c)return;try{const t=this.c.currentTime;
+  pEl(color){if(!this.c)return;if(this.c.state==="suspended")this.c.resume().catch(()=>{});try{const t=this.c.currentTime;
     switch(color){case"red":this._fireEl(t);break;case"blue":this._waterEl(t);break;
       case"green":this._windEl(t);break;case"yellow":this._lightEl(t);break;}}catch(e){}}
-  p(type){if(!this.c)return;try{const n=this.c.currentTime;
+  p(type){if(!this.c)return;if(this.c.state==="suspended")this.c.resume().catch(()=>{});try{const n=this.c.currentTime;
     switch(type){
       case "card":this._fNoise(n,0.038,3200*(0.9+Math.random()*0.2),1.2,"bandpass",0.5);this._fNoise(n,0.055,700,1.4,"lowpass",0.34);this._osc(170,"sine",n,0.045,0.16);break;
       case "draw":if(this.pFile("draw"))break;this._fNoise(n,0.13,1700*(0.9+Math.random()*0.2),2.6,"bandpass",0.3);this._bend(1100,2400,"sine",n,0.1,0.05);this._osc(150,"sine",n+0.09,0.04,0.1);break;
@@ -1703,11 +1709,12 @@ const FLY_DIR={
   right:{fy:-60,fex:340,fl:"88%",ft:"46%"}};
 const CardFlyFX=({element,count,toSelf,dir,onDone})=>{
   const doneRef=useRef(onDone);doneRef.current=onDone;
-  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),2050);return()=>clearTimeout(t);},[]);
-  const em=EM(element);const n=Math.min(count,8);
+  const n=Math.min(count,8);
+  useEffect(()=>{const t=setTimeout(()=>doneRef.current(),1500+n*PENALTY_GAP);return()=>clearTimeout(t);},[n]);
+  const em=EM(element);
   const D=FLY_DIR[dir]||(toSelf?FLY_DIR.down:FLY_DIR.up);
   const cards=useMemo(()=>Array.from({length:n},(_,i)=>({id:i,
-    sx:n<=1?0:-84+i*(168/(n-1)),del:i*0.28,rot:-18+Math.random()*36})),[n]);
+    sx:n<=1?0:-84+i*(168/(n-1)),del:i*(PENALTY_GAP/1000),rot:-18+Math.random()*36})),[n]);
   return(<div style={{position:"fixed",inset:0,zIndex:96,pointerEvents:"none",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
     {/* count badge rising from center */}
     <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",zIndex:2,
@@ -1738,11 +1745,12 @@ const CHIBI_DIR={
 const ChibiAttackFX=({element,victimName,count,toSelf,dir,onDone})=>{
   const[phase,setPhase]=useState(0);
   const doneRef=useRef(onDone);doneRef.current=onDone;
+  const nCd=Math.max(2,Math.min(count||4,8));
   useEffect(()=>{
     const t1=setTimeout(()=>setPhase(1),750);
-    const t2=setTimeout(()=>doneRef.current(),3450);
+    const t2=setTimeout(()=>doneRef.current(),2500+nCd*PENALTY_GAP); // cover the slower per-card fling
     return()=>{clearTimeout(t1);clearTimeout(t2);};
-  },[]);
+  },[nCd]);
   const em0=EM(element);const em={...em0,glow:ART_GLOW[element]||em0.glow,c3:ART_DARK[element]||em0.c3};
   const rays=useMemo(()=>Array.from({length:22},(_,i)=>({id:i,a:(i/22)*360})),[element]);
   const vlines=useMemo(()=>Array.from({length:26},(_,i)=>({id:i,x:(i/26)*100,d:Math.random()*0.3,w:1+Math.random()*2})),[element]);
@@ -1812,12 +1820,12 @@ const ChibiAttackFX=({element,victimName,count,toSelf,dir,onDone})=>{
     {/* the penalty cards — gather in the element, then fly one-by-one into the victim's hand */}
     {(()=>{const nC=Math.max(2,Math.min(count||4,8));
       const D=CHIBI_DIR[dir]||(toSelf?CHIBI_DIR.down:CHIBI_DIR.up);
-      const flashDel=(0.2+(nC-1)*0.28+1.0).toFixed(2);
+      const flashDel=(0.2+(nC-1)*(PENALTY_GAP/1000)+1.0).toFixed(2);
       return(<>
         {Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*Math.PI*2;
           return(<div key={i} style={{position:"absolute",left:"50%",top:"45%",zIndex:4,
             "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":`${D.fy}px`,"--fex":`${D.fex}px`,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
-            animation:`penaltyFling 1.9s cubic-bezier(.5,0,.32,1) ${(0.2+i*0.28).toFixed(2)}s both`}}>
+            animation:`penaltyFling 1.9s cubic-bezier(.5,0,.32,1) ${(0.2+i*(PENALTY_GAP/1000)).toFixed(2)}s both`}}>
             <div style={{width:36,height:52,borderRadius:6,background:CG[element]||em.grad,
               border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 4px 14px rgba(0,0,0,0.55),0 0 15px ${em.glow}aa`,
               display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2747,16 +2755,18 @@ export default function UnoGame(){
   // Single entry point for the discard-all animation — deduped by ts, so whichever fires first
   // (the player's own optimistic call in playC, or the broadcast watcher on the state echo) wins
   // and the other is ignored. Guarantees the player who used it sees it too.
-  const triggerDiscardAll=useCallback((ts,color,count,cards)=>{
+  const triggerDiscardAll=useCallback((ts,color,count,cards,by)=>{
     if(!ts||daRef.current===ts)return;daRef.current=ts;
     const dac=color||"yellow";const cnt=Math.max(2,count||2);const GAP=240,LAND=500;
     setActFx("discardAll");trigBurst(dac);psSeq("carddist",cnt,LAND,GAP); // banner + burst + one thunk per card as it lands
     // PROMINENT fly (same engine as opponent plays): each discarded card sweeps face-up from the
-    // hand up to the pile, staggered. Reliable + clearly visible in both orientations.
+    // PLAYER who used it up to the pile — from my hand if it's me, else from their seat.
     const p=pileRef.current?pileRef.current.getBoundingClientRect():null;
-    const tx=p?p.left+p.width/2:window.innerWidth/2,ty=p?p.top+p.height/2:Math.round(window.innerHeight*0.42);
+    const tx=p?p.left+p.width/2:Math.round(window.innerWidth/2),ty=p?p.top+p.height/2:Math.round(window.innerHeight*0.42);
+    const seat=(by&&by!==pid&&oppRefs.current[by])?oppRefs.current[by].getBoundingClientRect():null;
+    const sx=seat?seat.left+seat.width/2:Math.round(window.innerWidth/2),sy=seat?seat.top+seat.height/2:Math.round(window.innerHeight*0.9);
     const flyCards=(cards&&cards.length)?cards.slice(0,12):Array.from({length:cnt},()=>({id:Math.random(),color:dac==="wild"?"red":dac,value:"5",type:"number"}));
-    setDiscardFlyFx({cards:flyCards,tx,ty,ts});
+    setDiscardFlyFx({cards:flyCards,tx,ty,sx,sy,ts});
     setTimeout(()=>setDiscardFlyFx(f=>(f&&f.ts===ts)?null:f),LAND+flyCards.length*GAP+700);
     // Reveal the just-discarded cards on the pile ONE AT A TIME, synced to each flying card's landing.
     setDaLanded(0);const dc=cnt-1;
@@ -2765,14 +2775,15 @@ export default function UnoGame(){
   },[psE,psSeq,trigBurst]);
   useEffect(()=>{const da=g?.discardAllFx;if(!da||!da.ts)return;
     if(Date.now()-da.ts>6000){daRef.current=da.ts;return;} // skip stale on late join
-    triggerDiscardAll(da.ts,da.color,da.count,(g?.discardPile||[]).slice(-Math.max(2,da.count||2)));
+    triggerDiscardAll(da.ts,da.color,da.count,(g?.discardPile||[]).slice(-Math.max(2,da.count||2)),da.by);
   },[g?.discardAllFx?.ts]);
   // Draw sound for OBSERVERS — the drawer already hears it locally, but everyone else should
   // hear opponents draw (single or multiple cards) too.
   const drawSndRef=useRef(0);
   useEffect(()=>{const ld=g?.lastDraw;if(!ld||!ld.ts||ld.ts===drawSndRef.current)return;drawSndRef.current=ld.ts;
     if(ld.by===pid||Date.now()-ld.ts>4000)return; // drawer already heard it; skip stale on late join
-    psSeq("draw",Math.min(ld.count||1,6),0,220);
+    if(snd)ua(); // wake the audio context (an observer who isn't tapping may have it suspended)
+    psSeq("draw",Math.min(ld.count||1,6),0,240);
   },[g?.lastDraw?.ts]);
   const prevTopRef=useRef();
   useEffect(()=>{const id=topC?.id;if(!id||id===prevTopRef.current)return;prevTopRef.current=id;
@@ -2894,7 +2905,7 @@ export default function UnoGame(){
     const drawn=ndp.splice(0,Math.min(cnt,ndp.length));
     // Cadence at which each flying card reaches the hand (matches the CardFlyFX/penaltyFling
     // land times AND the per-card sounds). Deliver one card per landing → they appear one at a time.
-    const landBase=type==="wild4"?1950:1260,gap=280;
+    const landBase=type==="wild4"?1950:1260,gap=PENALTY_GAP; // matches the fly land times + slower per-card gap
     await wgs({pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:type||"draw2",count:cnt,ts:Date.now()}});
     // Write each card ~500ms before its land time so its fade-in (cardReceive) finishes exactly as
     // the flying card arrives and the sound plays — keeps hand, fly and sound in lockstep.
@@ -2922,20 +2933,18 @@ export default function UnoGame(){
     const psl=g?.pendingSlash;
     if(psl&&psl.ts&&psl.ts!==slashRef.current){
       slashRef.current=psl.ts;
+      if(snd)ua(); // wake audio (the victim/observers may have a suspended context → silent penalty)
       if(psl.type==="wild4"){
         const el=psl.element||"green";psE(el); // element sound plays once, with the cinematic
         const nC=Math.max(2,Math.min(psl.count||4,8));
         setChibiAttackFx({element:el,victimName:psl.name,count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        // one card-sound per card, timed to the exact LAND moment: penaltyFling reaches the
-        // hand at 92% of 1.9s, and card i starts at 0.2 + i*0.28 → land ≈ 1.95s + i*0.28.
-        const seq=psSeq("carddist",nC,1950,280);
+        const seq=psSeq("carddist",nC,1950,PENALTY_GAP); // one card-sound per card, matches the (now slower) fling stagger
         const t=setTimeout(()=>trigShake(),SLASH_DELAY);
         return()=>{seq.forEach(clearTimeout);clearTimeout(t);};
       }else{
         const nC=Math.max(1,Math.min(psl.count||2,8));
         setCardFlyFx({element:psl.element||"yellow",count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        // +2 cardLand reaches the hand at 90% of 1.4s, card i starts at i*0.28 → land ≈ 1.26s + i*0.28.
-        const seq=psSeq("carddist",nC,1260,280);
+        const seq=psSeq("carddist",nC,1260,PENALTY_GAP);
         return()=>{seq.forEach(clearTimeout);};
       }
     }
@@ -3189,7 +3198,7 @@ export default function UnoGame(){
         if(cardToPlay.value==="discardAll"){const mc=cardToPlay.color;
           const disc=remain.filter(c=>c.color===mc);remain=remain.filter(c=>c.color!==mc);
           nd.push(...disc,cardToPlay);m+=" Discard all "+mc+"! (-"+(disc.length+1)+" cards)";
-          if(disc.length+1>1)bdaFx={color:mc,count:disc.length+1,ts:Date.now()};}
+          if(disc.length+1>1)bdaFx={color:mc,count:disc.length+1,ts:Date.now(),by:cp};}
         else nd.push(cardToPlay);
 
         if(cardToPlay.value==="reverse"){if(is2P){skip2=true;m+=" Reverse! (Skip)";}else{dir=-dir;m+=" Reverse!";}}
@@ -3243,6 +3252,12 @@ export default function UnoGame(){
   // Swap between menu track and gameplay tracks as the screen changes.
   useEffect(()=>{bgm.gameTrack=(scr==="game"&&rc)?trackForRoom(rc):null; // sync everyone to the same track
     if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus,rc]);
+  // Keep audio alive for a WATCHING player: resume the context on entering a game and whenever the
+  // tab regains focus, so opponents' sounds (which don't come from your own taps) aren't muted.
+  useEffect(()=>{if(scr==="game")ua();},[scr]);
+  useEffect(()=>{const wake=()=>{if(!document.hidden)ua();};
+    document.addEventListener("visibilitychange",wake);window.addEventListener("focus",wake);
+    return()=>{document.removeEventListener("visibilitychange",wake);window.removeEventListener("focus",wake);};},[]);
 
   const restoreAccount=async()=>{
     const id=restoreId.trim().toLowerCase();
@@ -3396,8 +3411,8 @@ export default function UnoGame(){
       m+=" Discard all "+matchColor+"! (-"+(dCount+1)+" cards)";
       // Broadcast (so observers animate via the watcher) AND fire it locally right now (so the
       // player who used it sees it instantly, without waiting on the state echo).
-      if(dCount+1>1){daFx={color:matchColor,count:dCount+1,ts:Date.now()};
-        triggerDiscardAll(daFx.ts,matchColor,dCount+1,[...discarded,card]);}
+      if(dCount+1>1){daFx={color:matchColor,count:dCount+1,ts:Date.now(),by:pid};
+        triggerDiscardAll(daFx.ts,matchColor,dCount+1,[...discarded,card],pid);}
       else psSeq("carddist",1,0,0);
     } else {
       nd.push(card);
@@ -3467,7 +3482,7 @@ export default function UnoGame(){
     if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
     const dr=ndp.splice(0,Math.min(count,ndp.length));
     await wgs({pendingChallenge:null,drawStack:0,drawStackType:null,pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:"wild4",count,ts:Date.now()}});
-    const landBase=1950,gap=280,RECV=500;
+    const landBase=1950,gap=PENALTY_GAP,RECV=500; // matches the +4 fling land time + slower per-card gap
     let hand=[...(cg.hands?.[victimId]||[])];
     dr.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},Math.max(50,landBase-RECV)+i*gap);});
     setTimeout(()=>{wgs({drawPile:ndp,discardPile:nd,currentPlayer:nextPlayer,message:m,pendingSlash:null,drawStack:0,drawStackType:null,turnTimestamp:Date.now()});},landBase+Math.max(0,dr.length-1)*gap+450);
@@ -4782,7 +4797,7 @@ export default function UnoGame(){
       {/* Discard-all: a fan of face-up cards flying from the hand up to the pile, one after another.
           Big + slow + on top of everything so the throw is unmistakable. */}
       {discardFlyFx&&discardFlyFx.cards.map((c,i)=>{const n=discardFlyFx.cards.length;const spread=(i-(n-1)/2)*(isLandscape?30:40);
-        const sx=window.innerWidth/2+spread,sy=window.innerHeight*0.9;
+        const sx=discardFlyFx.sx+spread,sy=discardFlyFx.sy;
         return(<div key={(c.id!=null?c.id:i)+"-df"} style={{position:"fixed",left:discardFlyFx.tx,top:discardFlyFx.ty,zIndex:250,pointerEvents:"none",
           "--pfx":`${sx-discardFlyFx.tx}px`,"--pfy":`${sy-discardFlyFx.ty}px`,filter:"drop-shadow(0 8px 20px rgba(0,0,0,0.6))",
           animation:`playFly 0.72s cubic-bezier(.3,.8,.35,1) ${(i*0.24).toFixed(2)}s both`}}>
