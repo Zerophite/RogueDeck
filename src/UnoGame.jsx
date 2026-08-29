@@ -56,6 +56,9 @@ const SFX_FILES=[
 /* ══ BACKGROUND MUSIC (streamed MP3 tracks: menu + two gameplay tracks) ══ */
 const MUSIC_URL=import.meta.env.BASE_URL+"music/";
 const GAME_TRACKS=["gameplay1.mp3","gameplay2.mp3"];
+// Deterministic track per room so everyone in the same game hears the SAME music.
+const trackForRoom=rc=>{if(!rc)return null;let h=0;for(let i=0;i<rc.length;i++)h=(h*31+rc.charCodeAt(i))>>>0;
+  return GAME_TRACKS[h%GAME_TRACKS.length];};
 class BGMusic{
   constructor(){this.playing=false;this.vol=0.32;this.mode=null;this.audio=null;this.lastGame=null;this.pool=[];this.ctx=null;}
   init(ctx){this.ctx=ctx;}
@@ -90,7 +93,8 @@ class BGMusic{
   /* Fade out every track except the current one so no orphaned audio keeps playing. */
   _fadeOthers(){this.pool.forEach(a=>{if(a!==this.audio){a.onended=null;this._fadeOut(a);}});
     this.pool=this.audio?[this.audio]:[];}
-  _pickGame(){const opts=GAME_TRACKS.filter(t=>t!==this.lastGame);
+  _pickGame(){if(this.gameTrack)return this.gameTrack; // room-synced track (everyone hears the same)
+    const opts=GAME_TRACKS.filter(t=>t!==this.lastGame);
     const pool=opts.length?opts:GAME_TRACKS;const t=pool[Math.floor(Math.random()*pool.length)];this.lastGame=t;return t;}
   /* Warm the buffers up-front (on app load) so the first play() starts instantly
      instead of waiting several seconds for the MP3 to download+buffer. */
@@ -125,7 +129,10 @@ const bgm=new BGMusic();
 /* ══ ANIME SFX ENGINE (LOUD - matches music volume) ══ */
 class AnimeSFX{
   constructor(){this.c=null;this.master=null;this.vol=1;}
-  init(){if(!this.c)try{this.c=new(window.AudioContext||window.webkitAudioContext)();if(this.c.state==="suspended")this.c.resume();this.master=this.c.createGain();this.master.gain.value=this.vol;this.master.connect(this.c.destination);bgm.init(this.c);}catch(e){}}
+  init(){if(!this.c)try{this.c=new(window.AudioContext||window.webkitAudioContext)();this.master=this.c.createGain();this.master.gain.value=this.vol;this.master.connect(this.c.destination);bgm.init(this.c);}catch(e){}
+    // Always try to resume — a context created earlier can get suspended by the browser (e.g. an
+    // observer who isn't tapping anything), which would otherwise silence opponents' action sounds.
+    if(this.c&&this.c.state==="suspended")this.c.resume().catch(()=>{});}
   setVol(v){this.vol=v;if(this.master)this.master.gain.value=v;}
   _osc(freq,type,t,dur,vol=0.18){
     const o=this.c.createOscillator();const g=this.c.createGain();o.type=type;o.frequency.value=freq;
@@ -1855,9 +1862,12 @@ const DiscardAllFX=({color,count,cards:realCards,onDone})=>{
   useEffect(()=>{const t=setTimeout(onDone,total);return()=>clearTimeout(t);},[onDone,total]);
   const gc=CH[color]||"#E040FB";
   // Cards start down at the player's hand and sweep up into the discard pile (screen center).
+  // Start offset is viewport-relative so the cards stay ON-SCREEN in short landscape too
+  // (a fixed 250px start pushed them below the viewport in landscape → looked like no animation).
+  const baseY=typeof window!=="undefined"?Math.min(250,Math.max(120,Math.round(window.innerHeight*0.3))):250;
   const anim=useMemo(()=>Array.from({length:nCards},(_,i)=>({
-    id:i,startX:-100+Math.random()*200,startY:250+Math.random()*90,
-    rot:-30+Math.random()*60,delay:i*0.28,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards]);
+    id:i,startX:-100+Math.random()*200,startY:baseY+Math.random()*50,
+    rot:-30+Math.random()*60,delay:i*0.28,arc:(Math.random()<0.5?-1:1)*(70+Math.random()*70)})),[nCards,baseY]);
   return(<div style={{position:"fixed",inset:0,zIndex:95,pointerEvents:"none",
     display:"flex",alignItems:"center",justifyContent:"center",animation:`discardFade ${(total/1000).toFixed(2)}s forwards`}}>
     <div style={{position:"absolute",inset:0,
@@ -2694,7 +2704,7 @@ export default function UnoGame(){
     }else setChallenge(null);
   },[g?.pendingChallenge,myTurn,g?.winner,pid,rd?.players,myH,g]);
 
-  useEffect(()=>{const mkey=g?.message?g.message+"|"+g.turnTimestamp:null;if(!mkey||mkey===prevM.current)return;prevM.current=mkey;const m=g.message.toLowerCase();
+  useEffect(()=>{const mkey=g?.message?g.message+"|"+g.turnTimestamp:null;if(!mkey||mkey===prevM.current)return;prevM.current=mkey;if(snd)ua();const m=g.message.toLowerCase();
     if(m.includes("challenge")&&m.includes("guilty")){setActFx("challenge");ps("challenge");trigShake();trigBurst("red");trigImpact("red");}
     else if(m.includes("challenge")&&m.includes("innocent")){setActFx("challenge");ps("challenge");trigBurst("blue");trigImpact("blue");}
     else if(m.includes("stack")){const stc=g?.currentColor||"yellow";setActFx("stack");ps("stack");psE(stc);trigShake();trigBurst(stc);}
@@ -3224,7 +3234,8 @@ export default function UnoGame(){
     return()=>{evs.forEach(e=>window.removeEventListener(e,resume));document.removeEventListener("visibilitychange",vis);};
   },[]);
   // Swap between menu track and gameplay tracks as the screen changes.
-  useEffect(()=>{if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus]);
+  useEffect(()=>{bgm.gameTrack=(scr==="game"&&rc)?trackForRoom(rc):null; // sync everyone to the same track
+    if(mus&&bgm.playing)bgm.setMode(scr==="game"?"game":"menu");},[scr,mus,rc]);
 
   const restoreAccount=async()=>{
     const id=restoreId.trim().toLowerCase();
@@ -3475,11 +3486,11 @@ export default function UnoGame(){
       const nh={...g.hands};nh[pid]=hand;const cu={...(g.calledUno||{}),[pid]:false};
       if(foundPlayable){
         await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew "+cnt+" card"+(cnt>1?"s":""),turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:cnt,ts:Date.now()}});
-        psSeq("draw",cnt,500,280);setHasDrawn(true);setTimeout(()=>ps("playable"),Math.max(0,(cnt-1)*280+520));
+        psSeq("draw",cnt,150,260);setHasDrawn(true);setTimeout(()=>ps("playable"),Math.max(0,(cnt-1)*260+420));
       } else {
         await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(pid,g.direction),
           message:(rd.players[pid]?.name)+" drew "+cnt+" — can't play",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:cnt,ts:Date.now()}});
-        psSeq("draw",cnt,500,280);setLMsg("Drew "+cnt+" — can't play");setTimeout(()=>setLMsg(""),1500);
+        psSeq("draw",cnt,150,260);setLMsg("Drew "+cnt+" — can't play");setTimeout(()=>setLMsg(""),1500);
       }
     } else {
       const drawn=dp.shift();const nh={...g.hands};nh[pid]=[...myH,drawn];
@@ -3487,11 +3498,11 @@ export default function UnoGame(){
       const playable=canPlay(drawn,topC,g.currentColor);
       if(playable){
         await wgs({hands:nh,drawPile:dp,discardPile:nd,message:(rd.players[pid]?.name)+" drew a card",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:1,ts:Date.now()}});
-        psSeq("draw",1,500,280);setHasDrawn(true);setTimeout(()=>ps("playable"),520);
+        psSeq("draw",1,150,260);setHasDrawn(true);setTimeout(()=>ps("playable"),420);
       } else {
         await wgs({hands:nh,drawPile:dp,discardPile:nd,currentPlayer:np(pid,g.direction),
           message:(rd.players[pid]?.name)+" drew — can't play",turnTimestamp:Date.now(),calledUno:cu,lastDraw:{by:pid,count:1,ts:Date.now()}});
-        psSeq("draw",1,500,280);setLMsg("Drew — can't play");setTimeout(()=>setLMsg(""),1200);
+        psSeq("draw",1,150,260);setLMsg("Drew — can't play");setTimeout(()=>setLMsg(""),1200);
       }
     }
   },[myTurn,g,drawnCard,hasDrawn,drawStack,pickDr,isAdm,ps,psSeq,pid,myH,topC,np,wgs,rd,trigShake,settings.drawTilPlay,applyStackDraw]);
@@ -4470,11 +4481,11 @@ export default function UnoGame(){
       fontFamily:"'Segoe UI',system-ui,sans-serif",position:"relative",overflowY:"auto",overflowX:"hidden"}}>
       <CanvasBG screen="lobby"/>
       <div style={{position:"relative",zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",width:"100%"}}>
-        <div style={{color:"rgba(255,215,0,0.4)",fontSize:10,letterSpacing:5,marginBottom:5}}>ROOM CODE</div>
-        <div style={{fontSize:48,fontWeight:900,letterSpacing:16,color:"#FFD700",
-          textShadow:"0 0 45px rgba(255,215,0,0.5),0 0 90px rgba(255,215,0,0.2)",marginBottom:20,fontFamily:"Arial Black",
+        <div style={{color:"rgba(255,215,0,0.4)",fontSize:10,letterSpacing:5,marginBottom:isLandscape?2:5}}>ROOM CODE</div>
+        <div style={{fontSize:isLandscape?30:48,fontWeight:900,letterSpacing:isLandscape?10:16,color:"#FFD700",
+          textShadow:"0 0 45px rgba(255,215,0,0.5),0 0 90px rgba(255,215,0,0.2)",marginBottom:isLandscape?8:20,fontFamily:"Arial Black",
           animation:"codeGlow 2s ease-in-out infinite"}}>{rc}</div>
-        <div style={{...GLASS,padding:20,width:"100%",maxWidth:380,marginBottom:18}}>
+        <div style={{...GLASS,padding:isLandscape?"12px 16px":20,width:"100%",maxWidth:380,marginBottom:isLandscape?10:18}}>
           {settings.teamMode?(()=>{
             const withTeam=pls.map(([id,pd],i)=>({id,pd,team:settings.autoSplit?(i%2===0?"chaos":"order"):(pd.team||null)}));
             const un=withTeam.filter(x=>!x.team);
@@ -4514,9 +4525,9 @@ export default function UnoGame(){
               </div>}
             </>);
           })():(<>
-          <div style={{color:"#889",fontSize:9,marginBottom:12,letterSpacing:3}}>PLAYERS ({pls.length}/{settings.maxPlayers||MAX_PLAYERS})</div>
+          <div style={{color:"#889",fontSize:9,marginBottom:isLandscape?6:12,letterSpacing:3}}>PLAYERS ({pls.length}/{settings.maxPlayers||MAX_PLAYERS})</div>
           {pls.map(([id,pd],i)=>(
-            <div key={id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",
+            <div key={id} style={{display:"flex",alignItems:"center",gap:10,padding:isLandscape?"5px 12px":"9px 12px",
               background:id===pid?"rgba(255,215,0,0.06)":"transparent",borderRadius:12,marginBottom:4,
               transition:"all 0.3s",animation:`slideIn 0.4s ease-out ${i*0.08}s both`,
               border:id===pid?"1px solid rgba(255,215,0,0.1)":"1px solid transparent"}}>
@@ -4599,6 +4610,10 @@ export default function UnoGame(){
           </div>}
         </div>
 
+        {/* Sticky action footer — START / READY always stays on screen even with a full lobby */}
+        <div style={{position:"sticky",bottom:0,width:"100%",maxWidth:380,display:"flex",flexDirection:"column",alignItems:"center",
+          paddingTop:10,paddingBottom:"calc(env(safe-area-inset-bottom,0px) + 4px)",zIndex:5,
+          background:"linear-gradient(0deg,#060e0c 45%,rgba(6,14,12,0.9) 78%,transparent)"}}>
         {isHost&&pls.length>=2&&(allReady
           ?<button onClick={startGame} style={{...bst,maxWidth:380,
             background:"linear-gradient(135deg,#2E7D32,#1B5E20)",fontSize:18,letterSpacing:6,
@@ -4619,6 +4634,7 @@ export default function UnoGame(){
           padding:"8px 24px",borderRadius:10,fontSize:11,cursor:"pointer",transition:"all 0.2s",letterSpacing:2}}
           onPointerEnter={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.25)";e.currentTarget.style.color="#aaa";}}
           onPointerLeave={e=>{e.currentTarget.style.borderColor="rgba(255,255,255,0.08)";e.currentTarget.style.color="#889";}}>{isHost?"Close":"Leave"}</button>
+        </div>
       </div>
       {showInvite&&(()=>{const selCount=Object.values(inviteSel).filter(Boolean).length;return(
         <div onClick={()=>setShowInvite(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:250,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",animation:"fadeIn 0.3s"}}>
