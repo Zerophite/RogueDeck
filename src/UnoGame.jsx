@@ -2342,6 +2342,7 @@ export default function UnoGame(){
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
   const[cardFlyFx,setCardFlyFx]=useState(null);
   const[playFlyFx,setPlayFlyFx]=useState(null); // opponent's played card flying from their seat → pile
+  const[discardFlyFx,setDiscardFlyFx]=useState(null); // discard-all: multiple face-up cards flying hand → pile
   const[dealFx,setDealFx]=useState(null);
   const[draw2Fx,setDraw2Fx]=useState(null);
   const[reverseFx,setReverseFx]=useState(null);
@@ -2748,14 +2749,19 @@ export default function UnoGame(){
   // and the other is ignored. Guarantees the player who used it sees it too.
   const triggerDiscardAll=useCallback((ts,color,count,cards)=>{
     if(!ts||daRef.current===ts)return;daRef.current=ts;
-    const dac=color||"yellow";const cnt=Math.max(2,count||2);
-    psE(dac);psSeq("carddist",cnt,1150,280);setActFx("discardAll");trigBurst(dac);
-    setDiscardFx({color:dac,count:cnt,cards:(cards&&cards.length===cnt)?cards:undefined});
-    // Reveal the just-discarded cards on the pile ONE AT A TIME, synced to each flying card's
-    // landing (~1150 + i·280ms) so the pile fills as the cards arrive instead of dropping at once.
+    const dac=color||"yellow";const cnt=Math.max(2,count||2);const GAP=240,LAND=500;
+    setActFx("discardAll");trigBurst(dac);psSeq("carddist",cnt,LAND,GAP); // banner + burst + one thunk per card as it lands
+    // PROMINENT fly (same engine as opponent plays): each discarded card sweeps face-up from the
+    // hand up to the pile, staggered. Reliable + clearly visible in both orientations.
+    const p=pileRef.current?pileRef.current.getBoundingClientRect():null;
+    const tx=p?p.left+p.width/2:window.innerWidth/2,ty=p?p.top+p.height/2:Math.round(window.innerHeight*0.42);
+    const flyCards=(cards&&cards.length)?cards.slice(0,12):Array.from({length:cnt},()=>({id:Math.random(),color:dac==="wild"?"red":dac,value:"5",type:"number"}));
+    setDiscardFlyFx({cards:flyCards,tx,ty,ts});
+    setTimeout(()=>setDiscardFlyFx(f=>(f&&f.ts===ts)?null:f),LAND+flyCards.length*GAP+700);
+    // Reveal the just-discarded cards on the pile ONE AT A TIME, synced to each flying card's landing.
     setDaLanded(0);const dc=cnt-1;
-    for(let i=0;i<dc;i++)setTimeout(()=>setDaLanded(k=>Math.max(k,i+1)),1150+i*280);
-    setTimeout(()=>setDaLanded(dc),1150+dc*280+300);
+    for(let i=0;i<dc;i++)setTimeout(()=>setDaLanded(k=>Math.max(k,i+1)),LAND+i*GAP);
+    setTimeout(()=>setDaLanded(dc),LAND+dc*GAP+250);
   },[psE,psSeq,trigBurst]);
   useEffect(()=>{const da=g?.discardAllFx;if(!da||!da.ts)return;
     if(Date.now()-da.ts>6000){daRef.current=da.ts;return;} // skip stale on late join
@@ -2936,6 +2942,7 @@ export default function UnoGame(){
   },[g?.pendingSlash,ps,psE,psSeq,trigShake,pid]);
 
   useEffect(()=>{if(!g||g.winner||!g.currentPlayer)return;
+    if(!settings.turnTime){setTurnTimer(9999);return;} // ∞ — no turn limit (never times out)
     setTurnTimer(settings.turnTime);
     const iv=setInterval(()=>{setTurnTimer(prev=>{
       if(gRef.current?.pause)return prev; // hold the turn timer during a disconnect pause
@@ -2943,7 +2950,7 @@ export default function UnoGame(){
       if(prev===6&&snd)sfx.playClock(); // stoppable ticking clip for the final 5 seconds
       return prev-1;});},1000);
     return()=>{clearInterval(iv);sfx.stopClock();}; // turn ended (drew/played/timeout) → stop ticking
-  },[g?.currentPlayer,g?.turnTimestamp,g?.winner]);
+  },[g?.currentPlayer,g?.turnTimestamp,g?.winner,settings.turnTime]);
 
   const gameActive=!!g&&!g.winner;
   useEffect(()=>{if(!gameActive)return;
@@ -3614,9 +3621,10 @@ export default function UnoGame(){
     setLMsg("UNO!");setTimeout(()=>setLMsg(""),1200);};
   const leave=async(e)=>{if(e&&e.stopPropagation)e.stopPropagation();
     bgm.stop();setMus(false);
-    if(scr==="game"&&g&&!g.winner){ // live game: don't tear down — the resolver pauses & forfeits us after 30s
+    if(scr==="game"&&g&&!g.winner){ // live game: don't tear down — the resolver forfeits us after the reconnect window
       const otherHumans=pls.filter(([id])=>id!==pid&&!isBot(id)).length;
       if(otherHumans===0){try{await remove(ref(db,"rooms/"+rc));}catch(e2){}} // nobody left to resolve → clean up
+      else if(!g.pause){try{await wgs({pause:{by:pid,name:rd.players[pid]?.name||"Player",until:Date.now()+RECONNECT_MS}});}catch(e2){}} // pause the others immediately, don't wait for the heartbeat to go stale
       setRc("");setRd(null);setScr("menu");return;}
     if(isHost)await remove(ref(db,"rooms/"+rc));
     else await remove(ref(db,"rooms/"+rc+"/players/"+pid));setRc("");setRd(null);setScr("menu");};
@@ -4531,8 +4539,8 @@ export default function UnoGame(){
               background:id===pid?"rgba(255,215,0,0.06)":"transparent",borderRadius:12,marginBottom:4,
               transition:"all 0.3s",animation:`slideIn 0.4s ease-out ${i*0.08}s both`,
               border:id===pid?"1px solid rgba(255,215,0,0.1)":"1px solid transparent"}}>
-              <div style={{flexShrink:0}}><Avatar id={pd.avatar} state={pd.ready&&id!==rd?.host?"celebrate":"idle"} size={38} photo={pd.photo}/></div>
-              <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
+              <div style={{flexShrink:0}}><Avatar id={pd.avatar} state={pd.ready&&id!==rd?.host?"celebrate":"idle"} size={isLandscape?30:38} photo={pd.photo}/></div>
+              <div style={{flex:1,color:"#ddd",fontWeight:600,fontSize:isLandscape?12:14}}>{pd.name}{id===pid&&<span style={{color:"#778",fontSize:9}}> (you)</span>}{pd.isBot&&<span style={{color:"#4CAF50",fontSize:8,background:"rgba(76,175,80,0.1)",padding:"1px 6px",borderRadius:4,fontWeight:700,letterSpacing:1,marginLeft:4}}>BOT</span>}</div>
               <span style={{fontSize:11,color:"#778",fontWeight:600,fontFamily:"monospace"}}>{rd?.scores?.[id]||0}</span>
               {id===rd?.host&&!pd.reviewing&&<span style={{fontSize:8,color:"#FFD700",background:"rgba(255,215,0,0.1)",padding:"2px 8px",borderRadius:6,fontWeight:700,letterSpacing:1}}>HOST</span>}
               {pd.reviewing?<span style={{fontSize:8,fontWeight:800,letterSpacing:1,padding:"2px 8px",borderRadius:6,
@@ -4559,13 +4567,13 @@ export default function UnoGame(){
             onPointerLeave={e=>{e.currentTarget.style.borderColor="rgba(76,175,80,0.3)";e.currentTarget.style.background="rgba(76,175,80,0.06)";}}>
             + ADD BOT</button>}
         </div>
-        <button onClick={()=>{setShowInvite(true);setInviteSel({});setFriendMsg("");}} style={{width:"100%",maxWidth:380,padding:"9px 0",borderRadius:12,marginBottom:10,
+        <button onClick={()=>{setShowInvite(true);setInviteSel({});setFriendMsg("");}} style={{width:"100%",maxWidth:380,padding:isLandscape?"6px 0":"9px 0",borderRadius:12,marginBottom:isLandscape?6:10,
           border:"1px solid rgba(21,101,192,0.35)",background:"rgba(21,101,192,0.1)",color:"#64B5F6",
           fontSize:11,fontWeight:800,cursor:"pointer",letterSpacing:2,transition:"all 0.2s"}}
           onPointerEnter={e=>e.currentTarget.style.background="rgba(21,101,192,0.18)"}
           onPointerLeave={e=>e.currentTarget.style.background="rgba(21,101,192,0.1)"}>🤝 INVITE FRIENDS</button>
         {/* Settings */}
-        <div style={{width:"100%",maxWidth:380,marginBottom:10}}>
+        <div style={{width:"100%",maxWidth:380,marginBottom:isLandscape?4:10}}>
           <button onClick={()=>setShowSettings(!showSettings)} style={{background:"none",border:"1px solid rgba(255,215,0,0.12)",
             color:"#FFD700",padding:"6px 16px",borderRadius:10,fontSize:10,fontWeight:700,cursor:"pointer",
             letterSpacing:3,transition:"all 0.2s",display:"flex",alignItems:"center",gap:6,margin:"0 auto"}}
@@ -4574,7 +4582,7 @@ export default function UnoGame(){
             ⚙ SETTINGS {showSettings?"▲":"▼"}</button>
           {showSettings&&<div style={{...GLASS,padding:14,marginTop:8,animation:"fadeIn 0.3s"}}>
             {[
-              {label:"Turn Time",key:"turnTime",opts:[{v:10,l:"10s"},{v:15,l:"15s"},{v:20,l:"20s"},{v:30,l:"30s"}]},
+              {label:"Turn Time",key:"turnTime",opts:[{v:10,l:"10s"},{v:15,l:"15s"},{v:20,l:"20s"},{v:30,l:"30s"},{v:0,l:"∞"}]},
               {label:"Round Time",key:"roundTime",opts:[{v:120,l:"2 min"},{v:180,l:"3 min"},{v:300,l:"5 min"},{v:0,l:"∞"}]},
               {label:"Starting Cards",key:"startCards",opts:[{v:5,l:"5"},{v:7,l:"7"},{v:10,l:"10"}]},
             ].map(s=>(
@@ -4771,6 +4779,14 @@ export default function UnoGame(){
         "--pfx":`${playFlyFx.sx-playFlyFx.tx}px`,"--pfy":`${playFlyFx.sy-playFlyFx.ty}px`,
         animation:"playFly 0.5s cubic-bezier(.3,.85,.4,1) forwards"}}>
         <Card card={playFlyFx.card} sz={isLandscape?"sm":"md"}/></div>}
+      {/* Discard-all: a fan of face-up cards flying from the hand up to the pile, one after another.
+          Big + slow + on top of everything so the throw is unmistakable. */}
+      {discardFlyFx&&discardFlyFx.cards.map((c,i)=>{const n=discardFlyFx.cards.length;const spread=(i-(n-1)/2)*(isLandscape?30:40);
+        const sx=window.innerWidth/2+spread,sy=window.innerHeight*0.9;
+        return(<div key={(c.id!=null?c.id:i)+"-df"} style={{position:"fixed",left:discardFlyFx.tx,top:discardFlyFx.ty,zIndex:250,pointerEvents:"none",
+          "--pfx":`${sx-discardFlyFx.tx}px`,"--pfy":`${sy-discardFlyFx.ty}px`,filter:"drop-shadow(0 8px 20px rgba(0,0,0,0.6))",
+          animation:`playFly 0.72s cubic-bezier(.3,.8,.35,1) ${(i*0.24).toFixed(2)}s both`}}>
+          <Card card={c} sz={isLandscape?"md":"lg"}/></div>);})}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
       {reverseFx&&<ReverseFX color={reverseFx} onDone={()=>setReverseFx(null)}/>}
       {skipFx&&<SkipFX color={skipFx} onDone={()=>setSkipFx(null)}/>}
@@ -5131,7 +5147,7 @@ export default function UnoGame(){
                 <div style={{position:"absolute",top:-8,right:-8,zIndex:3,width:isLandscape?16:22,height:isLandscape?16:22,borderRadius:"50%",
                   background:CG[g.currentColor],border:"2px solid rgba(255,255,255,0.7)",
                   boxShadow:`0 0 18px ${gcHex}aa,0 0 35px ${gcHex}44`,transition:"all 0.5s"}}/>
-                {!g.winner&&(()=>{const low=turnTimer<=5;return(<div style={{position:"absolute",left:"calc(100% + 12px)",top:"50%",transform:"translateY(-50%)",
+                {!g.winner&&settings.turnTime>0&&(()=>{const low=turnTimer<=5;return(<div style={{position:"absolute",left:"calc(100% + 12px)",top:"50%",transform:"translateY(-50%)",
                   width:46,height:46,pointerEvents:"none",zIndex:15}}>
                   {/* only the clock IMAGE wobbles; the number stays centered in the face so it's always readable */}
                   <img src={UI_URL+"clock.png"} width={46} height={46} alt="" style={{position:"absolute",inset:0,display:"block",objectFit:"contain",transformOrigin:"50% 22%",
