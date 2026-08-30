@@ -2734,7 +2734,7 @@ export default function UnoGame(){
     else if(m.includes("discard all")){/* handled uniformly by the discardAllFx watcher */}
     else if(m.includes("shadow")){const shc=g?.currentColor||"blue";setActFx("shadow");ps("shadow");psE(shc);trigBurst(shc);}
     else if(m.includes("snatch")){const snc=g?.currentColor||"yellow";setActFx("snatch");ps("draw2");psE(snc);trigShake();trigBurst(snc);}
-    else if(m.includes("played")){}
+    else if(m.includes("played")){if(g?.lastPlay?.by&&g.lastPlay.by!==pid)ps("card");} // plain number-card play: observers hear it too (the player who played it already heard it locally)
     if(m.includes("timed out")){ps("timeout");const tm=g.message.match(/^(.*?)\s+timed out/i);setTimeoutFx(tm?tm[1]:"");}
   },[g?.message,g?.turnTimestamp,ps,psE,trigShake,trigBurst,trigImpact,trigLightning,g?.currentColor]);
   useEffect(()=>{if(timeoutFx!==null){const t=setTimeout(()=>setTimeoutFx(null),2000);return()=>clearTimeout(t);}},[timeoutFx]);
@@ -2948,7 +2948,7 @@ export default function UnoGame(){
         return()=>{seq.forEach(clearTimeout);};
       }
     }
-  },[g?.pendingSlash,ps,psE,psSeq,trigShake,pid]);
+  },[g?.pendingSlash?.ts,ps,psE,psSeq,trigShake,pid]); // key off ts, NOT the object — hand updates during delivery re-create the object and would otherwise cancel the queued sounds
 
   useEffect(()=>{if(!g||g.winner||!g.currentPlayer)return;
     if(!settings.turnTime){setTurnTimer(9999);return;} // ∞ — no turn limit (never times out)
