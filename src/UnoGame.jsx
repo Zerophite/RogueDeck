@@ -18,7 +18,7 @@ function EM(color){return ELEM_META[color]||ELEM_META.yellow;}
 const VALS=["0","1","2","3","4","5","6","7","8","9","skip","reverse","draw2"];
 const ADMIN_PASS="admin123";
 const TURN_TIME=15;
-const PENALTY_GAP=440; // ms between each +2/+4 penalty card arriving — slower, one-at-a-time like discard-all
+const PENALTY_GAP=300; // ms between each +2/+4 penalty card arriving (one-at-a-time, but not too slow)
 const ROUND_TIME=180;
 const DEF_SETTINGS={turnTime:15,roundTime:180,startCards:7,stacking:true,specialCards:true,drawTilPlay:false,maxPlayers:4,teamMode:false,autoSplit:true};
 const MAX_PLAYERS=4;
@@ -1727,7 +1727,7 @@ const CardFlyFX=({element,count,toSelf,dir,onDone})=>{
       filter:`blur(1px) drop-shadow(0 0 16px ${em.glow})`,animation:"landFlash 0.6s ease-out 1s both"}}/>
     {cards.map(c=><div key={c.id} style={{position:"absolute",
       "--fx":`${c.sx}px`,"--fy":`${D.fy}px`,"--fex":`${D.fex}px`,"--fr":`${c.rot}deg`,
-      animation:`cardLand 1.4s cubic-bezier(.5,0,.32,1) ${c.del}s forwards`}}>
+      animation:`cardLand 1.05s cubic-bezier(.5,0,.32,1) ${c.del}s forwards`}}>
       <div style={{width:42,height:60,borderRadius:7,background:"linear-gradient(150deg,#232838,#0b0f18)",
         border:"1.5px solid rgba(255,215,0,0.5)",boxShadow:`0 6px 18px rgba(0,0,0,0.55),0 0 16px ${em.glow}66`,
         display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1825,7 +1825,7 @@ const ChibiAttackFX=({element,victimName,count,toSelf,dir,onDone})=>{
         {Array.from({length:nC}).map((_,i)=>{const ang=(i/nC)*Math.PI*2;
           return(<div key={i} style={{position:"absolute",left:"50%",top:"45%",zIndex:4,
             "--rx":`${Math.round(Math.cos(ang)*50)}px`,"--ry":`${Math.round(Math.sin(ang)*34)}px`,"--fy":`${D.fy}px`,"--fex":`${D.fex}px`,"--fr":`${-20+Math.round(Math.random()*40)}deg`,
-            animation:`penaltyFling 1.9s cubic-bezier(.5,0,.32,1) ${(0.2+i*(PENALTY_GAP/1000)).toFixed(2)}s both`}}>
+            animation:`penaltyFling 1.4s cubic-bezier(.5,0,.32,1) ${(0.2+i*(PENALTY_GAP/1000)).toFixed(2)}s both`}}>
             <div style={{width:36,height:52,borderRadius:6,background:CG[element]||em.grad,
               border:"2px solid rgba(255,255,255,0.9)",boxShadow:`0 4px 14px rgba(0,0,0,0.55),0 0 15px ${em.glow}aa`,
               display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2757,7 +2757,7 @@ export default function UnoGame(){
   // and the other is ignored. Guarantees the player who used it sees it too.
   const triggerDiscardAll=useCallback((ts,color,count,cards,by)=>{
     if(!ts||daRef.current===ts)return;daRef.current=ts;
-    const dac=color||"yellow";const cnt=Math.max(2,count||2);const GAP=240,LAND=500;
+    const dac=color||"yellow";const cnt=Math.max(2,count||2);const GAP=210,LAND=350;
     setActFx("discardAll");trigBurst(dac);psSeq("carddist",cnt,LAND,GAP); // banner + burst + one thunk per card as it lands
     // PROMINENT fly (same engine as opponent plays): each discarded card sweeps face-up from the
     // PLAYER who used it up to the pile — from my hand if it's me, else from their seat.
@@ -2905,7 +2905,7 @@ export default function UnoGame(){
     const drawn=ndp.splice(0,Math.min(cnt,ndp.length));
     // Cadence at which each flying card reaches the hand (matches the CardFlyFX/penaltyFling
     // land times AND the per-card sounds). Deliver one card per landing → they appear one at a time.
-    const landBase=type==="wild4"?1950:1260,gap=PENALTY_GAP; // matches the fly land times + slower per-card gap
+    const landBase=type==="wild4"?1450:950,gap=PENALTY_GAP; // matches the (faster) fly land times
     await wgs({pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:type||"draw2",count:cnt,ts:Date.now()}});
     // Write each card ~500ms before its land time so its fade-in (cardReceive) finishes exactly as
     // the flying card arrives and the sound plays — keeps hand, fly and sound in lockstep.
@@ -2938,13 +2938,13 @@ export default function UnoGame(){
         const el=psl.element||"green";psE(el); // element sound plays once, with the cinematic
         const nC=Math.max(2,Math.min(psl.count||4,8));
         setChibiAttackFx({element:el,victimName:psl.name,count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        const seq=psSeq("carddist",nC,1950,PENALTY_GAP); // one card-sound per card, matches the (now slower) fling stagger
+        const seq=psSeq("carddist",nC,1450,PENALTY_GAP); // one card-sound per card, synced to each fling landing
         const t=setTimeout(()=>trigShake(),SLASH_DELAY);
         return()=>{seq.forEach(clearTimeout);clearTimeout(t);};
       }else{
         const nC=Math.max(1,Math.min(psl.count||2,8));
         setCardFlyFx({element:psl.element||"yellow",count:nC,toSelf:psl.victim===pid,dir:victimDir(psl.victim)});
-        const seq=psSeq("carddist",nC,1260,PENALTY_GAP);
+        const seq=psSeq("carddist",nC,950,PENALTY_GAP);
         return()=>{seq.forEach(clearTimeout);};
       }
     }
@@ -3482,7 +3482,7 @@ export default function UnoGame(){
     if(ndp.length<count){const reshuf=sh(nd.slice(0,-1));ndp=[...ndp,...reshuf];nd.splice(0,nd.length-1);}
     const dr=ndp.splice(0,Math.min(count,ndp.length));
     await wgs({pendingChallenge:null,drawStack:0,drawStackType:null,pendingSlash:{victim:victimId,name:rd.players[victimId]?.name||"Player",element,type:"wild4",count,ts:Date.now()}});
-    const landBase=1950,gap=PENALTY_GAP,RECV=500; // matches the +4 fling land time + slower per-card gap
+    const landBase=1450,gap=PENALTY_GAP,RECV=500; // matches the +4 fling land time
     let hand=[...(cg.hands?.[victimId]||[])];
     dr.forEach((c,i)=>{setTimeout(()=>{hand=[...hand,c];wgs({["hands/"+victimId]:hand});},Math.max(50,landBase-RECV)+i*gap);});
     setTimeout(()=>{wgs({drawPile:ndp,discardPile:nd,currentPlayer:nextPlayer,message:m,pendingSlash:null,drawStack:0,drawStackType:null,turnTimestamp:Date.now()});},landBase+Math.max(0,dr.length-1)*gap+450);
@@ -4800,7 +4800,7 @@ export default function UnoGame(){
         const sx=discardFlyFx.sx+spread,sy=discardFlyFx.sy;
         return(<div key={(c.id!=null?c.id:i)+"-df"} style={{position:"fixed",left:discardFlyFx.tx,top:discardFlyFx.ty,zIndex:250,pointerEvents:"none",
           "--pfx":`${sx-discardFlyFx.tx}px`,"--pfy":`${sy-discardFlyFx.ty}px`,filter:"drop-shadow(0 8px 20px rgba(0,0,0,0.6))",
-          animation:`playFly 0.72s cubic-bezier(.3,.8,.35,1) ${(i*0.24).toFixed(2)}s both`}}>
+          animation:`playFly 0.55s cubic-bezier(.3,.8,.35,1) ${(i*0.21).toFixed(2)}s both`}}>
           <Card card={c} sz={isLandscape?"md":"lg"}/></div>);})}
       {draw2Fx&&<Draw2FX color={draw2Fx} onDone={()=>setDraw2Fx(null)}/>}
       {reverseFx&&<ReverseFX color={reverseFx} onDone={()=>setReverseFx(null)}/>}
