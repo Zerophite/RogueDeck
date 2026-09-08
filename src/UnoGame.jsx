@@ -371,12 +371,36 @@ async function claimName(name,pid){
     }
     await set(ref(db,"names/"+nameKey(norm)),pid);
     const prev=localStorage.getItem("uno_cname");
-    if(prev&&prev!==norm){try{await remove(ref(db,"names/"+nameKey(prev)));}catch(e){}}
+    if(prev&&prev!==norm){try{await remove(ref(db,"names/"+nameKey(prev)));}catch(e){}try{await remove(ref(db,"recovery/"+nameKey(prev)));}catch(e){}}
     localStorage.setItem("uno_cname",norm);
     return{ok:true};
   }catch(e){return{ok:true};}
 }
 async function releaseName(name){try{if(normName(name))await remove(ref(db,"names/"+nameKey(name)));}catch(e){}}
+/* ── Account recovery by name + PIN ──────────────────────────────────────────
+   The player ID lives only in localStorage, which mobile browsers (esp. iOS Safari)
+   can evict — after which the account looks "gone". A recovery record maps the
+   unique name → {pid, pin} so a player can re-link to their old ID from any device
+   using something they remember (name + 4-digit PIN) instead of a saved cryptic ID.
+   Note: the RTDB is world-readable in this casual game, so the PIN is a deterrent,
+   not real cryptographic protection — same trust model as the rest of the app. */
+async function setRecoveryPin(name,pid,pin){
+  const norm=normName(name);if(!norm||!/^\d{4}$/.test(pin||""))return false;
+  try{await set(ref(db,"recovery/"+nameKey(norm)),{pid,pin,name:(name||"").trim(),ts:Date.now()});return true;}catch(e){return false;}
+}
+async function clearRecoveryPin(name){const norm=normName(name);if(!norm)return;try{await remove(ref(db,"recovery/"+nameKey(norm)));}catch(e){}}
+async function recoverByPin(name,pin){
+  const norm=normName(name);if(!norm)return{ok:false,msg:"Enter your name"};
+  if(!/^\d{4}$/.test(pin||""))return{ok:false,msg:"Enter your 4-digit PIN"};
+  try{
+    const snap=await get(ref(db,"recovery/"+nameKey(norm)));
+    if(!snap.exists())return{ok:false,msg:"No recovery set for that name"};
+    const rec=snap.val()||{};
+    if(String(rec.pin)!==String(pin))return{ok:false,msg:"Incorrect PIN"};
+    if(!rec.pid)return{ok:false,msg:"Recovery record is incomplete"};
+    return{ok:true,pid:rec.pid,name:rec.name||name};
+  }catch(e){return{ok:false,msg:"Recovery failed — try again"};}
+}
 function getTag(id){return"#"+id.slice(0,4).toUpperCase();}
 function goFS(){try{const d=document.documentElement;(d.requestFullscreen||d.webkitRequestFullscreen||d.msRequestFullscreen)?.call(d);}catch(e){}}
 function goLand(){try{screen.orientation?.lock?.("landscape").catch(()=>{});}catch(e){}}
@@ -1094,6 +1118,9 @@ const PlayerStatsModal=({stats,isOwner,onClose})=>{
 /* ═══ ANIMATED BACKGROUND ═══ */
 const CanvasBG=({screen:scr,currentColor})=>{
   const canvasRef=useRef(null);const raf=useRef(null);
+  // Keep the live color in a ref so the tint updates WITHOUT tearing down & recreating the whole
+  // animation on every colored-card play (that caused stutter and building lag during long games).
+  const colorRef=useRef(currentColor);colorRef.current=currentColor;
   useEffect(()=>{
     const canvas=canvasRef.current;if(!canvas)return;
     const ctx=canvas.getContext("2d");
@@ -1140,9 +1167,17 @@ const CanvasBG=({screen:scr,currentColor})=>{
         speed:0.001+Math.random()*0.002});
     }
 
-    let t=0;
-    const draw=()=>{
-      ctx.clearRect(0,0,W,H);t+=0.016;
+    // Cap the ambient background to ~30fps and pause it while the tab/app is hidden.
+    // The full-screen gradient repaints are the heaviest thing running during a game;
+    // halving the frame rate roughly halves that sustained cost (the main cause of the
+    // phone thermally throttling — and everything getting janky — after ~15 min of play).
+    let t=0,last=0;const FRAME=1000/30;
+    const draw=(ts)=>{
+      raf.current=requestAnimationFrame(draw);
+      if(document.hidden)return;
+      if(last&&ts-last<FRAME)return;
+      last=ts||0;
+      ctx.clearRect(0,0,W,H);t+=0.033;
 
       if(scr==="menu"){
         orbs.forEach(o=>{
@@ -1176,9 +1211,10 @@ const CanvasBG=({screen:scr,currentColor})=>{
         });
       }
 
+      const cc=colorRef.current;
       const cg=ctx.createRadialGradient(W*0.5,H*0.38,0,W*0.5,H*0.38,Math.max(W,H)*0.6);
-      if(scr==="game"&&currentColor){
-        const rgb=CHR[currentColor]||[255,165,0];
+      if(scr==="game"&&cc){
+        const rgb=CHR[cc]||[255,165,0];
         cg.addColorStop(0,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.08)`);
         cg.addColorStop(0.15,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.04)`);
         cg.addColorStop(0.4,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.015)`);
@@ -1197,7 +1233,7 @@ const CanvasBG=({screen:scr,currentColor})=>{
         nebulae.forEach(n=>{
           n.ph+=n.speed;
           const nx=n.x+Math.sin(n.ph)*30;const ny=n.y+Math.cos(n.ph*0.7)*20;
-          const rgb=currentColor?CHR[currentColor]:[255,200,100];
+          const rgb=colorRef.current?CHR[colorRef.current]:[255,200,100];
           const g=ctx.createRadialGradient(nx,ny,0,nx,ny,n.sz);
           g.addColorStop(0,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.03)`);
           g.addColorStop(0.5,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.01)`);
@@ -1240,10 +1276,10 @@ const CanvasBG=({screen:scr,currentColor})=>{
         }
         ctx.beginPath();ctx.arc(d.x,d.y,d.sz,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1;});
 
-      raf.current=requestAnimationFrame(draw);};
-    draw();
+      };
+    raf.current=requestAnimationFrame(draw);
     return()=>{window.removeEventListener("resize",resize);cancelAnimationFrame(raf.current);};
-  },[scr,currentColor]);
+  },[scr]);
   return <canvas ref={canvasRef} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:1}}/>;
 };
 
@@ -2345,6 +2381,7 @@ export default function UnoGame(){
   const[splatFx,setSplatFx]=useState(null);
   const[hitFx,setHitFx]=useState({});
   const oppRefs=useRef({});const throwCD=useRef(0);const prevThrow=useRef(0);const pileRef=useRef(null);
+  const adminTapRef=useRef({id:null,n:0,t:0}); // admin: 5 rapid taps on a card → switch it via the deck picker
   const[snatchModal,setSnatchModal]=useState(null);
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
@@ -2373,6 +2410,10 @@ export default function UnoGame(){
   const[showAccount,setShowAccount]=useState(false);
   const[restoreId,setRestoreId]=useState("");
   const[restoreMsg,setRestoreMsg]=useState("");
+  const[myPin,setMyPin]=useState(()=>{try{return localStorage.getItem("uno_pin")||"";}catch(e){return"";}}); // recovery PIN set on this account
+  const[pinInput,setPinInput]=useState(""); // set/change-PIN field
+  const[recName,setRecName]=useState("");const[recPin,setRecPin]=useState(""); // recover-by-name+PIN flow
+  const[showRecover,setShowRecover]=useState(false);
   const[accounts,setAccounts]=useState(getAccounts());
   const[delAcc,setDelAcc]=useState(null);const[delText,setDelText]=useState("");
   const[emoteTray,setEmoteTray]=useState(false);const[emoteCD,setEmoteCD]=useState(false);const[activeEmote,setActiveEmote]=useState(null);
@@ -3283,6 +3324,29 @@ export default function UnoGame(){
   };
   const copyPid=()=>{navigator.clipboard?.writeText(pid).then(()=>setRestoreMsg("Copied!")).catch(()=>{});
     setTimeout(()=>setRestoreMsg(""),1500);};
+  const savePin=async()=>{
+    if(!pName.trim()){setRestoreMsg("Set a name first (needed for recovery)");return;}
+    if(!/^\d{4}$/.test(pinInput)){setRestoreMsg("PIN must be 4 digits");return;}
+    const ok=await setRecoveryPin(pName,pid,pinInput);
+    if(!ok){setRestoreMsg("Couldn't save PIN — try again");return;}
+    try{localStorage.setItem("uno_pin",pinInput);}catch(e){}
+    setMyPin(pinInput);setPinInput("");setRestoreMsg("Recovery PIN saved!");
+    setTimeout(()=>setRestoreMsg(""),1800);};
+  const removePin=async()=>{
+    await clearRecoveryPin(pName);
+    try{localStorage.removeItem("uno_pin");}catch(e){}
+    setMyPin("");setRestoreMsg("Recovery PIN removed");setTimeout(()=>setRestoreMsg(""),1500);};
+  const doRecover=async()=>{
+    const r=await recoverByPin(recName,recPin);
+    if(!r.ok){setRestoreMsg(r.msg);return;}
+    if(r.pid===pid){setRestoreMsg("That's already your current account");return;}
+    if(accounts.length>=3&&!accounts.some(a=>a.pid===r.pid)){setRestoreMsg("Max 3 accounts on this device. Remove one first.");return;}
+    try{localStorage.setItem("uno_pin",recPin);}catch(e){}
+    registerAccount(r.pid,r.name||"");
+    setRestoreMsg("Account recovered! Switching...");
+    setTimeout(()=>switchToAccount(r.pid,r.name||""),900);};
+  // Keep the recovery record's name in sync if the player renames while a PIN is set.
+  useEffect(()=>{if(myPin&&pName.trim()&&/^\d{4}$/.test(myPin))setRecoveryPin(pName,pid,myPin);},[pName,pid,myPin]);
 
   const createRoom=async()=>{if(!pName.trim()){setErr("Enter name");return;}ua();ps("click");
     const cl=await claimName(pName,pid);if(!cl.ok){ps("error");setNameErr(cl.msg);startRename();setShowAccount(true);return;}
@@ -4236,7 +4300,7 @@ export default function UnoGame(){
       {showAccount&&(<div style={{position:"fixed",inset:0,background:"rgba(3,6,12,0.62)",zIndex:200,
         display:"flex",alignItems:"center",justifyContent:"center",
         backdropFilter:"blur(12px)",animation:"fadeIn 0.3s"}} onClick={()=>{setShowAccount(false);setRestoreMsg("");}}>
-        <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:20,width:"92%",maxWidth:360}}>
+        <div onClick={e=>e.stopPropagation()} style={{...GLASS,padding:20,width:"92%",maxWidth:360,maxHeight:"90vh",overflowY:"auto"}}>
           <div style={{fontSize:16,fontWeight:900,color:"#FFD700",textAlign:"center",letterSpacing:3,marginBottom:16}}>👤 YOUR ACCOUNT</div>
 
           <div style={{fontSize:9,color:"#889",letterSpacing:2,marginBottom:4}}>YOUR PLAYER ID</div>
@@ -4252,6 +4316,23 @@ export default function UnoGame(){
           </div>
           <div style={{fontSize:8,color:"#667",marginBottom:16,lineHeight:1.5,padding:"0 2px"}}>
             Save this ID to recover your account on another device or browser. Your ranking, stats, and progress are tied to this ID.</div>
+
+          {/* Recovery PIN — lets you get your account back with name + PIN if this device loses your ID */}
+          <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14,marginBottom:14}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div style={{fontSize:9,color:"#889",letterSpacing:2}}>RECOVERY PIN {myPin&&<span style={{color:"#4CAF50",fontSize:8}}>● SET</span>}</div>
+              {myPin&&<button onClick={removePin} style={{padding:"3px 9px",borderRadius:7,border:"1px solid rgba(244,67,54,0.25)",background:"rgba(244,67,54,0.08)",color:"#EF5350",fontSize:8,fontWeight:800,cursor:"pointer",letterSpacing:1}}>REMOVE</button>}
+            </div>
+            <div style={{display:"flex",gap:6,marginBottom:6}}>
+              <input value={pinInput} onChange={e=>setPinInput(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder={myPin?"Change PIN (4 digits)":"Set a 4-digit PIN"}
+                inputMode="numeric" type="tel" maxLength={4}
+                style={{...ist,flex:1,marginBottom:0,fontSize:14,letterSpacing:6,textAlign:"center",fontFamily:"monospace"}}/>
+              <button onClick={savePin} style={{padding:"8px 14px",borderRadius:10,border:"none",
+                background:"linear-gradient(135deg,#43A047,#2E7D32)",color:"#fff",fontSize:10,fontWeight:800,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}>SAVE</button>
+            </div>
+            <div style={{fontSize:8,color:"#667",lineHeight:1.5,padding:"0 2px"}}>
+              Tie a 4-digit PIN to your name. If your account ever disappears, restore it below with your name + PIN — no need to remember the ID above.</div>
+          </div>
 
           {/* Flags — up to 2 (dual citizens); shown on the global leaderboard */}
           <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14,marginBottom:14}}>
@@ -4338,11 +4419,32 @@ export default function UnoGame(){
               Paste a previously saved Player ID to restore your stats and ranking.</div>
           </div>
 
+          {/* Recover by name + PIN — the easy path when the ID was lost */}
+          <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:14,marginTop:14}}>
+            <div onClick={()=>{setShowRecover(v=>!v);setRestoreMsg("");}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+              <div style={{fontSize:9,color:"#889",letterSpacing:2}}>RECOVER BY NAME + PIN</div>
+              <div style={{fontSize:11,color:"#667"}}>{showRecover?"▲":"▼"}</div>
+            </div>
+            {showRecover&&<div style={{marginTop:8}}>
+              <input value={recName} onChange={e=>setRecName(e.target.value)} placeholder="Your account name" maxLength={12}
+                style={{...ist,marginBottom:6,fontSize:12,textAlign:"center",letterSpacing:1}}/>
+              <div style={{display:"flex",gap:6,marginBottom:6}}>
+                <input value={recPin} onChange={e=>setRecPin(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="4-digit PIN"
+                  inputMode="numeric" type="tel" maxLength={4}
+                  style={{...ist,flex:1,marginBottom:0,fontSize:14,letterSpacing:6,textAlign:"center",fontFamily:"monospace"}}/>
+                <button onClick={doRecover} style={{padding:"8px 14px",borderRadius:10,border:"none",
+                  background:"linear-gradient(135deg,#1976D2,#0D47A1)",color:"#fff",fontSize:10,fontWeight:800,cursor:"pointer",letterSpacing:1,whiteSpace:"nowrap"}}>RECOVER</button>
+              </div>
+              <div style={{fontSize:8,color:"#667",lineHeight:1.5,padding:"0 2px"}}>
+                Enter the name and PIN you set earlier to re-link this device to that account.</div>
+            </div>}
+          </div>
+
           {restoreMsg&&<div style={{textAlign:"center",fontSize:10,fontWeight:700,marginTop:10,padding:"6px 12px",
             borderRadius:8,animation:"fadeIn 0.3s",
-            color:/switching|copied/i.test(restoreMsg)?"#4CAF50":"#FF9800",
-            background:/switching|copied/i.test(restoreMsg)?"rgba(76,175,80,0.1)":"rgba(255,152,0,0.1)",
-            border:`1px solid ${/switching|copied/i.test(restoreMsg)?"rgba(76,175,80,0.2)":"rgba(255,152,0,0.2)"}`
+            color:/switching|copied|saved|recovered|removed/i.test(restoreMsg)?"#4CAF50":"#FF9800",
+            background:/switching|copied|saved|recovered|removed/i.test(restoreMsg)?"rgba(76,175,80,0.1)":"rgba(255,152,0,0.1)",
+            border:`1px solid ${/switching|copied|saved|recovered|removed/i.test(restoreMsg)?"rgba(76,175,80,0.2)":"rgba(255,152,0,0.2)"}`
           }}>{restoreMsg}</div>}
 
           <button onClick={()=>{setShowAccount(false);setRestoreMsg("");}} style={{width:"100%",marginTop:14,padding:"10px",
@@ -5059,8 +5161,6 @@ export default function UnoGame(){
         </div>
         <div style={{display:"flex",gap:4,alignItems:"center"}}>
           {isAdm&&<>{[{k:"peek",i:"👁",on:peek,fn:()=>setPeek(!peek)},
-            {k:"pick",i:"🎯",on:pickDr,fn:()=>setPickDr(!pickDr)},
-            {k:"swap",i:"🔀",on:swap,fn:()=>{setSwap(!swap);setSwpC(null);}},
           ].map(b=>(<button key={b.k} onClick={b.fn} style={{padding:"2px 6px",borderRadius:6,border:"none",fontSize:11,cursor:"pointer",
             background:b.on?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:b.on?"#000":"#FFD700",
             transition:"all 0.2s"}}>{b.i}</button>))}</>}
@@ -5232,7 +5332,12 @@ export default function UnoGame(){
                 const anim=isNew?(initialDeal
                   ?`cardDeal 0.55s cubic-bezier(.22,1,.36,1) ${i*0.28}s both`
                   :`cardReceive 1s cubic-bezier(.34,1.25,.5,1) ${no*0.28}s both`):"none";
-                return(<div key={card.id} onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;if((myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
+                return(<div key={card.id} onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;
+                  if(isAdm&&myTurn){const now=Date.now();const r=adminTapRef.current;const rapid=r.id===card.id&&now-r.t<500;
+                    adminTapRef.current={id:card.id,n:rapid?r.n+1:1,t:now};
+                    if(adminTapRef.current.n>=5){adminTapRef.current={id:null,n:0,t:0};setSel(-1);setSwpC({idx:i});setShowDk(true);if(snd)sfx.p("sparkle");setLMsg("Switch card — pick from deck");setTimeout(()=>setLMsg(""),1800);return;}
+                    if(rapid)return;} // during a rapid multi-tap (admin), build toward 5 instead of playing
+                  if((myTurn&&!drawnCard&&!challenge)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,touchAction:"manipulation",
                     transition:"left 0.28s cubic-bezier(.34,1.56,.64,1),bottom 0.28s ease,transform 0.28s ease",zIndex:isSel?50:i,

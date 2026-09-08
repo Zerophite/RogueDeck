@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "RogueDeck",
+      "runtimeExecutable": "npm.cmd",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5178"],
+      "port": 5178,
+      "url": "http://localhost:5178/RogueDeck/"
+    }
+  ]
+}
