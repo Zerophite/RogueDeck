@@ -2381,7 +2381,7 @@ export default function UnoGame(){
   const[splatFx,setSplatFx]=useState(null);
   const[hitFx,setHitFx]=useState({});
   const oppRefs=useRef({});const throwCD=useRef(0);const prevThrow=useRef(0);const pileRef=useRef(null);
-  const adminTapRef=useRef({id:null,n:0,t:0}); // admin: 5 rapid taps on a card → switch it via the deck picker
+  const adminHoldRef=useRef({fired:false,t:null}); // admin: hold a card (long-press) → switch it via the deck picker (works even off-turn)
   const[snatchModal,setSnatchModal]=useState(null);
   const[wild4Fx,setWild4Fx]=useState(null);
   const[chibiAttackFx,setChibiAttackFx]=useState(null);
@@ -5332,18 +5332,23 @@ export default function UnoGame(){
                 const anim=isNew?(initialDeal
                   ?`cardDeal 0.55s cubic-bezier(.22,1,.36,1) ${i*0.28}s both`
                   :`cardReceive 1s cubic-bezier(.34,1.25,.5,1) ${no*0.28}s both`):"none";
-                return(<div key={card.id} onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;
-                  if(isAdm&&myTurn){const now=Date.now();const r=adminTapRef.current;const rapid=r.id===card.id&&now-r.t<500;
-                    adminTapRef.current={id:card.id,n:rapid?r.n+1:1,t:now};
-                    if(adminTapRef.current.n>=5){adminTapRef.current={id:null,n:0,t:0};setSel(-1);setSwpC({idx:i});setShowDk(true);if(snd)sfx.p("sparkle");setLMsg("Switch card — pick from deck");setTimeout(()=>setLMsg(""),1800);return;}
-                    if(rapid)return;} // during a rapid multi-tap (admin), build toward 5 instead of playing
-                  if((myTurn&&!drawnCard&&!challenge)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}}}
+                const tapCard=()=>{if((myTurn&&!drawnCard&&!challenge)){if(isSel)cardClick(i);else{ps("cardLift");setSel(i);}}};
+                return(<div key={card.id}
+                  onPointerDown={e=>{if(e.pointerType==="mouse"&&e.button!==0)return;
+                    if(isAdm){ // admin: hold to switch this card via the deck picker; a short tap still plays/lifts it
+                      const h=adminHoldRef.current;h.fired=false;clearTimeout(h.t);
+                      h.t=setTimeout(()=>{h.fired=true;setSel(-1);setSwpC({idx:i});setShowDk(true);if(snd)sfx.p("sparkle");setLMsg("Switch card — pick from deck");setTimeout(()=>setLMsg(""),1800);},550);
+                      return;} // defer tap-vs-hold decision to pointerup
+                    tapCard();}}
+                  onPointerUp={()=>{if(!isAdm)return;const h=adminHoldRef.current;clearTimeout(h.t);if(h.fired){h.fired=false;return;}tapCard();}}
+                  onPointerLeave={()=>{if(isAdm)clearTimeout(adminHoldRef.current.t);}}
+                  onPointerCancel={()=>{if(isAdm)clearTimeout(adminHoldRef.current.t);}}
                   style={{position:"absolute",bottom:isSel?(isLandscape?25:35):playable?(6+liftY):(2+liftY),left:`calc(50% + ${xOff}px - ${isLandscape?35:44}px)`,
                     transform:`rotate(${angle}deg)${isSel?" scale(1.08)":""}`,touchAction:"manipulation",
                     transition:"left 0.28s cubic-bezier(.34,1.56,.64,1),bottom 0.28s ease,transform 0.28s ease",zIndex:isSel?50:i,
                     animation:anim,
                     filter:isSel?"brightness(1.2)":playable?"brightness(1.06)":"none",
-                    cursor:(myTurn&&!drawnCard&&!challenge)||(swap&&isAdm)?"pointer":"default"}}>
+                    cursor:(myTurn&&!drawnCard&&!challenge)||isAdm?"pointer":"default"}}>
                   <Card card={card} sz={cardSz} highlighted={playable&&!isSel} lifted={isSel}/>
                 </div>);})}
             </div>
