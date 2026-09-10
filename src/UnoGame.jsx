@@ -1286,8 +1286,10 @@ const CanvasBG=({screen:scr,currentColor})=>{
 /* ═══ LIGHTNING EFFECT (for +2/+4 plays) ═══ */
 const LightningFX=({color,onDone})=>{
   const canvasRef=useRef(null);
+  const doneRef=useRef(onDone);doneRef.current=onDone; // keep latest onDone WITHOUT re-running the effect
   useEffect(()=>{
     const canvas=canvasRef.current;if(!canvas)return;
+    let raf=0;
     const ctx=canvas.getContext("2d");
     const W=canvas.width=window.innerWidth;const H=canvas.height=window.innerHeight;
     const rgb=CHR[color]||[255,200,0];
@@ -1328,9 +1330,10 @@ const LightningFX=({color,onDone})=>{
       ctx.clearRect(0,0,W,H);
       if(f<3){ctx.globalAlpha=0.5*(1-f/3);ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
       let alive=false;bolts.forEach(b=>{drawBolt(b);if(b.life>0)alive=true;});
-      f++;if(alive&&f<80)requestAnimationFrame(anim);else onDone();};
-    anim();
-  },[color,onDone]);
+      f++;if(alive&&f<80)raf=requestAnimationFrame(anim);else doneRef.current&&doneRef.current();};
+    raf=requestAnimationFrame(anim);
+    return()=>cancelAnimationFrame(raf);
+  },[color]);
   return <canvas ref={canvasRef} style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:97}}/>;
 };
 
@@ -1412,8 +1415,10 @@ const PlasmaBolt=({color})=>{
 /* ═══ ANIME IMPACT (speed lines + flash on card play) ═══ */
 const AnimeImpact=({color,onDone})=>{
   const canvasRef=useRef(null);
+  const doneRef=useRef(onDone);doneRef.current=onDone; // keep latest onDone WITHOUT re-running the effect
   useEffect(()=>{
     const canvas=canvasRef.current;if(!canvas)return;
+    let raf=0;
     const ctx=canvas.getContext("2d");
     const W=canvas.width=window.innerWidth;const H=canvas.height=window.innerHeight;
     const cx=W/2,cy=H*0.38;const rgb=CHR[color]||[255,200,0];
@@ -1440,17 +1445,20 @@ const AnimeImpact=({color,onDone})=>{
         ctx.strokeStyle=l.isColored?`rgb(${rgb[0]},${rgb[1]},${rgb[2]})`:"#fff";
         ctx.lineWidth=l.width*(1-pr*0.5);ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();});
       ctx.globalAlpha=1;
-      if(f<28)requestAnimationFrame(anim);else onDone();};
-    anim();
-  },[color,onDone]);
+      if(f<28)raf=requestAnimationFrame(anim);else doneRef.current&&doneRef.current();};
+    raf=requestAnimationFrame(anim);
+    return()=>cancelAnimationFrame(raf);
+  },[color]);
   return <canvas ref={canvasRef} style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:96}}/>;
 };
 
 /* ═══ BURST PARTICLES ═══ */
 const BurstFX=({color,onDone})=>{
   const canvasRef=useRef(null);
+  const doneRef=useRef(onDone);doneRef.current=onDone; // keep latest onDone WITHOUT re-running the effect
   useEffect(()=>{
     const canvas=canvasRef.current;if(!canvas)return;
+    let raf=0;
     const ctx=canvas.getContext("2d");
     const W=canvas.width=window.innerWidth;const H=canvas.height=window.innerHeight;
     const cx=W/2,cy=H*0.38;const rgb=CHR[color]||[255,165,0];
@@ -1484,9 +1492,10 @@ const BurstFX=({color,onDone})=>{
         ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,p.sz*p.life*2.2),0,Math.PI*2);ctx.fill();
         ctx.globalAlpha=Math.max(0,p.life);ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,p.sz*p.life),0,Math.PI*2);ctx.fill();
         ctx.globalAlpha=1;});
-      frame++;if(alive&&frame<120)requestAnimationFrame(anim);else onDone();};
-    anim();
-  },[color,onDone]);
+      frame++;if(alive&&frame<120)raf=requestAnimationFrame(anim);else doneRef.current&&doneRef.current();};
+    raf=requestAnimationFrame(anim);
+    return()=>cancelAnimationFrame(raf); // cancel the loop on unmount/re-run so bursts can't accumulate
+  },[color]);
   return <canvas ref={canvasRef} style={{position:"fixed",top:0,left:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:99}}/>;
 };
 
