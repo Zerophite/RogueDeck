@@ -3649,28 +3649,32 @@ export default function UnoGame(){
   },[g,catchUno]);
   const throwChosen=useCallback((targetId,itemId)=>{throwAt(targetId,itemId);setThrowPick(null);},[throwAt]);
 
-  const snatchPick=useCallback(async(cardIdx)=>{if(!snatchModal||snatchModal.phase!=="pick"||!g)return;
-    const nh={...g.hands};const oppHand=[...(nh[snatchModal.fromId]||[])];
-    if(cardIdx>=oppHand.length){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
-    const stolen=oppHand[cardIdx];oppHand.splice(cardIdx,1);
-    nh[snatchModal.fromId]=oppHand;nh[pid]=[...(nh[pid]||[]),stolen];
-    await wgs({hands:nh});
+  // Pick phase: just REVEAL the chosen card instantly. No Firebase write yet — the whole
+  // snatch is a single 1-for-1 swap committed at the swap step, so tapping is lag-free.
+  const snatchPick=useCallback((cardIdx)=>{if(!snatchModal||snatchModal.phase!=="pick"||!g)return;
+    const oppHand=g.hands?.[snatchModal.fromId]||[];
+    if(cardIdx>=oppHand.length){setSnatchModal(null);wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});return;}
+    const stolen=oppHand[cardIdx];if(snd)sfx.p("draw");
     setSnatchModal({phase:"swap",fromId:snatchModal.fromId,fromName:snatchModal.fromName,card:stolen,nextTurn:snatchModal.nextTurn});
-  },[snatchModal,g,pid,wgs]);
-  const snatchSwap=useCallback(async(myCardIdx)=>{if(!snatchModal||snatchModal.phase!=="swap"||!g)return;
-    const nh={...g.hands};const myHand=[...(nh[pid]||[])];const oppHand=[...(nh[snatchModal.fromId]||[])];
-    const myCard=myHand[myCardIdx];
-    oppHand.push(myCard);nh[snatchModal.fromId]=oppHand;
-    nh[pid]=myHand.filter((_,i)=>i!==myCardIdx);
-    await wgs({hands:nh,message:(rd.players[pid]?.name)+" swapped a card with "+(snatchModal.fromName)+"!",currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});
-    setSnatchModal(null);},[snatchModal,g,pid,wgs,rd]);
-  const snatchReturn=useCallback(async()=>{if(!snatchModal||!g)return;
-    if(snatchModal.phase==="pick"){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
-    const nh={...g.hands};const myHand=[...(nh[pid]||[])];const oppHand=[...(nh[snatchModal.fromId]||[])];
-    const si=myHand.findIndex(c=>c.id===snatchModal.card.id);if(si===-1){await wgs({currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});setSnatchModal(null);return;}
-    oppHand.push(myHand[si]);nh[pid]=myHand.filter((_,i)=>i!==si);nh[snatchModal.fromId]=oppHand;
-    await wgs({hands:nh,message:(rd.players[pid]?.name)+" returned the snatched card",currentPlayer:snatchModal.nextTurn,turnTimestamp:Date.now()});
-    setSnatchModal(null);},[snatchModal,g,pid,wgs,rd]);
+  },[snatchModal,g,wgs,snd]);
+  // Swap phase: swap the stolen card with one of mine in a SINGLE write. Close the modal
+  // immediately and fire the write in the background (don't await) so there's no delay.
+  const snatchSwap=useCallback((myCardIdx)=>{if(!snatchModal||snatchModal.phase!=="swap"||!g)return;
+    const myHand=[...(g.hands?.[pid]||[])];const myCard=myHand[myCardIdx];if(!myCard)return;
+    const stolen=snatchModal.card;const oppHand=[...(g.hands?.[snatchModal.fromId]||[])];
+    const oi=oppHand.findIndex(c=>c.id===stolen.id);if(oi!==-1)oppHand.splice(oi,1); // remove stolen from opp
+    oppHand.push(myCard); // give my card to the opponent
+    const nh={...g.hands};nh[snatchModal.fromId]=oppHand;
+    nh[pid]=[...myHand.filter((_,i)=>i!==myCardIdx),stolen]; // my card leaves, stolen card arrives
+    const fromName=snatchModal.fromName,nextTurn=snatchModal.nextTurn;
+    setSnatchModal(null);if(snd)sfx.p("card");
+    wgs({hands:nh,message:(rd.players[pid]?.name)+" swapped a card with "+fromName+"!",currentPlayer:nextTurn,turnTimestamp:Date.now()});
+  },[snatchModal,g,pid,wgs,rd,snd]);
+  // Cancel/skip the snatch. Nothing has been moved yet (the swap is a single deferred write),
+  // so this just passes the turn — instant, no await.
+  const snatchReturn=useCallback(()=>{if(!snatchModal)return;
+    const nextTurn=snatchModal.nextTurn;setSnatchModal(null);
+    wgs({currentPlayer:nextTurn,turnTimestamp:Date.now()});},[snatchModal,wgs]);
 
   const cardClick=ci=>{if(swap&&isAdm){admSwap(ci);return;}
     if(!myTurn||g?.winner||drawnCard||challenge||snatchModal)return;
