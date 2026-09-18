@@ -4934,8 +4934,10 @@ export default function UnoGame(){
             imageRendering:"auto"}}/>
       </div>}
       {emoteTray&&!g.winner&&<div onClick={()=>setEmoteTray(false)} style={{position:"absolute",inset:0,zIndex:99}}>
-        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:isLandscape?105:135,left:"50%",transform:"translateX(-50%)",
-          display:"flex",gap:10,padding:"10px 16px",borderRadius:18,
+        <div onClick={e=>e.stopPropagation()} style={{position:"absolute",bottom:isLandscape?105:135,left:"50%",transform:"translateX(-50%)"}}>
+        {/* Centering lives on this wrapper; the animation's transform lives on the inner box, so
+            aslide's translateY no longer clobbers translateX(-50%) and the tray stops jumping. */}
+        <div style={{display:"flex",gap:10,padding:"10px 16px",borderRadius:18,
           background:"rgba(8,16,14,0.92)",border:"1px solid rgba(255,215,0,0.15)",
           backdropFilter:"blur(12px)",boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
           animation:"aslide 0.2s ease-out"}}>
@@ -4950,6 +4952,7 @@ export default function UnoGame(){
               <img src={EMOTE_URL+em.gif} alt={em.id} style={{width:40,height:40,objectFit:"contain",imageRendering:"auto"}}/>
               <span style={{fontSize:7,color:"#889",fontWeight:700,letterSpacing:1}}>{em.label}</span>
             </div>))}
+        </div>
         </div>
       </div>}
       {timeoutFx!==null&&<div style={{position:"fixed",inset:0,zIndex:60,display:"flex",alignItems:"center",justifyContent:"center",
@@ -5172,19 +5175,17 @@ export default function UnoGame(){
               {Math.floor(roundTimer/60)}:{(roundTimer%60).toString().padStart(2,"0")}</span>
           </div>}
         </div>
-        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {isAdm&&<>{[{k:"peek",i:"👁",on:peek,fn:()=>setPeek(!peek)},
-          ].map(b=>(<button key={b.k} onClick={b.fn} style={{padding:"2px 6px",borderRadius:6,border:"none",fontSize:11,cursor:"pointer",
-            background:b.on?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:b.on?"#000":"#FFD700",
-            transition:"all 0.2s"}}>{b.i}</button>))}</>}
-          <button onClick={()=>setShowLB(!showLB)} style={{padding:"2px 6px",borderRadius:6,border:"none",fontSize:11,cursor:"pointer",
-            background:showLB?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:showLB?"#000":"#FFD700",
-            transition:"all 0.2s",fontWeight:700}}>🏆</button>
-          {!g.winner&&<button onClick={()=>setEmoteTray(!emoteTray)} style={{background:emoteTray?"rgba(255,215,0,0.9)":"none",border:"none",fontSize:14,cursor:"pointer",
-            opacity:emoteCD?0.3:0.8,padding:"2px 4px",borderRadius:6,transition:"all 0.2s"}}>{"🎭"}</button>}
-          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{background:"none",border:"none",fontSize:15,cursor:"pointer",opacity:(snd||mus)?0.8:0.3,padding:2}}>
+          ].map(b=>(<button key={b.k} onClick={b.fn} style={{...TOPBTN,fontSize:15,
+            background:b.on?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:b.on?"#000":"#FFD700"}}>{b.i}</button>))}</>}
+          <button onClick={()=>setShowLB(!showLB)} style={{...TOPBTN,fontSize:15,fontWeight:700,
+            background:showLB?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",color:showLB?"#000":"#FFD700"}}>🏆</button>
+          {!g.winner&&<button onClick={()=>setEmoteTray(!emoteTray)} style={{...TOPBTN,fontSize:17,
+            background:emoteTray?"rgba(255,215,0,0.9)":"rgba(0,0,0,0.4)",opacity:emoteCD?0.3:1}}>{"🎭"}</button>}
+          <button onClick={e=>{e.stopPropagation();setShowAudio(true);}} style={{...TOPBTN,fontSize:17,background:"rgba(0,0,0,0.4)",opacity:(snd||mus)?1:0.5}}>
             {(snd||mus)?"🔊":"🔇"}</button>
-          <button onClick={()=>{goFS();goLand();}} style={{background:"none",border:"none",fontSize:14,cursor:"pointer",padding:2,opacity:0.3}}>{"⛶"}</button>
+          <button onClick={()=>{goFS();goLand();}} style={{...TOPBTN,fontSize:16,background:"rgba(0,0,0,0.4)",opacity:0.6}}>{"⛶"}</button>
         </div>
       </div>
       {audioModal}
@@ -5579,6 +5580,11 @@ const GLASS={background:"rgba(8,20,18,0.75)",borderRadius:20,border:"1px solid r
   backdropFilter:"blur(20px)",boxShadow:"0 12px 50px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.03)"};
 const MBTN={padding:"11px 28px",borderRadius:14,border:"none",color:"#fff",fontSize:14,fontWeight:700,
   cursor:"pointer",letterSpacing:2,transition:"all 0.2s"};
+// Top-bar icon buttons (🏆/🎭/🔊/⛶/👁): a comfortable ~40px touch target with no tap-delay,
+// so they're easy to hit on mobile and don't feel unresponsive.
+const TOPBTN={minWidth:40,minHeight:36,display:"inline-flex",alignItems:"center",justifyContent:"center",
+  padding:"5px 8px",borderRadius:9,border:"none",color:"#FFD700",cursor:"pointer",lineHeight:1,
+  touchAction:"manipulation",WebkitTapHighlightColor:"transparent",transition:"all 0.2s"};
 const ls={color:"#889",fontSize:9,display:"block",marginBottom:5,letterSpacing:4,textTransform:"uppercase"};
 const ist={width:"100%",padding:"12px 16px",borderRadius:12,border:"1px solid rgba(255,255,255,0.1)",
   background:"rgba(255,255,255,0.04)",color:"#fff",fontSize:14,outline:"none",marginBottom:10,boxSizing:"border-box",transition:"all 0.25s"};
